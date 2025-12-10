@@ -828,9 +828,13 @@
       const photoCountHint = document.getElementById("photoCountHint");
 
       const PREFERRED_CAMERA_KEY = "preferredCameraDeviceId";
+      const PERMISSION_GRANTED_KEY = "cameraPermissionGranted";
       const DB_NAME = "pwa-camera-db";
       const DB_VERSION = 1;
       const STORE_NAME = "photos";
+
+      // Track if permission was granted in this session to avoid re-prompts
+      let permissionGrantedThisSession = false;
 
       const MAX_PHOTOS = 1000;
       const MAX_BYTES = 500 * 1024 * 1024; // cca 500 MB
@@ -1257,6 +1261,62 @@
         }
       }
 
+      // Check camera permission status using Permissions API
+      async function checkCameraPermission() {
+        // Check if we already have permission granted in localStorage
+        if (localStorage.getItem(PERMISSION_GRANTED_KEY) === "true") {
+          return "granted";
+        }
+
+        // Check if permission was granted this session
+        if (permissionGrantedThisSession) {
+          return "granted";
+        }
+
+        // Try Permissions API (not fully supported on iOS Safari, but works elsewhere)
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const result = await navigator.permissions.query({ name: "camera" });
+            if (result.state === "granted") {
+              localStorage.setItem(PERMISSION_GRANTED_KEY, "true");
+              permissionGrantedThisSession = true;
+            }
+            return result.state; // "granted", "denied", or "prompt"
+          } catch (e) {
+            // Permissions API not supported for camera (iOS Safari)
+            console.log("Permissions API not available for camera, falling back");
+          }
+        }
+
+        // Fallback: try to enumerate devices - if we get labels, permission was granted
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(d => d.kind === "videoinput");
+          // If we have device labels, permission was already granted
+          if (videoDevices.length > 0 && videoDevices[0].label) {
+            localStorage.setItem(PERMISSION_GRANTED_KEY, "true");
+            permissionGrantedThisSession = true;
+            return "granted";
+          }
+        } catch (e) {
+          console.log("enumerateDevices check failed", e);
+        }
+
+        return "prompt";
+      }
+
+      // Mark permission as granted after successful camera access
+      function markPermissionGranted() {
+        localStorage.setItem(PERMISSION_GRANTED_KEY, "true");
+        permissionGrantedThisSession = true;
+      }
+
+      // Clear permission status (useful if user revokes permission)
+      function clearPermissionStatus() {
+        localStorage.removeItem(PERMISSION_GRANTED_KEY);
+        permissionGrantedThisSession = false;
+      }
+
       async function listVideoDevices(selectedId) {
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -1318,6 +1378,16 @@
           return;
         }
 
+        // Check permission status first
+        const permissionStatus = await checkCameraPermission();
+
+        if (permissionStatus === "denied") {
+          cameraLabel.textContent = "Přístup odepřen";
+          cameraDot.style.background = "#ff3b30";
+          showError("Přístup ke kameře byl odepřen. Povol kameru v nastavení prohlížeče nebo zařízení.");
+          return;
+        }
+
         if (currentStream) {
           currentStream.getTracks().forEach(function (t) {
             t.stop();
@@ -1336,12 +1406,36 @@
           video.srcObject = stream;
           cameraDot.style.background = "#34c759";
           cameraLabel.textContent = "Kamera běží";
+
+          // Mark permission as granted after successful access
+          markPermissionGranted();
+
           await listVideoDevices(deviceId || cameraSelect.value || null);
         } catch (err) {
           console.error(err);
-          cameraLabel.textContent = "Nelze spustit";
-          cameraDot.style.background = "#ff9500";
-          showError("Nepodařilo se spustit kameru: " + (err && err.message ? err.message : err));
+
+          // Handle specific error types
+          const errorName = err && err.name;
+
+          if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+            // User denied permission - clear our cached status
+            clearPermissionStatus();
+            cameraLabel.textContent = "Přístup odepřen";
+            cameraDot.style.background = "#ff3b30";
+            showError("Přístup ke kameře byl odepřen. Povol kameru v nastavení prohlížeče nebo zařízení.");
+          } else if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+            cameraLabel.textContent = "Kamera nenalezena";
+            cameraDot.style.background = "#ff9500";
+            showError("Kamera nebyla nalezena. Zkontroluj, zda je kamera připojená.");
+          } else if (errorName === "NotReadableError" || errorName === "TrackStartError") {
+            cameraLabel.textContent = "Kamera obsazená";
+            cameraDot.style.background = "#ff9500";
+            showError("Kamera je používána jinou aplikací.");
+          } else {
+            cameraLabel.textContent = "Nelze spustit";
+            cameraDot.style.background = "#ff9500";
+            showError("Nepodařilo se spustit kameru: " + (err && err.message ? err.message : err));
+          }
         }
       }
 
@@ -1481,10 +1575,41 @@
             cameraLabel.textContent = "Pozastaveno";
             cameraDot.style.background = "#ff9500";
           } else if (document.visibilityState === "visible") {
-            const preferred = localStorage.getItem(PREFERRED_CAMERA_KEY);
-            initCamera(preferred || null);
+            // Only auto-restart if permission was previously granted
+            // This avoids prompting users who haven't granted permission yet
+            if (permissionGrantedThisSession || localStorage.getItem(PERMISSION_GRANTED_KEY) === "true") {
+              const preferred = localStorage.getItem(PREFERRED_CAMERA_KEY);
+              initCamera(preferred || null);
+            }
           }
         });
+
+        // Monitor permission changes (when user changes in system settings)
+        if (navigator.permissions && navigator.permissions.query) {
+          navigator.permissions.query({ name: "camera" }).then(function (permissionStatus) {
+            permissionStatus.onchange = function () {
+              if (permissionStatus.state === "granted") {
+                markPermissionGranted();
+                // Auto-start camera when permission is granted
+                const preferred = localStorage.getItem(PREFERRED_CAMERA_KEY);
+                initCamera(preferred || null);
+              } else if (permissionStatus.state === "denied") {
+                clearPermissionStatus();
+                if (currentStream) {
+                  currentStream.getTracks().forEach(function (t) {
+                    t.stop();
+                  });
+                  currentStream = null;
+                }
+                cameraLabel.textContent = "Přístup odepřen";
+                cameraDot.style.background = "#ff3b30";
+                showError("Přístup ke kameře byl odepřen v nastavení.");
+              }
+            };
+          }).catch(function () {
+            // Permissions API not supported for camera (iOS Safari)
+          });
+        }
       }
 
       async function updatePhotoHint() {
