@@ -1,16 +1,43 @@
 ---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import CameraPanel from '../components/CameraPanel.astro';
+import SidePanel from '../components/SidePanel.astro';
+import Footer from '../components/Footer.astro';
+import SettingsModal from '../components/SettingsModal.astro';
 
+const base = import.meta.env.BASE_URL;
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="Kamera">
+  <div id="app">
+    <Header />
+
+    <main>
+      <div class="layout">
+        <CameraPanel />
+        <SidePanel />
+      </div>
+    </main>
+
+    <Footer />
+  </div>
+
+  <SettingsModal />
+
+  <script define:vars={{ base }}>
+    window.__APP_BASE_PATH__ = base;
+  </script>
+
+  <script>
+    import { initApp } from '../scripts/main';
+
+    const basePath = (window as Window & { __APP_BASE_PATH__?: string }).__APP_BASE_PATH__ || '/';
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => initApp(basePath));
+    } else {
+      initApp(basePath);
+    }
+  </script>
+</Layout>

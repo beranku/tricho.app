@@ -1,0 +1,27 @@
+---
+import CameraOverlay from './CameraOverlay.astro';
+---
+
+<section class="panel">
+  <div class="panel-header">
+    <div class="panel-title">Fotoaparát</div>
+  </div>
+
+  <div class="camera-shell">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="camera-overlay-gradient"></div>
+    <CameraOverlay />
+  </div>
+
+  <div class="camera-footer-row">
+    <span id="cameraFooterText">Full HD, JPEG 80 %, ukládání lokálně.</span>
+    <span id="photoCountHint"></span>
+  </div>
+
+  <div id="errorBox" class="error-box" hidden>
+    <div class="error-dot"></div>
+    <div id="errorText"></div>
+  </div>
+</section>
+
+<canvas id="captureCanvas" hidden></canvas>

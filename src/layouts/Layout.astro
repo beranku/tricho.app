@@ -1,0 +1,27 @@
+---
+interface Props {
+  title?: string;
+}
+
+const { title = 'Kamera' } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <title>{title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f2f2f7" />
+  <link rel="manifest" href={`${base}manifest.webmanifest`} />
+  <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+</head>
+<body>
+  <slot />
+</body>
+</html>
+
+<style is:global>
+  @import '../styles/global.css';
+</style>

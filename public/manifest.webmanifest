@@ -1,0 +1,19 @@
+{
+  "name": "PWA Kamera",
+  "short_name": "Kamera",
+  "description": "Kamera aplikace s lokálním úložištěm",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f2f7",
+  "theme_color": "#f2f2f7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

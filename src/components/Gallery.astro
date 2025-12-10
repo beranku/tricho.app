@@ -1,0 +1,40 @@
+---
+---
+
+<div class="stack-section gallery" id="galleryCard" hidden>
+  <div class="gallery-header-row">
+    <div class="panel-title">Galerie</div>
+    <button id="closeGalleryButton" type="button" class="btn-ghost btn-sm">
+      Hotovo
+    </button>
+  </div>
+
+  <div id="gallerySummary" class="gallery-summary"></div>
+
+  <details>
+    <summary class="hint">Správa úložiště</summary>
+    <div class="field" style="margin-top:0.35rem;">
+      <label for="monthsInput">Smazat starší než</label>
+      <div class="months-row">
+        <input
+          id="monthsInput"
+          class="months-input"
+          type="number"
+          min="1"
+          max="36"
+          value="6"
+        />
+        <span class="hint">měsíců</span>
+        <button id="cleanupButton" type="button" class="btn-ghost btn-sm">
+          Smazat
+        </button>
+      </div>
+      <div id="cleanupResult" class="cleanup-result"></div>
+    </div>
+  </details>
+
+  <div class="gallery-body">
+    <div id="sessionList" class="session-list"></div>
+    <div id="galleryGrid" class="gallery-grid"></div>
+  </div>
+</div>

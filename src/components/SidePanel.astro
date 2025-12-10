@@ -1,0 +1,30 @@
+---
+import Gallery from './Gallery.astro';
+---
+
+<section class="panel">
+  <div class="side-panel">
+    <!-- INSTALL -->
+    <div class="stack-section">
+      <div class="panel-section-title">Aplikace</div>
+      <div class="field">
+        <button id="installButton" type="button" class="btn btn-sm" hidden>
+          📲 Nainstalovat na toto zařízení
+        </button>
+      </div>
+      <div id="installHint" class="hint"></div>
+    </div>
+
+    <!-- CAMERA SETTINGS -->
+    <div class="stack-section">
+      <div class="panel-section-title">Kamera</div>
+      <div class="field">
+        <label for="cameraSelect">Zdroj</label>
+        <select id="cameraSelect"></select>
+      </div>
+    </div>
+
+    <!-- GALLERY -->
+    <Gallery />
+  </div>
+</section>
