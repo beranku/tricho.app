@@ -658,6 +658,264 @@
         align-items: flex-start;
       }
     }
+
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+
+    .modal-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    @media (min-width: 600px) {
+      .modal-overlay {
+        align-items: center;
+      }
+    }
+
+    .modal-dialog {
+      background: var(--bg-elevated-strong);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      width: 100%;
+      max-width: 480px;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-soft);
+      transform: translateY(100%);
+      transition: transform 0.25s ease;
+    }
+
+    .modal-overlay.visible .modal-dialog {
+      transform: translateY(0);
+    }
+
+    @media (min-width: 600px) {
+      .modal-dialog {
+        border-radius: var(--radius-xl);
+        border-bottom: 1px solid var(--border);
+        max-height: 80vh;
+        transform: translateY(20px) scale(0.95);
+      }
+      .modal-overlay.visible .modal-dialog {
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.8rem 1rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .modal-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .modal-close {
+      width: 2rem;
+      height: 2rem;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated);
+      color: var(--text-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+
+    .modal-close:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.8rem 1rem;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.8rem 1rem;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .modal-footer .btn {
+      flex: 1;
+    }
+
+    .settings-section {
+      margin-bottom: 1rem;
+    }
+
+    .settings-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .settings-section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 0.5rem;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    .settings-row:last-child {
+      border-bottom: none;
+    }
+
+    .settings-label {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .settings-label-text {
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    .settings-label-hint {
+      font-size: 0.72rem;
+      color: var(--text-soft);
+      margin-top: 0.1rem;
+    }
+
+    .settings-control {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .settings-input {
+      width: 5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated-strong);
+      color: var(--text);
+      padding: 0.35rem 0.5rem;
+      font-size: 0.8rem;
+      outline: none;
+      text-align: right;
+    }
+
+    .settings-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .settings-select {
+      min-width: 7rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated-strong);
+      color: var(--text);
+      padding: 0.35rem 0.5rem;
+      font-size: 0.8rem;
+      outline: none;
+    }
+
+    .settings-select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .settings-unit {
+      font-size: 0.75rem;
+      color: var(--text-soft);
+      min-width: 2.5rem;
+    }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 3rem;
+      height: 1.75rem;
+      border-radius: var(--radius-pill);
+      background: rgba(148, 163, 184, 0.4);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .toggle.active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .toggle-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 1.35rem;
+      height: 1.35rem;
+      border-radius: var(--radius-pill);
+      background: #ffffff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      transition: transform 0.2s ease;
+    }
+
+    .toggle.active .toggle-knob {
+      transform: translateX(1.25rem);
+    }
+
+    .settings-btn-header {
+      width: 2rem;
+      height: 2rem;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+
+    .settings-btn-header:hover {
+      background: #ffffff;
+      border-color: rgba(148, 163, 184, 0.6);
+    }
   </style>
 </head>
 <body>
@@ -675,6 +933,9 @@
         <div class="status-chip">
           <span id="modeLabel">V prohlížeči</span>
         </div>
+        <button id="settingsButton" type="button" class="settings-btn-header" title="Nastavení">
+          ⚙️
+        </button>
       </div>
     </header>
 
@@ -799,6 +1060,133 @@
 
   <canvas id="captureCanvas" hidden></canvas>
 
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">Nastavení</div>
+        <button id="settingsCloseBtn" type="button" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Session Settings -->
+        <div class="settings-section">
+          <div class="settings-section-title">Sezení</div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Oddělení sezení</div>
+              <div class="settings-label-hint">Pauza mezi snímky pro nové sezení</div>
+            </div>
+            <div class="settings-control">
+              <input type="number" id="settingSessionGap" class="settings-input" min="1" max="60" value="10" />
+              <span class="settings-unit">min</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image Quality Settings -->
+        <div class="settings-section">
+          <div class="settings-section-title">Kvalita snímků</div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Kvalita JPEG</div>
+              <div class="settings-label-hint">Vyšší = lepší kvalita, větší soubor</div>
+            </div>
+            <div class="settings-control">
+              <input type="number" id="settingJpegQuality" class="settings-input" min="50" max="100" step="5" value="80" />
+              <span class="settings-unit">%</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Max. rozlišení</div>
+              <div class="settings-label-hint">Větší snímky zabírají více místa</div>
+            </div>
+            <div class="settings-control">
+              <select id="settingResolution" class="settings-select">
+                <option value="1280">HD (1280px)</option>
+                <option value="1920" selected>Full HD (1920px)</option>
+                <option value="2560">QHD (2560px)</option>
+                <option value="3840">4K (3840px)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Storage Settings -->
+        <div class="settings-section">
+          <div class="settings-section-title">Úložiště</div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Max. počet snímků</div>
+              <div class="settings-label-hint">Starší snímky budou automaticky smazány</div>
+            </div>
+            <div class="settings-control">
+              <input type="number" id="settingMaxPhotos" class="settings-input" min="100" max="5000" step="100" value="1000" />
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Max. velikost úložiště</div>
+              <div class="settings-label-hint">Limit pro automatické mazání</div>
+            </div>
+            <div class="settings-control">
+              <input type="number" id="settingMaxStorage" class="settings-input" min="100" max="2000" step="50" value="500" />
+              <span class="settings-unit">MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Camera Settings -->
+        <div class="settings-section">
+          <div class="settings-section-title">Kamera</div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Výchozí kamera</div>
+              <div class="settings-label-hint">Která kamera se použije při startu</div>
+            </div>
+            <div class="settings-control">
+              <select id="settingDefaultCamera" class="settings-select">
+                <option value="environment">Zadní</option>
+                <option value="user">Přední</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Auto-restart kamery</div>
+              <div class="settings-label-hint">Obnovit kameru po návratu do aplikace</div>
+            </div>
+            <div class="settings-control">
+              <div id="settingAutoRestart" class="toggle active">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Other Settings -->
+        <div class="settings-section">
+          <div class="settings-section-title">Ostatní</div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <div class="settings-label-text">Potvrdit mazání</div>
+              <div class="settings-label-hint">Ptát se před smazáním snímku</div>
+            </div>
+            <div class="settings-control">
+              <div id="settingConfirmDelete" class="toggle">
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="settingsResetBtn" type="button" class="btn btn-ghost btn-sm">Výchozí</button>
+        <button id="settingsSaveBtn" type="button" class="btn btn-sm">Uložit</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
       const onlineDot = document.getElementById("onlineDot");
@@ -827,8 +1215,24 @@
       const sessionList = document.getElementById("sessionList");
       const photoCountHint = document.getElementById("photoCountHint");
 
+      // Settings modal elements
+      const settingsButton = document.getElementById("settingsButton");
+      const settingsModal = document.getElementById("settingsModal");
+      const settingsCloseBtn = document.getElementById("settingsCloseBtn");
+      const settingsSaveBtn = document.getElementById("settingsSaveBtn");
+      const settingsResetBtn = document.getElementById("settingsResetBtn");
+      const settingSessionGap = document.getElementById("settingSessionGap");
+      const settingJpegQuality = document.getElementById("settingJpegQuality");
+      const settingResolution = document.getElementById("settingResolution");
+      const settingMaxPhotos = document.getElementById("settingMaxPhotos");
+      const settingMaxStorage = document.getElementById("settingMaxStorage");
+      const settingDefaultCamera = document.getElementById("settingDefaultCamera");
+      const settingAutoRestart = document.getElementById("settingAutoRestart");
+      const settingConfirmDelete = document.getElementById("settingConfirmDelete");
+
       const PREFERRED_CAMERA_KEY = "preferredCameraDeviceId";
       const PERMISSION_GRANTED_KEY = "cameraPermissionGranted";
+      const SETTINGS_KEY = "appSettings";
       const DB_NAME = "pwa-camera-db";
       const DB_VERSION = 1;
       const STORE_NAME = "photos";
@@ -836,12 +1240,153 @@
       // Track if permission was granted in this session to avoid re-prompts
       let permissionGrantedThisSession = false;
 
-      const MAX_PHOTOS = 1000;
-      const MAX_BYTES = 500 * 1024 * 1024; // cca 500 MB
-      const TARGET_MAX_WIDTH = 1920;
-      const TARGET_MAX_HEIGHT = 1080;
-      const JPEG_QUALITY = 0.8;
-      const SESSION_GAP_MS = 10 * 60 * 1000; // 10 minut
+      // Default settings
+      const DEFAULT_SETTINGS = {
+        sessionGapMinutes: 10,
+        jpegQuality: 80,
+        maxResolution: 1920,
+        maxPhotos: 1000,
+        maxStorageMB: 500,
+        defaultCamera: "environment",
+        autoRestartCamera: true,
+        confirmDelete: false
+      };
+
+      // Current settings (loaded from localStorage or defaults)
+      let currentSettings = { ...DEFAULT_SETTINGS };
+
+      function loadSettings() {
+        try {
+          const stored = localStorage.getItem(SETTINGS_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            // Merge with defaults to handle new settings added in updates
+            currentSettings = { ...DEFAULT_SETTINGS, ...parsed };
+          } else {
+            currentSettings = { ...DEFAULT_SETTINGS };
+          }
+        } catch (e) {
+          console.error("Failed to load settings:", e);
+          currentSettings = { ...DEFAULT_SETTINGS };
+        }
+        return currentSettings;
+      }
+
+      function saveSettings(settings) {
+        try {
+          currentSettings = { ...settings };
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(currentSettings));
+          return true;
+        } catch (e) {
+          console.error("Failed to save settings:", e);
+          return false;
+        }
+      }
+
+      function getSettings() {
+        return currentSettings;
+      }
+
+      function resetSettings() {
+        currentSettings = { ...DEFAULT_SETTINGS };
+        localStorage.removeItem(SETTINGS_KEY);
+        return currentSettings;
+      }
+
+      // Computed settings getters
+      function getSessionGapMs() {
+        return currentSettings.sessionGapMinutes * 60 * 1000;
+      }
+
+      function getJpegQuality() {
+        return currentSettings.jpegQuality / 100;
+      }
+
+      function getMaxWidth() {
+        return currentSettings.maxResolution;
+      }
+
+      function getMaxHeight() {
+        // Maintain 16:9 aspect ratio based on width
+        return Math.round(currentSettings.maxResolution * 9 / 16);
+      }
+
+      function getMaxPhotos() {
+        return currentSettings.maxPhotos;
+      }
+
+      function getMaxBytes() {
+        return currentSettings.maxStorageMB * 1024 * 1024;
+      }
+
+      // Settings modal functions
+      function populateSettingsForm() {
+        const s = getSettings();
+        settingSessionGap.value = s.sessionGapMinutes;
+        settingJpegQuality.value = s.jpegQuality;
+        settingResolution.value = s.maxResolution;
+        settingMaxPhotos.value = s.maxPhotos;
+        settingMaxStorage.value = s.maxStorageMB;
+        settingDefaultCamera.value = s.defaultCamera;
+
+        if (s.autoRestartCamera) {
+          settingAutoRestart.classList.add("active");
+        } else {
+          settingAutoRestart.classList.remove("active");
+        }
+
+        if (s.confirmDelete) {
+          settingConfirmDelete.classList.add("active");
+        } else {
+          settingConfirmDelete.classList.remove("active");
+        }
+      }
+
+      function getSettingsFromForm() {
+        return {
+          sessionGapMinutes: Math.max(1, Math.min(60, parseInt(settingSessionGap.value, 10) || 10)),
+          jpegQuality: Math.max(50, Math.min(100, parseInt(settingJpegQuality.value, 10) || 80)),
+          maxResolution: parseInt(settingResolution.value, 10) || 1920,
+          maxPhotos: Math.max(100, Math.min(5000, parseInt(settingMaxPhotos.value, 10) || 1000)),
+          maxStorageMB: Math.max(100, Math.min(2000, parseInt(settingMaxStorage.value, 10) || 500)),
+          defaultCamera: settingDefaultCamera.value || "environment",
+          autoRestartCamera: settingAutoRestart.classList.contains("active"),
+          confirmDelete: settingConfirmDelete.classList.contains("active")
+        };
+      }
+
+      function openSettingsModal() {
+        populateSettingsForm();
+        settingsModal.classList.add("visible");
+      }
+
+      function closeSettingsModal() {
+        settingsModal.classList.remove("visible");
+      }
+
+      function handleSettingsSave() {
+        const newSettings = getSettingsFromForm();
+        if (saveSettings(newSettings)) {
+          updateCameraFooterHint();
+          closeSettingsModal();
+        }
+      }
+
+      function handleSettingsReset() {
+        resetSettings();
+        populateSettingsForm();
+      }
+
+      function updateCameraFooterHint() {
+        const s = getSettings();
+        const resLabel = s.maxResolution >= 3840 ? "4K" :
+                         s.maxResolution >= 2560 ? "QHD" :
+                         s.maxResolution >= 1920 ? "Full HD" : "HD";
+        const footerText = document.querySelector(".camera-footer-row span:first-child");
+        if (footerText) {
+          footerText.textContent = resLabel + ", JPEG " + s.jpegQuality + " %, ukládání lokálně.";
+        }
+      }
 
       let deferredPrompt = null;
       let currentStream = null;
@@ -1022,11 +1567,12 @@
 
         const sessionsArr = [];
         let current = { start: sorted[0].createdAt, photos: [sorted[0]] };
+        const sessionGapMs = getSessionGapMs();
 
         for (let i = 1; i < sorted.length; i++) {
           const prev = sorted[i - 1];
           const cur = sorted[i];
-          if (cur.createdAt - prev.createdAt > SESSION_GAP_MS) {
+          if (cur.createdAt - prev.createdAt > sessionGapMs) {
             sessionsArr.push(current);
             current = { start: cur.createdAt, photos: [cur] };
           } else {
@@ -1124,6 +1670,12 @@
           del.type = "button";
           del.textContent = "Smazat";
           del.addEventListener("click", async function () {
+            const settings = getSettings();
+            if (settings.confirmDelete) {
+              if (!confirm("Opravdu smazat tento snímek?")) {
+                return;
+              }
+            }
             await deletePhoto(photo.id);
             await renderGallery();
           });
@@ -1227,8 +1779,11 @@
           const photos = await loadPhotos();
           if (!photos.length) return;
 
+          const maxPhotos = getMaxPhotos();
+          const maxBytes = getMaxBytes();
+
           let { bytes: totalBytes, count: totalCount } = computeTotals(photos);
-          if (totalCount <= MAX_PHOTOS && totalBytes <= MAX_BYTES) return;
+          if (totalCount <= maxPhotos && totalBytes <= maxBytes) return;
 
           const sorted = photos.slice().sort(function (a, b) {
             return a.createdAt - b.createdAt;
@@ -1238,7 +1793,7 @@
           let removedCount = 0;
 
           for (const photo of sorted) {
-            if (totalCount <= MAX_PHOTOS && totalBytes <= MAX_BYTES) break;
+            if (totalCount <= maxPhotos && totalBytes <= maxBytes) break;
             const b = (photo.blob && photo.blob.size) || photo.size || 0;
             await deletePhoto(photo.id);
             totalCount -= 1;
@@ -1395,8 +1950,9 @@
           currentStream = null;
         }
 
+        const defaultFacingMode = getSettings().defaultCamera || "environment";
         const constraints = {
-          video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" },
+          video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: defaultFacingMode },
           audio: false,
         };
 
@@ -1452,12 +2008,14 @@
 
         const srcW = video.videoWidth;
         const srcH = video.videoHeight;
+        const maxWidth = getMaxWidth();
+        const maxHeight = getMaxHeight();
 
         let targetW = srcW;
         let targetH = srcH;
 
-        if (srcW > TARGET_MAX_WIDTH || srcH > TARGET_MAX_HEIGHT) {
-          const scale = Math.min(TARGET_MAX_WIDTH / srcW, TARGET_MAX_HEIGHT / srcH);
+        if (srcW > maxWidth || srcH > maxHeight) {
+          const scale = Math.min(maxWidth / srcW, maxHeight / srcH);
           targetW = Math.round(srcW * scale);
           targetH = Math.round(srcH * scale);
         }
@@ -1483,7 +2041,7 @@
             }
           },
           "image/jpeg",
-          JPEG_QUALITY
+          getJpegQuality()
         );
       }
 
@@ -1532,6 +2090,27 @@
         window.addEventListener("online", updateOnlineStatus);
         window.addEventListener("offline", updateOnlineStatus);
 
+        // Settings modal listeners
+        settingsButton.addEventListener("click", openSettingsModal);
+        settingsCloseBtn.addEventListener("click", closeSettingsModal);
+        settingsSaveBtn.addEventListener("click", handleSettingsSave);
+        settingsResetBtn.addEventListener("click", handleSettingsReset);
+
+        // Close modal on overlay click
+        settingsModal.addEventListener("click", function (e) {
+          if (e.target === settingsModal) {
+            closeSettingsModal();
+          }
+        });
+
+        // Toggle switches
+        settingAutoRestart.addEventListener("click", function () {
+          settingAutoRestart.classList.toggle("active");
+        });
+        settingConfirmDelete.addEventListener("click", function () {
+          settingConfirmDelete.classList.toggle("active");
+        });
+
         cameraSelect.addEventListener("change", function () {
           const id = cameraSelect.value;
           if (id) {
@@ -1575,9 +2154,10 @@
             cameraLabel.textContent = "Pozastaveno";
             cameraDot.style.background = "#ff9500";
           } else if (document.visibilityState === "visible") {
-            // Only auto-restart if permission was previously granted
-            // This avoids prompting users who haven't granted permission yet
-            if (permissionGrantedThisSession || localStorage.getItem(PERMISSION_GRANTED_KEY) === "true") {
+            // Only auto-restart if setting is enabled and permission was previously granted
+            const settings = getSettings();
+            if (settings.autoRestartCamera &&
+                (permissionGrantedThisSession || localStorage.getItem(PERMISSION_GRANTED_KEY) === "true")) {
               const preferred = localStorage.getItem(PREFERRED_CAMERA_KEY);
               initCamera(preferred || null);
             }
@@ -1622,6 +2202,10 @@
       }
 
       function init() {
+        // Load settings first
+        loadSettings();
+        updateCameraFooterHint();
+
         updateOnlineStatus();
         updateModeStatus();
         installHint.textContent = detectPlatformInstallHint();
