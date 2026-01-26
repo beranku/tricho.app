@@ -8,11 +8,16 @@
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
   type VerifiedRegistrationResponse,
+  type VerifiedAuthenticationResponse,
 } from '@simplewebauthn/server';
 import type {
   PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
+  AuthenticationResponseJSON,
   AuthenticatorTransportFuture,
 } from '@simplewebauthn/server';
 
@@ -58,6 +63,24 @@ export interface BeginRegistrationResult {
 export interface FinishRegistrationResult {
   verified: boolean;
   userId: string;
+  credentialId: string;
+}
+
+/**
+ * Result from beginning authentication
+ */
+export interface BeginAuthenticationResult {
+  options: PublicKeyCredentialRequestOptionsJSON;
+  userId: string;
+}
+
+/**
+ * Result from finishing authentication
+ */
+export interface FinishAuthenticationResult {
+  verified: boolean;
+  userId: string;
+  username: string;
   credentialId: string;
 }
 
@@ -301,6 +324,140 @@ export async function finishRegistration(
   return {
     verified: true,
     userId: user.id,
+    credentialId: uint8ArrayToBase64url(
+      new Uint8Array(Buffer.from(credential.id, 'base64url'))
+    ),
+  };
+}
+
+// ============================================================================
+// Authentication Functions
+// ============================================================================
+
+/**
+ * Begin WebAuthn authentication ceremony
+ *
+ * Generates authentication options for the client to pass to navigator.credentials.get()
+ *
+ * @param username - The username (typically email) of the account to authenticate
+ * @returns Authentication options and user ID
+ */
+export async function beginAuthentication(
+  username: string
+): Promise<BeginAuthenticationResult> {
+  // Validate username
+  if (!username || typeof username !== 'string') {
+    throw new Error('Username is required');
+  }
+
+  const trimmedUsername = username.trim().toLowerCase();
+  if (trimmedUsername.length < 3) {
+    throw new Error('Username must be at least 3 characters');
+  }
+
+  // Get user
+  const user = getUserByUsername(trimmedUsername);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  // Check if user has any credentials
+  if (user.credentials.length === 0) {
+    throw new Error('No credentials registered for this user');
+  }
+
+  // Get allowed credentials for this user
+  const allowCredentials = user.credentials.map((cred) => ({
+    id: cred.id,
+    transports: cred.transports,
+  }));
+
+  // Generate authentication options
+  const options = await generateAuthenticationOptions({
+    rpID: rpConfig.id,
+    userVerification: 'required',
+    allowCredentials,
+    timeout: 60000, // 60 seconds
+  });
+
+  // Store challenge for verification
+  user.currentChallenge = options.challenge;
+  users.set(user.id, user);
+
+  return {
+    options,
+    userId: user.id,
+  };
+}
+
+/**
+ * Finish WebAuthn authentication ceremony
+ *
+ * Verifies the authentication response from the client
+ *
+ * @param userId - The user ID from beginAuthentication
+ * @param response - The authentication response from navigator.credentials.get()
+ * @returns Verification result with user information
+ */
+export async function finishAuthentication(
+  userId: string,
+  response: AuthenticationResponseJSON
+): Promise<FinishAuthenticationResult> {
+  // Get user
+  const user = users.get(userId);
+  if (!user) {
+    throw new Error('User not found. Please start authentication again.');
+  }
+
+  // Get stored challenge
+  const expectedChallenge = user.currentChallenge;
+  if (!expectedChallenge) {
+    throw new Error('No authentication challenge found. Please start authentication again.');
+  }
+
+  // Clear challenge (single use)
+  user.currentChallenge = undefined;
+
+  // Find the credential used for authentication
+  const credentialId = response.id;
+  const credential = user.credentials.find((cred) => cred.id === credentialId);
+  if (!credential) {
+    throw new Error('Credential not found for this user');
+  }
+
+  let verification: VerifiedAuthenticationResponse;
+
+  try {
+    verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: getExpectedOrigins(),
+      expectedRPID: rpConfig.id,
+      credential: {
+        id: credential.id,
+        publicKey: credential.publicKey,
+        counter: credential.counter,
+        transports: credential.transports,
+      },
+      requireUserVerification: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Verification failed';
+    throw new Error(`Authentication verification failed: ${message}`);
+  }
+
+  if (!verification.verified) {
+    throw new Error('Authentication verification failed');
+  }
+
+  // Update counter to prevent replay attacks
+  credential.counter = verification.authenticationInfo.newCounter;
+  users.set(user.id, user);
+
+  return {
+    verified: true,
+    userId: user.id,
+    username: user.username,
     credentialId: uint8ArrayToBase64url(
       new Uint8Array(Buffer.from(credential.id, 'base64url'))
     ),

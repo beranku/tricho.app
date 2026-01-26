@@ -6,10 +6,12 @@
  */
 
 import { Hono } from 'hono';
-import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 import {
   beginRegistration,
   finishRegistration,
+  beginAuthentication,
+  finishAuthentication,
   getUserByUsername,
   hasCredentials,
   getRpConfig,
@@ -26,6 +28,15 @@ interface RegisterBeginBody {
 interface RegisterFinishBody {
   userId: string;
   response: RegistrationResponseJSON;
+}
+
+interface AuthenticateBeginBody {
+  username: string;
+}
+
+interface AuthenticateFinishBody {
+  userId: string;
+  response: AuthenticationResponseJSON;
 }
 
 // ============================================================================
@@ -131,6 +142,111 @@ authRouter.post('/register/finish', async (c) => {
 
     // Return appropriate status code based on error
     if (message.includes('not found') || message.includes('start registration again')) {
+      return c.json({ error: message }, 404);
+    }
+
+    if (message.includes('verification failed')) {
+      return c.json({ error: message }, 400);
+    }
+
+    return c.json({ error: message }, 500);
+  }
+});
+
+// ============================================================================
+// Authentication Endpoints
+// ============================================================================
+
+/**
+ * POST /api/auth/authenticate/begin
+ *
+ * Begin WebAuthn authentication ceremony.
+ * Returns options for navigator.credentials.get()
+ *
+ * Request body:
+ *   { username: string } - The username (email) for the account to authenticate
+ *
+ * Response:
+ *   200: { options: PublicKeyCredentialRequestOptionsJSON, userId: string }
+ *   400: { error: string } - Invalid request
+ *   404: { error: string } - User not found or no credentials registered
+ */
+authRouter.post('/authenticate/begin', async (c) => {
+  try {
+    const body = await c.req.json<AuthenticateBeginBody>();
+
+    // Validate request
+    if (!body.username) {
+      return c.json({ error: 'Username is required' }, 400);
+    }
+
+    // Generate authentication options
+    const result = await beginAuthentication(body.username);
+
+    return c.json({
+      options: result.options,
+      userId: result.userId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Authentication failed';
+
+    // Return appropriate status code based on error
+    if (message.includes('at least')) {
+      return c.json({ error: message }, 400);
+    }
+
+    if (message.includes('not found') || message.includes('No credentials')) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 500);
+  }
+});
+
+/**
+ * POST /api/auth/authenticate/finish
+ *
+ * Complete WebAuthn authentication ceremony.
+ * Verifies the credential response from the client.
+ *
+ * Request body:
+ *   {
+ *     userId: string,        - The user ID from /authenticate/begin
+ *     response: object       - The response from navigator.credentials.get()
+ *   }
+ *
+ * Response:
+ *   200: { verified: boolean, userId: string, username: string, credentialId: string }
+ *   400: { error: string } - Invalid request or verification failed
+ *   404: { error: string } - User or credential not found
+ */
+authRouter.post('/authenticate/finish', async (c) => {
+  try {
+    const body = await c.req.json<AuthenticateFinishBody>();
+
+    // Validate request
+    if (!body.userId) {
+      return c.json({ error: 'User ID is required' }, 400);
+    }
+
+    if (!body.response) {
+      return c.json({ error: 'Authentication response is required' }, 400);
+    }
+
+    // Verify authentication
+    const result = await finishAuthentication(body.userId, body.response);
+
+    return c.json({
+      verified: result.verified,
+      userId: result.userId,
+      username: result.username,
+      credentialId: result.credentialId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Authentication failed';
+
+    // Return appropriate status code based on error
+    if (message.includes('not found') || message.includes('start authentication again')) {
       return c.json({ error: message }, 404);
     }
 
