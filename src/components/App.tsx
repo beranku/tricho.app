@@ -7,6 +7,31 @@
  * - Error boundaries
  * - Database readiness
  *
+ * ## Daily Unlock Flow
+ *
+ * When a user returns to the app with an existing account:
+ *
+ * 1. App detects existing account → AuthState.Locked
+ * 2. LoginScreen displays in login mode
+ * 3. User triggers passkey authentication
+ * 4. AuthContext.loginWithPrf() attempts PRF-based unlock:
+ *    - Authenticates with passkey + PRF extension
+ *    - If PRF succeeds: derives KEK from PRF output → unwraps DEK → inits RxDB
+ *    - If PRF fails: shows error, user needs recovery QR
+ * 5. On success → AuthState.Authenticated, database ready
+ * 6. Main content renders with access to encrypted customer data
+ *
+ * ## First-time Setup Flow
+ *
+ * When a new user opens the app:
+ *
+ * 1. No existing account → AuthState.NeedsSetup
+ * 2. LoginScreen displays in setup mode
+ * 3. User registers passkey
+ * 4. Recovery QR shown (user must save before proceeding)
+ * 5. DEK wrapped with RS-derived KEK, stored locally
+ * 6. RxDB initialized with DEK → AuthState.Authenticated
+ *
  * @module components/App
  *
  * @example
@@ -575,4 +600,7 @@ export {
   AuthState,
   type AuthUser,
   type AuthContextType,
+  type PrfLoginOptions,
+  type LoginOptions,
+  type SetupResult,
 } from '../context/AuthContext';

@@ -37,7 +37,7 @@ import React, {
   useMemo,
   type FormEvent,
 } from 'react';
-import { useAuth, AuthState, type SetupResult } from '../context/AuthContext';
+import { useAuth, AuthState, type SetupResult, type PrfLoginOptions } from '../context/AuthContext';
 import { RecoveryQRDisplay } from './RecoveryQRDisplay';
 import type { RecoverySecret, DataEncryptionKey, DerivedKek } from '../crypto/keys';
 import type { PrfCapabilities } from '../auth/prf';
@@ -361,7 +361,7 @@ export function LoginScreen({
   );
 
   // ========================================================================
-  // Login Flow (Authentication)
+  // Login Flow (Authentication with PRF)
   // ========================================================================
 
   const handleLoginSubmit = useCallback(
@@ -379,42 +379,27 @@ export function LoginScreen({
       setScreenState('authenticating');
 
       try {
-        // Dynamically import auth modules
-        const { unlockWithPasskey, loadStoredCredentials } = await import('../auth/prf');
+        // Get device info for session tracking
         const { getDeviceInfo } = await import('../auth/passkey');
-        const { base64urlDecode } = await import('../crypto/utils');
 
-        // Load stored device credentials if available
-        const storedCreds = loadStoredCredentials();
-        let deviceSalt: Uint8Array | undefined;
-        let prfSalt: Uint8Array | undefined;
+        // Use the PRF-based login (daily unlock flow)
+        // This doesn't require recovery secret - PRF provides key material
+        const loginOptions: PrfLoginOptions = {
+          username: trimmedUsername,
+          deviceInfo: getDeviceInfo(),
+        };
 
-        if (storedCreds) {
-          deviceSalt = base64urlDecode(storedCreds.deviceSalt);
-          if (storedCreds.prfSalt) {
-            prfSalt = base64urlDecode(storedCreds.prfSalt);
-          }
-        }
+        const success = await auth.loginWithPrf(loginOptions);
 
-        // For login, we need the recovery secret from the user
-        // In a real app, this would be stored securely or the user would enter it
-        // For now, we'll prompt for recovery if needed
-
-        // Check if we have wrapped DEK in storage
-        const wrappedDekStr = localStorage.getItem('tricho:wrapped_dek');
-        if (!wrappedDekStr) {
-          setError('No account data found. Please use recovery or set up a new account.');
+        if (success) {
+          // Login succeeded - PRF worked
+          setScreenState('idle');
+          onLoginComplete?.();
+        } else {
+          // PRF failed - need recovery flow
+          // The auth context already set an appropriate error message
           setScreenState('error');
-          return;
         }
-
-        // We need recovery secret for fallback
-        // This is a limitation - in production, you'd handle this better
-        // For now, show that recovery is needed
-        setError(
-          'Please use the recovery option to unlock your account, or contact support.'
-        );
-        setScreenState('error');
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Login failed';
 
@@ -422,6 +407,8 @@ export function LoginScreen({
           setError('Authentication was cancelled. Please try again.');
         } else if (message.includes('not registered')) {
           setError('No passkey found for this account. Please set up a new account or use recovery.');
+        } else if (message.includes('NotAllowedError')) {
+          setError('Authentication was denied. Please try again.');
         } else {
           setError(message);
         }
@@ -429,7 +416,7 @@ export function LoginScreen({
         setScreenState('error');
       }
     },
-    [username, clearError]
+    [username, clearError, auth, onLoginComplete]
   );
 
   // ========================================================================
