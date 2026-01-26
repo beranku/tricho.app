@@ -71,6 +71,10 @@ export interface PasskeyAuthenticationResult {
   expiresIn: number;
   /** Token type (always 'Bearer') */
   tokenType: string;
+  /** PRF output if extension was supported (32 bytes) */
+  prfOutput?: Uint8Array;
+  /** Whether PRF was requested and available */
+  prfSupported: boolean;
 }
 
 /**
@@ -93,6 +97,34 @@ export interface PasskeyAuthenticationOptions {
   deviceInfo?: string;
   /** Use conditional UI (autofill) for authentication */
   useAutofill?: boolean;
+  /** Request PRF extension for key derivation (32-byte salt required) */
+  prfSalt?: Uint8Array;
+}
+
+/**
+ * PRF extension input for WebAuthn
+ */
+interface PrfExtensionInput {
+  eval: {
+    first: ArrayBuffer;
+  };
+}
+
+/**
+ * PRF extension output from WebAuthn credential
+ */
+interface PrfExtensionOutput {
+  enabled?: boolean;
+  results?: {
+    first?: ArrayBuffer;
+  };
+}
+
+/**
+ * Client extension results with PRF support
+ */
+interface ClientExtensionResultsWithPrf {
+  prf?: PrfExtensionOutput;
 }
 
 /**
@@ -105,6 +137,8 @@ export interface WebAuthnCapabilities {
   autofillSupported: boolean;
   /** Platform authenticator (Face ID, Touch ID, Windows Hello) is available */
   platformAuthenticatorAvailable: boolean;
+  /** Browser may support PRF extension (actual support depends on authenticator) */
+  prfMayBeSupported: boolean;
 }
 
 /**
@@ -244,10 +278,14 @@ export async function getWebAuthnCapabilities(): Promise<WebAuthnCapabilities> {
     }
   }
 
+  // Check PRF support (synchronous, but depends on authenticator)
+  const prfMayBeSupported = isPrfExtensionSupported();
+
   return {
     webAuthnSupported,
     autofillSupported,
     platformAuthenticatorAvailable,
+    prfMayBeSupported,
   };
 }
 
@@ -259,6 +297,56 @@ export async function getWebAuthnCapabilities(): Promise<WebAuthnCapabilities> {
  */
 export function isWebAuthnSupported(): boolean {
   return browserSupportsWebAuthn();
+}
+
+/**
+ * Check if PRF extension is likely supported in the current browser.
+ * Note: Actual PRF support depends on the authenticator, not just the browser.
+ * Safari has limited PRF support (only iCloud Keychain passkeys).
+ *
+ * This performs a basic capability check. Full PRF support can only be
+ * confirmed during an actual authentication ceremony.
+ *
+ * @returns true if PRF might be available (browser supports it)
+ *
+ * @example
+ * ```typescript
+ * const prfMightBeAvailable = isPrfExtensionSupported();
+ * if (prfMightBeAvailable) {
+ *   // Attempt authentication with PRF
+ *   const salt = generateDeviceSalt();
+ *   const result = await authenticateWithPasskey(username, { prfSalt: salt });
+ *   if (result.prfSupported) {
+ *     // PRF was actually available and succeeded
+ *   } else {
+ *     // Fall back to recovery secret
+ *   }
+ * }
+ * ```
+ */
+export function isPrfExtensionSupported(): boolean {
+  // PRF extension requires:
+  // 1. WebAuthn support
+  // 2. PublicKeyCredential to be available
+  // The actual extension support depends on the authenticator and browser combination
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  if (!browserSupportsWebAuthn()) {
+    return false;
+  }
+
+  // Check if PublicKeyCredential exists (required for extensions)
+  if (typeof PublicKeyCredential === 'undefined') {
+    return false;
+  }
+
+  // Note: We cannot definitively check PRF support without attempting authentication
+  // Chrome 116+, Edge 116+, and Safari 18+ have PRF support (with caveats for Safari)
+  // Safari PRF only works with iCloud Keychain passkeys, not hardware keys
+
+  return true;
 }
 
 // ============================================================================
@@ -463,9 +551,13 @@ async function finishRegistrationWithServer(
  * 3. Send the assertion to server for verification
  * 4. Receive tokens on successful authentication
  *
+ * When PRF salt is provided, the PRF extension is requested during authentication
+ * to derive a cryptographic key from the passkey. This enables stateless key
+ * derivation for E2EE without storing the key material.
+ *
  * @param username - The username (typically email) for the account
  * @param options - Optional configuration for the authentication
- * @returns Promise resolving to authentication result with tokens
+ * @returns Promise resolving to authentication result with tokens and optional PRF output
  * @throws {WebAuthnNotSupportedError} If WebAuthn is not supported
  * @throws {PasskeyCancelledError} If the user cancels the ceremony
  * @throws {PasskeyServerError} If server communication fails
@@ -473,15 +565,23 @@ async function finishRegistrationWithServer(
  *
  * @example
  * ```typescript
+ * // Basic authentication
  * try {
  *   const result = await authenticateWithPasskey('user@example.com');
- *   // Store tokens for API requests
  *   tokenStorage.setAccessToken(result.accessToken);
- *   tokenStorage.setRefreshToken(result.refreshToken);
  * } catch (error) {
  *   if (error instanceof PasskeyCancelledError) {
  *     // User cancelled - allow retry
  *   }
+ * }
+ *
+ * // Authentication with PRF for key derivation
+ * const prfSalt = new Uint8Array(32); // Your device-specific salt
+ * crypto.getRandomValues(prfSalt);
+ * const result = await authenticateWithPasskey('user@example.com', { prfSalt });
+ * if (result.prfSupported && result.prfOutput) {
+ *   // Use PRF output to derive KEK
+ *   const kek = await deriveKekFromPRF(result.prfOutput, deviceSalt);
  * }
  * ```
  */
@@ -504,30 +604,52 @@ export async function authenticateWithPasskey(
     throw new Error('Username must be at least 3 characters');
   }
 
+  // Validate PRF salt if provided (must be 32 bytes)
+  if (options.prfSalt && options.prfSalt.length !== 32) {
+    throw new Error('PRF salt must be exactly 32 bytes');
+  }
+
   // Step 1: Begin authentication with server
   const beginResponse = await beginAuthenticationWithServer(trimmedUsername, options.signal);
 
-  // Step 2: Execute WebAuthn authentication ceremony
+  // Step 2: Execute WebAuthn authentication ceremony (with or without PRF)
   let credential: AuthenticationResponseJSON;
-  try {
-    credential = await startAuthentication({
-      optionsJSON: beginResponse.options,
-      useBrowserAutofill: options.useAutofill,
-    });
-  } catch (error) {
-    // Handle user cancellation and other errors
-    if (error instanceof Error) {
-      if (
-        error.name === 'NotAllowedError' ||
-        error.message.includes('cancelled') ||
-        error.message.includes('canceled')
-      ) {
-        throw new PasskeyCancelledError('Authentication was cancelled by the user');
-      }
-    }
-    throw new PasskeyVerificationError(
-      `Authentication ceremony failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+  let prfOutput: Uint8Array | undefined;
+  let prfSupported = false;
+
+  if (options.prfSalt) {
+    // Use PRF-enabled authentication
+    const prfResult = await authenticateWithPRF(
+      beginResponse.options,
+      options.prfSalt,
+      options.useAutofill
     );
+    credential = prfResult.credential;
+    prfOutput = prfResult.prfOutput;
+    prfSupported = prfResult.prfSupported;
+  } else {
+    // Standard authentication without PRF
+    try {
+      credential = await startAuthentication({
+        optionsJSON: beginResponse.options,
+        useBrowserAutofill: options.useAutofill,
+      });
+      prfSupported = false;
+    } catch (error) {
+      // Handle user cancellation and other errors
+      if (error instanceof Error) {
+        if (
+          error.name === 'NotAllowedError' ||
+          error.message.includes('cancelled') ||
+          error.message.includes('canceled')
+        ) {
+          throw new PasskeyCancelledError('Authentication was cancelled by the user');
+        }
+      }
+      throw new PasskeyVerificationError(
+        `Authentication ceremony failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 
   // Step 3: Finish authentication with server
@@ -547,7 +669,198 @@ export async function authenticateWithPasskey(
     refreshToken: finishResponse.refreshToken,
     expiresIn: finishResponse.expiresIn,
     tokenType: finishResponse.tokenType,
+    prfOutput,
+    prfSupported,
   };
+}
+
+/**
+ * Result from PRF-enabled authentication ceremony
+ */
+interface PrfAuthenticationResult {
+  credential: AuthenticationResponseJSON;
+  prfOutput?: Uint8Array;
+  prfSupported: boolean;
+}
+
+/**
+ * Execute WebAuthn authentication with PRF extension.
+ * This uses the raw navigator.credentials.get API to include PRF extension
+ * since @simplewebauthn/browser doesn't have direct PRF support.
+ *
+ * @param serverOptions - Options from the server
+ * @param prfSalt - 32-byte salt for PRF evaluation
+ * @param useBrowserAutofill - Whether to use conditional UI
+ * @returns Promise resolving to credential and PRF output
+ * @throws {PasskeyCancelledError} If the user cancels
+ * @throws {PasskeyVerificationError} If the ceremony fails
+ *
+ * @internal
+ */
+async function authenticateWithPRF(
+  serverOptions: PublicKeyCredentialRequestOptionsJSON,
+  prfSalt: Uint8Array,
+  useBrowserAutofill?: boolean
+): Promise<PrfAuthenticationResult> {
+  try {
+    // Convert JSON options to native WebAuthn format
+    const publicKeyOptions = convertOptionsToNative(serverOptions);
+
+    // Create a copy of the salt as an ArrayBuffer (not SharedArrayBuffer)
+    // This ensures type compatibility with the PRF extension
+    const saltBuffer = new ArrayBuffer(prfSalt.byteLength);
+    new Uint8Array(saltBuffer).set(prfSalt);
+
+    // Add PRF extension to request
+    const extensions: AuthenticationExtensionsClientInputs & { prf?: PrfExtensionInput } = {
+      ...publicKeyOptions.extensions,
+      prf: {
+        eval: {
+          first: saltBuffer,
+        },
+      },
+    };
+
+    // Build the credential request options
+    const credentialRequestOptions: CredentialRequestOptions = {
+      publicKey: {
+        ...publicKeyOptions,
+        extensions,
+      },
+      // Conditional mediation for autofill (if supported)
+      mediation: useBrowserAutofill ? 'conditional' : undefined,
+    };
+
+    // Execute the WebAuthn ceremony
+    const credential = (await navigator.credentials.get(
+      credentialRequestOptions
+    )) as PublicKeyCredential | null;
+
+    if (!credential) {
+      throw new PasskeyCancelledError('No credential was selected');
+    }
+
+    // Extract PRF output from extension results
+    const clientExtResults = credential.getClientExtensionResults() as ClientExtensionResultsWithPrf;
+    let prfOutput: Uint8Array | undefined;
+    let prfSupported = false;
+
+    if (clientExtResults.prf?.results?.first) {
+      prfOutput = new Uint8Array(clientExtResults.prf.results.first);
+      prfSupported = true;
+    } else if (clientExtResults.prf?.enabled === false) {
+      // PRF was explicitly not enabled by the authenticator
+      prfSupported = false;
+    }
+
+    // Convert credential to JSON format for server verification
+    const credentialJSON = convertCredentialToJSON(credential);
+
+    return {
+      credential: credentialJSON,
+      prfOutput,
+      prfSupported,
+    };
+  } catch (error) {
+    // Handle user cancellation
+    if (error instanceof PasskeyCancelledError) {
+      throw error;
+    }
+    if (error instanceof Error) {
+      if (
+        error.name === 'NotAllowedError' ||
+        error.message.includes('cancelled') ||
+        error.message.includes('canceled')
+      ) {
+        throw new PasskeyCancelledError('Authentication was cancelled by the user');
+      }
+      if (error.name === 'AbortError') {
+        throw new PasskeyCancelledError('Authentication was aborted');
+      }
+    }
+    throw new PasskeyVerificationError(
+      `Authentication ceremony failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Convert server JSON options to native WebAuthn PublicKeyCredentialRequestOptions.
+ *
+ * @internal
+ */
+function convertOptionsToNative(
+  options: PublicKeyCredentialRequestOptionsJSON
+): PublicKeyCredentialRequestOptions {
+  return {
+    challenge: base64urlToBuffer(options.challenge),
+    timeout: options.timeout,
+    rpId: options.rpId,
+    allowCredentials: options.allowCredentials?.map((cred) => ({
+      type: cred.type,
+      id: base64urlToBuffer(cred.id),
+      transports: cred.transports as AuthenticatorTransport[] | undefined,
+    })),
+    userVerification: options.userVerification,
+    extensions: options.extensions,
+  };
+}
+
+/**
+ * Convert PublicKeyCredential to JSON format for server.
+ *
+ * @internal
+ */
+function convertCredentialToJSON(credential: PublicKeyCredential): AuthenticationResponseJSON {
+  const response = credential.response as AuthenticatorAssertionResponse;
+
+  return {
+    id: credential.id,
+    rawId: bufferToBase64url(credential.rawId),
+    response: {
+      clientDataJSON: bufferToBase64url(response.clientDataJSON),
+      authenticatorData: bufferToBase64url(response.authenticatorData),
+      signature: bufferToBase64url(response.signature),
+      userHandle: response.userHandle ? bufferToBase64url(response.userHandle) : undefined,
+    },
+    authenticatorAttachment: credential.authenticatorAttachment as
+      | AuthenticatorAttachment
+      | undefined,
+    clientExtensionResults: credential.getClientExtensionResults(),
+    type: credential.type as 'public-key',
+  };
+}
+
+/**
+ * Convert base64url string to ArrayBuffer.
+ *
+ * @internal
+ */
+function base64urlToBuffer(base64url: string): ArrayBuffer {
+  // Add padding if needed
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+  const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+/**
+ * Convert ArrayBuffer to base64url string.
+ *
+ * @internal
+ */
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**
