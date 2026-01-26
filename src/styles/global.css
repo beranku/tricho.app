@@ -1948,3 +1948,591 @@ footer code {
 .login-screen--recovery-register .login-subtitle {
   color: #15803d;
 }
+
+/* ============================================================================
+   Photo Capture Component
+   ============================================================================ */
+
+.photo-capture {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.photo-capture-file-input,
+.photo-capture-canvas {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* Source Selection */
+.photo-capture-select {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.photo-capture-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.photo-capture-options {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.photo-capture-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 2rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  min-width: 140px;
+}
+
+.photo-capture-option:hover {
+  background: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.15);
+}
+
+.photo-capture-option:active {
+  transform: scale(0.97);
+}
+
+.photo-capture-option svg {
+  color: var(--accent);
+}
+
+.photo-capture-cancel-button {
+  margin-top: auto;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.photo-capture-cancel-button:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Camera View */
+.photo-capture-camera {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #000;
+}
+
+.photo-capture-camera-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.photo-capture-camera-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.photo-capture-icon-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.photo-capture-icon-button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.photo-capture-icon-button:active {
+  transform: scale(0.95);
+}
+
+.photo-capture-icon-button--primary {
+  background: var(--accent);
+}
+
+.photo-capture-icon-button--primary:hover {
+  background: #0077ed;
+}
+
+.photo-capture-camera-view {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.photo-capture-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-capture-camera-error {
+  padding: 2rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.photo-capture-camera-error p {
+  margin: 0 0 1rem;
+}
+
+.photo-capture-camera-error button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.photo-capture-camera-error button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.photo-capture-camera-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.photo-capture-shutter {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+.photo-capture-shutter:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.photo-capture-shutter:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.photo-capture-shutter:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.photo-capture-shutter-inner {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Preview */
+.photo-capture-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-elevated-strong);
+}
+
+.photo-capture-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.photo-capture-preview-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.photo-capture-preview-image {
+  flex: 0 0 auto;
+  max-height: 40vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.photo-capture-preview-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.photo-capture-preview-form {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.photo-capture-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.photo-capture-form-group label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.photo-capture-form-group select,
+.photo-capture-form-group input,
+.photo-capture-form-group textarea {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.photo-capture-form-group select:focus,
+.photo-capture-form-group input:focus,
+.photo-capture-form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.photo-capture-form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.photo-capture-preview-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Shared Button Styles */
+.photo-capture-button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.photo-capture-button:active {
+  transform: scale(0.98);
+}
+
+.photo-capture-button--primary {
+  background: linear-gradient(135deg, #0a84ff, #409cff);
+  border: 1px solid transparent;
+  color: #ffffff;
+}
+
+.photo-capture-button--primary:hover {
+  background: linear-gradient(135deg, #0077ed, #3690ff);
+}
+
+.photo-capture-button--secondary {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.65);
+  color: var(--text-soft);
+}
+
+.photo-capture-button--secondary:hover {
+  background: #ffffff;
+  color: var(--text);
+}
+
+/* Processing */
+.photo-capture-processing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.photo-capture-processing-content {
+  text-align: center;
+}
+
+.photo-capture-processing-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.photo-capture-processing-message {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.photo-capture-progress-bar {
+  width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  margin: 0 auto 0.5rem;
+  overflow: hidden;
+}
+
+.photo-capture-progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #0a84ff, #409cff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.photo-capture-progress-text {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.photo-capture-spinner {
+  animation: photo-capture-spin 1s linear infinite;
+  color: var(--accent);
+}
+
+@keyframes photo-capture-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Complete */
+.photo-capture-complete {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.photo-capture-complete-content {
+  text-align: center;
+}
+
+.photo-capture-complete-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(52, 199, 89, 0.15);
+  color: #34c759;
+}
+
+.photo-capture-complete-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.photo-capture-complete-message {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.photo-capture-complete-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+/* Error */
+.photo-capture-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.photo-capture-error-content {
+  text-align: center;
+}
+
+.photo-capture-error-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 59, 48, 0.15);
+  color: var(--danger);
+}
+
+.photo-capture-error-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.photo-capture-error-message {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  max-width: 300px;
+}
+
+.photo-capture-error-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+/* Modal */
+.photo-capture-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: photo-capture-modal-fade-in 0.2s ease;
+}
+
+@keyframes photo-capture-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.photo-capture-modal {
+  background: var(--bg-elevated-strong);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-soft);
+  animation: photo-capture-modal-slide-up 0.25s ease;
+}
+
+@keyframes photo-capture-modal-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 600px) {
+  .photo-capture-modal-overlay {
+    align-items: center;
+  }
+
+  .photo-capture-modal {
+    border-radius: var(--radius-xl);
+    border-bottom: 1px solid var(--border);
+    max-height: 85vh;
+    animation: photo-capture-modal-scale-in 0.25s ease;
+  }
+
+  @keyframes photo-capture-modal-scale-in {
+    from {
+      transform: translateY(20px) scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+  }
+}

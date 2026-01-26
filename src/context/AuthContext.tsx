@@ -175,7 +175,10 @@ export interface SetupResult {
 /**
  * Full auth context type
  */
-export type AuthContextType = AuthContextState & AuthContextActions;
+export type AuthContextType = AuthContextState & AuthContextActions & {
+  /** Get the current DEK for encryption operations (returns null if not authenticated) */
+  getDek: () => DataEncryptionKey | null;
+};
 
 // ============================================================================
 // Context
@@ -208,6 +211,7 @@ const defaultContext: AuthContextType = {
   lock: async () => {},
   logout: async () => {},
   clearError: () => {},
+  getDek: () => null,
 };
 
 /**
@@ -949,6 +953,14 @@ export function AuthProvider({ children, initialPrfSupported = false }: AuthProv
     dispatch({ type: 'CLEAR_ERROR' });
   }, []);
 
+  /**
+   * Get the current DEK for encryption operations.
+   * Returns null if not authenticated.
+   */
+  const getDek = useCallback((): DataEncryptionKey | null => {
+    return dekRef.current;
+  }, []);
+
   // ========================================================================
   // Context Value
   // ========================================================================
@@ -965,8 +977,9 @@ export function AuthProvider({ children, initialPrfSupported = false }: AuthProv
       lock,
       logout,
       clearError,
+      getDek,
     }),
-    [state, startSetup, login, loginWithPrf, completeSetup, recoverWithSecret, markRecoverySaved, lock, logout, clearError]
+    [state, startSetup, login, loginWithPrf, completeSetup, recoverWithSecret, markRecoverySaved, lock, logout, clearError, getDek]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
