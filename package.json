@@ -9,6 +9,9 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.16.5"
+    "astro": "^5.16.5",
+    "crypto-js": "^4.2.0",
+    "dexie": "^4.2.1",
+    "rxdb": "^16.21.1"
   }
 }
