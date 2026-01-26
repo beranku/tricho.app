@@ -1238,3 +1238,1051 @@ export function _resetPhotoSyncState(): void {
 export function _getPresignedUrlCache(): Map<string, PresignedUrl> {
   return presignedUrlCache;
 }
+
+// ============================================================================
+// Offline Photo Queue Types
+// ============================================================================
+
+/**
+ * Status of a queued upload item
+ */
+export type QueueItemStatus = 'pending' | 'uploading' | 'retrying' | 'failed' | 'completed';
+
+/**
+ * A single item in the offline upload queue
+ */
+export interface QueuedUploadItem {
+  /** Unique queue item ID */
+  id: string;
+  /** Photo ID */
+  photoId: string;
+  /** Photo variant */
+  variant: PhotoVariant;
+  /** Storage key for the upload */
+  storageKey: string;
+  /** Encrypted data to upload (stored as base64 for IndexedDB) */
+  encryptedDataBase64: string;
+  /** Content type */
+  contentType: string;
+  /** Auth token for the upload */
+  authToken: string;
+  /** Current status */
+  status: QueueItemStatus;
+  /** Number of retry attempts */
+  retryCount: number;
+  /** Maximum retry attempts before permanent failure */
+  maxRetries: number;
+  /** Timestamp when next retry should occur (Unix ms) */
+  nextRetryAt: number | null;
+  /** Timestamp when item was added to queue */
+  createdAt: number;
+  /** Timestamp of last update */
+  updatedAt: number;
+  /** Last error message if failed */
+  lastError?: string;
+  /** Last error code if failed */
+  lastErrorCode?: PhotoSyncErrorCode;
+  /** Priority (lower = higher priority) */
+  priority: number;
+}
+
+/**
+ * Options for adding an item to the upload queue
+ */
+export interface QueueUploadOptions {
+  /** Photo ID */
+  photoId: string;
+  /** Photo variant */
+  variant: PhotoVariant;
+  /** Storage key */
+  storageKey: string;
+  /** Encrypted data to upload */
+  encryptedData: Uint8Array;
+  /** Content type */
+  contentType?: string;
+  /** Auth token */
+  authToken: string;
+  /** Maximum retry attempts (default: 5) */
+  maxRetries?: number;
+  /** Priority (default: 10, lower = higher priority) */
+  priority?: number;
+}
+
+/**
+ * Queue statistics
+ */
+export interface QueueStats {
+  /** Total items in queue */
+  total: number;
+  /** Pending items (not yet attempted) */
+  pending: number;
+  /** Currently uploading */
+  uploading: number;
+  /** Waiting for retry */
+  retrying: number;
+  /** Permanently failed */
+  failed: number;
+  /** Successfully completed */
+  completed: number;
+  /** Oldest item timestamp */
+  oldestItemAt: number | null;
+  /** Newest item timestamp */
+  newestItemAt: number | null;
+}
+
+/**
+ * Queue event types
+ */
+export type QueueEventType =
+  | 'item-added'
+  | 'item-updated'
+  | 'item-completed'
+  | 'item-failed'
+  | 'item-removed'
+  | 'queue-processing-started'
+  | 'queue-processing-stopped'
+  | 'queue-cleared'
+  | 'online-status-changed';
+
+/**
+ * Queue event data
+ */
+export interface QueueEvent {
+  type: QueueEventType;
+  item?: QueuedUploadItem;
+  stats: QueueStats;
+  isOnline: boolean;
+  isProcessing: boolean;
+}
+
+/**
+ * Queue event listener
+ */
+export type QueueEventListener = (event: QueueEvent) => void;
+
+/**
+ * Queue configuration options
+ */
+export interface QueueConfig {
+  /** Maximum concurrent uploads (default: 2) */
+  concurrency?: number;
+  /** Base retry delay in ms (default: 1000) */
+  baseRetryDelay?: number;
+  /** Maximum retry delay in ms (default: 60000 = 1 minute) */
+  maxRetryDelay?: number;
+  /** Retry backoff multiplier (default: 2) */
+  backoffMultiplier?: number;
+  /** Auto-start processing when online (default: true) */
+  autoProcess?: boolean;
+  /** Process queue when visibility changes to visible (default: true) */
+  processOnForeground?: boolean;
+}
+
+// ============================================================================
+// Queue Module State
+// ============================================================================
+
+/** IndexedDB database name for queue storage */
+const QUEUE_DB_NAME = 'tricho-photo-queue';
+const QUEUE_DB_VERSION = 1;
+const QUEUE_STORE_NAME = 'upload-queue';
+
+/** Queue event listeners */
+const queueEventListeners: Set<QueueEventListener> = new Set();
+
+/** Cached database promise */
+let queueDbPromise: Promise<IDBDatabase | null> | null = null;
+
+/** Current queue state */
+let isQueueProcessing = false;
+let isQueueOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+/** Queue configuration */
+let queueConfig: Required<QueueConfig> = {
+  concurrency: 2,
+  baseRetryDelay: 1000,
+  maxRetryDelay: 60000,
+  backoffMultiplier: 2,
+  autoProcess: true,
+  processOnForeground: true,
+};
+
+/** Active upload abort controllers */
+const activeUploads: Map<string, AbortController> = new Map();
+
+/** Processing interval reference */
+let processingInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Network event handlers */
+let queueOnlineHandler: (() => void) | null = null;
+let queueOfflineHandler: (() => void) | null = null;
+let queueVisibilityHandler: (() => void) | null = null;
+
+// ============================================================================
+// Queue IndexedDB Operations
+// ============================================================================
+
+/**
+ * Opens the queue IndexedDB database
+ */
+function openQueueDb(): Promise<IDBDatabase | null> {
+  if (queueDbPromise) {
+    return queueDbPromise;
+  }
+
+  if (typeof window === 'undefined' || !('indexedDB' in window)) {
+    return Promise.resolve(null);
+  }
+
+  queueDbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(QUEUE_DB_NAME, QUEUE_DB_VERSION);
+
+    request.onerror = () => {
+      queueDbPromise = null;
+      reject(request.error);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(QUEUE_STORE_NAME)) {
+        const store = db.createObjectStore(QUEUE_STORE_NAME, { keyPath: 'id' });
+        // Create indexes for efficient queries
+        store.createIndex('status', 'status', { unique: false });
+        store.createIndex('priority', 'priority', { unique: false });
+        store.createIndex('nextRetryAt', 'nextRetryAt', { unique: false });
+        store.createIndex('photoId', 'photoId', { unique: false });
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      resolve((event.target as IDBOpenDBRequest).result);
+    };
+  });
+
+  return queueDbPromise;
+}
+
+/**
+ * Saves a queue item to IndexedDB
+ */
+async function saveQueueItem(item: QueuedUploadItem): Promise<void> {
+  const db = await openQueueDb();
+  if (!db) {
+    throw new PhotoSyncError('IndexedDB not available', 'STORAGE_ERROR');
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    const req = store.put(item);
+
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(new PhotoSyncError('Failed to save queue item', 'STORAGE_ERROR', item.photoId, req.error));
+  });
+}
+
+/**
+ * Gets a queue item by ID
+ */
+async function getQueueItem(id: string): Promise<QueuedUploadItem | null> {
+  const db = await openQueueDb();
+  if (!db) return null;
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readonly');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    const req = store.get(id);
+
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Gets all queue items
+ */
+async function getAllQueueItems(): Promise<QueuedUploadItem[]> {
+  const db = await openQueueDb();
+  if (!db) return [];
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readonly');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    const req = store.getAll();
+
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Deletes a queue item
+ */
+async function deleteQueueItem(id: string): Promise<void> {
+  const db = await openQueueDb();
+  if (!db) return;
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    const req = store.delete(id);
+
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Clears all items from the queue
+ */
+async function clearAllQueueItems(): Promise<void> {
+  const db = await openQueueDb();
+  if (!db) return;
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    const req = store.clear();
+
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ============================================================================
+// Queue Statistics and Helpers
+// ============================================================================
+
+/**
+ * Calculates queue statistics from items
+ */
+function calculateQueueStats(items: QueuedUploadItem[]): QueueStats {
+  const stats: QueueStats = {
+    total: items.length,
+    pending: 0,
+    uploading: 0,
+    retrying: 0,
+    failed: 0,
+    completed: 0,
+    oldestItemAt: null,
+    newestItemAt: null,
+  };
+
+  for (const item of items) {
+    switch (item.status) {
+      case 'pending':
+        stats.pending++;
+        break;
+      case 'uploading':
+        stats.uploading++;
+        break;
+      case 'retrying':
+        stats.retrying++;
+        break;
+      case 'failed':
+        stats.failed++;
+        break;
+      case 'completed':
+        stats.completed++;
+        break;
+    }
+
+    if (stats.oldestItemAt === null || item.createdAt < stats.oldestItemAt) {
+      stats.oldestItemAt = item.createdAt;
+    }
+    if (stats.newestItemAt === null || item.createdAt > stats.newestItemAt) {
+      stats.newestItemAt = item.createdAt;
+    }
+  }
+
+  return stats;
+}
+
+/**
+ * Generates a unique queue item ID
+ */
+function generateQueueItemId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `q_${crypto.randomUUID()}`;
+  }
+  return `q_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+/**
+ * Calculates the next retry delay using exponential backoff
+ */
+function calculateRetryDelay(retryCount: number): number {
+  const delay = queueConfig.baseRetryDelay * Math.pow(queueConfig.backoffMultiplier, retryCount);
+  // Add jitter (±10%)
+  const jitter = delay * 0.1 * (Math.random() * 2 - 1);
+  return Math.min(delay + jitter, queueConfig.maxRetryDelay);
+}
+
+/**
+ * Converts Uint8Array to base64 string for IndexedDB storage
+ */
+function uint8ArrayToBase64(data: Uint8Array): string {
+  let binary = '';
+  const len = data.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(data[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Converts base64 string back to Uint8Array
+ */
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// ============================================================================
+// Queue Event Handling
+// ============================================================================
+
+/**
+ * Emits a queue event to all listeners
+ */
+async function emitQueueEvent(
+  type: QueueEventType,
+  item?: QueuedUploadItem
+): Promise<void> {
+  const items = await getAllQueueItems();
+  const stats = calculateQueueStats(items);
+
+  const event: QueueEvent = {
+    type,
+    item,
+    stats,
+    isOnline: isQueueOnline,
+    isProcessing: isQueueProcessing,
+  };
+
+  for (const listener of queueEventListeners) {
+    try {
+      listener(event);
+    } catch (error) {
+      if (getEnv().debug) {
+        console.warn('Queue event listener error:', error);
+      }
+    }
+  }
+}
+
+/**
+ * Subscribes to queue events
+ *
+ * @param listener - Event listener function
+ * @returns Unsubscribe function
+ *
+ * @example
+ * ```typescript
+ * const unsubscribe = subscribeQueueEvents((event) => {
+ *   console.log(`Queue event: ${event.type}, pending: ${event.stats.pending}`);
+ * });
+ * ```
+ */
+export function subscribeQueueEvents(listener: QueueEventListener): () => void {
+  queueEventListeners.add(listener);
+  return () => {
+    queueEventListeners.delete(listener);
+  };
+}
+
+// ============================================================================
+// Queue Operations
+// ============================================================================
+
+/**
+ * Initializes the offline photo queue with configuration.
+ * Sets up network listeners and starts auto-processing if enabled.
+ *
+ * @param config - Queue configuration options
+ *
+ * @example
+ * ```typescript
+ * initPhotoQueue({
+ *   concurrency: 3,
+ *   autoProcess: true,
+ *   processOnForeground: true,
+ * });
+ * ```
+ */
+export function initPhotoQueue(config: QueueConfig = {}): void {
+  // Merge config with defaults
+  queueConfig = {
+    concurrency: config.concurrency ?? 2,
+    baseRetryDelay: config.baseRetryDelay ?? 1000,
+    maxRetryDelay: config.maxRetryDelay ?? 60000,
+    backoffMultiplier: config.backoffMultiplier ?? 2,
+    autoProcess: config.autoProcess ?? true,
+    processOnForeground: config.processOnForeground ?? true,
+  };
+
+  // Set up network listeners
+  setupQueueNetworkListeners();
+
+  // Set up visibility listener for foreground processing
+  if (queueConfig.processOnForeground) {
+    setupQueueVisibilityListener();
+  }
+
+  // Start processing interval (checks every 5 seconds for items ready to retry)
+  if (processingInterval) {
+    clearInterval(processingInterval);
+  }
+  processingInterval = setInterval(() => {
+    if (isQueueOnline && queueConfig.autoProcess && !isQueueProcessing) {
+      processQueue().catch(() => {
+        // Errors are handled inside processQueue
+      });
+    }
+  }, 5000);
+
+  // Initial processing if online
+  if (isQueueOnline && queueConfig.autoProcess) {
+    processQueue().catch(() => {
+      // Errors are handled inside processQueue
+    });
+  }
+}
+
+/**
+ * Sets up network event listeners for the queue
+ */
+function setupQueueNetworkListeners(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  // Clean up existing listeners
+  cleanupQueueNetworkListeners();
+
+  queueOnlineHandler = () => {
+    isQueueOnline = true;
+    emitQueueEvent('online-status-changed');
+
+    // Auto-process when coming online
+    if (queueConfig.autoProcess && !isQueueProcessing) {
+      processQueue().catch(() => {
+        // Errors are handled inside processQueue
+      });
+    }
+  };
+
+  queueOfflineHandler = () => {
+    isQueueOnline = false;
+    emitQueueEvent('online-status-changed');
+
+    // Cancel active uploads when going offline
+    for (const [, controller] of activeUploads) {
+      controller.abort();
+    }
+    activeUploads.clear();
+  };
+
+  window.addEventListener('online', queueOnlineHandler);
+  window.addEventListener('offline', queueOfflineHandler);
+}
+
+/**
+ * Sets up visibility change listener for foreground processing
+ */
+function setupQueueVisibilityListener(): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  if (queueVisibilityHandler) {
+    document.removeEventListener('visibilitychange', queueVisibilityHandler);
+  }
+
+  queueVisibilityHandler = () => {
+    if (document.visibilityState === 'visible' && isQueueOnline && !isQueueProcessing) {
+      processQueue().catch(() => {
+        // Errors are handled inside processQueue
+      });
+    }
+  };
+
+  document.addEventListener('visibilitychange', queueVisibilityHandler);
+}
+
+/**
+ * Cleans up queue network listeners
+ */
+function cleanupQueueNetworkListeners(): void {
+  if (typeof window !== 'undefined') {
+    if (queueOnlineHandler) {
+      window.removeEventListener('online', queueOnlineHandler);
+      queueOnlineHandler = null;
+    }
+    if (queueOfflineHandler) {
+      window.removeEventListener('offline', queueOfflineHandler);
+      queueOfflineHandler = null;
+    }
+  }
+
+  if (typeof document !== 'undefined' && queueVisibilityHandler) {
+    document.removeEventListener('visibilitychange', queueVisibilityHandler);
+    queueVisibilityHandler = null;
+  }
+}
+
+/**
+ * Adds a photo upload to the offline queue.
+ * The upload will be attempted immediately if online, or queued for later if offline.
+ *
+ * @param options - Queue upload options
+ * @returns Promise resolving to the queued item
+ *
+ * @example
+ * ```typescript
+ * const queuedItem = await queuePhotoUpload({
+ *   photoId: 'photo_123',
+ *   variant: 'original',
+ *   storageKey: 'user_abc/photo_123/original.enc',
+ *   encryptedData: encryptedBytes,
+ *   authToken: 'jwt_token',
+ * });
+ * ```
+ */
+export async function queuePhotoUpload(options: QueueUploadOptions): Promise<QueuedUploadItem> {
+  const now = Date.now();
+
+  const item: QueuedUploadItem = {
+    id: generateQueueItemId(),
+    photoId: options.photoId,
+    variant: options.variant,
+    storageKey: options.storageKey,
+    encryptedDataBase64: uint8ArrayToBase64(options.encryptedData),
+    contentType: options.contentType ?? 'application/octet-stream',
+    authToken: options.authToken,
+    status: 'pending',
+    retryCount: 0,
+    maxRetries: options.maxRetries ?? 5,
+    nextRetryAt: null,
+    createdAt: now,
+    updatedAt: now,
+    priority: options.priority ?? 10,
+  };
+
+  // Save to IndexedDB
+  await saveQueueItem(item);
+
+  // Emit event
+  await emitQueueEvent('item-added', item);
+
+  // Trigger processing if online and auto-process enabled
+  if (isQueueOnline && queueConfig.autoProcess && !isQueueProcessing) {
+    // Use setTimeout to avoid blocking
+    setTimeout(() => {
+      processQueue().catch(() => {
+        // Errors are handled inside processQueue
+      });
+    }, 0);
+  }
+
+  return item;
+}
+
+/**
+ * Gets the current state of the upload queue.
+ *
+ * @returns Promise resolving to queue statistics
+ */
+export async function getQueueStats(): Promise<QueueStats> {
+  const items = await getAllQueueItems();
+  return calculateQueueStats(items);
+}
+
+/**
+ * Gets all items currently in the queue.
+ *
+ * @returns Promise resolving to array of queued items
+ */
+export async function getQueuedItems(): Promise<QueuedUploadItem[]> {
+  return getAllQueueItems();
+}
+
+/**
+ * Gets queued items for a specific photo.
+ *
+ * @param photoId - Photo ID to filter by
+ * @returns Promise resolving to array of queued items for the photo
+ */
+export async function getQueuedItemsForPhoto(photoId: string): Promise<QueuedUploadItem[]> {
+  const items = await getAllQueueItems();
+  return items.filter((item) => item.photoId === photoId);
+}
+
+/**
+ * Removes a specific item from the queue.
+ * Will abort the upload if currently in progress.
+ *
+ * @param itemId - Queue item ID to remove
+ */
+export async function removeFromQueue(itemId: string): Promise<void> {
+  // Abort if currently uploading
+  const controller = activeUploads.get(itemId);
+  if (controller) {
+    controller.abort();
+    activeUploads.delete(itemId);
+  }
+
+  const item = await getQueueItem(itemId);
+  await deleteQueueItem(itemId);
+  await emitQueueEvent('item-removed', item ?? undefined);
+}
+
+/**
+ * Removes all items for a specific photo from the queue.
+ *
+ * @param photoId - Photo ID to remove items for
+ */
+export async function removePhotoFromQueue(photoId: string): Promise<void> {
+  const items = await getQueuedItemsForPhoto(photoId);
+  for (const item of items) {
+    await removeFromQueue(item.id);
+  }
+}
+
+/**
+ * Clears all items from the queue.
+ * Will abort any active uploads.
+ */
+export async function clearQueue(): Promise<void> {
+  // Abort all active uploads
+  for (const [, controller] of activeUploads) {
+    controller.abort();
+  }
+  activeUploads.clear();
+
+  await clearAllQueueItems();
+  await emitQueueEvent('queue-cleared');
+}
+
+/**
+ * Retries a failed queue item immediately.
+ *
+ * @param itemId - Queue item ID to retry
+ */
+export async function retryQueueItem(itemId: string): Promise<void> {
+  const item = await getQueueItem(itemId);
+  if (!item) {
+    throw new PhotoSyncError('Queue item not found', 'NOT_FOUND');
+  }
+
+  if (item.status !== 'failed' && item.status !== 'retrying') {
+    throw new PhotoSyncError('Item is not in a retryable state', 'INVALID_DATA');
+  }
+
+  // Reset for retry
+  item.status = 'pending';
+  item.nextRetryAt = null;
+  item.retryCount = 0;
+  item.updatedAt = Date.now();
+
+  await saveQueueItem(item);
+  await emitQueueEvent('item-updated', item);
+
+  // Trigger processing
+  if (isQueueOnline && !isQueueProcessing) {
+    processQueue().catch(() => {
+      // Errors are handled inside processQueue
+    });
+  }
+}
+
+/**
+ * Retries all failed items in the queue.
+ */
+export async function retryAllFailed(): Promise<void> {
+  const items = await getAllQueueItems();
+  const failedItems = items.filter((item) => item.status === 'failed');
+
+  for (const item of failedItems) {
+    item.status = 'pending';
+    item.nextRetryAt = null;
+    item.retryCount = 0;
+    item.updatedAt = Date.now();
+    await saveQueueItem(item);
+  }
+
+  if (failedItems.length > 0 && isQueueOnline && !isQueueProcessing) {
+    processQueue().catch(() => {
+      // Errors are handled inside processQueue
+    });
+  }
+}
+
+// ============================================================================
+// Queue Processing
+// ============================================================================
+
+/**
+ * Processes the upload queue.
+ * Uploads items concurrently with the configured concurrency limit.
+ * Handles retries with exponential backoff.
+ */
+export async function processQueue(): Promise<void> {
+  if (!isQueueOnline) {
+    return;
+  }
+
+  if (isQueueProcessing) {
+    return;
+  }
+
+  isQueueProcessing = true;
+  await emitQueueEvent('queue-processing-started');
+
+  try {
+    while (isQueueOnline) {
+      // Get items ready to process
+      const items = await getItemsReadyToProcess();
+
+      if (items.length === 0) {
+        break;
+      }
+
+      // Process in batches according to concurrency
+      const batch = items.slice(0, queueConfig.concurrency);
+      await Promise.all(batch.map((item) => processQueueItem(item)));
+    }
+  } finally {
+    isQueueProcessing = false;
+    await emitQueueEvent('queue-processing-stopped');
+  }
+}
+
+/**
+ * Gets items that are ready to be processed
+ */
+async function getItemsReadyToProcess(): Promise<QueuedUploadItem[]> {
+  const items = await getAllQueueItems();
+  const now = Date.now();
+
+  return items
+    .filter((item) => {
+      // Skip completed or currently uploading
+      if (item.status === 'completed' || item.status === 'uploading') {
+        return false;
+      }
+
+      // Skip permanently failed
+      if (item.status === 'failed') {
+        return false;
+      }
+
+      // Check if retry time has passed
+      if (item.status === 'retrying' && item.nextRetryAt && item.nextRetryAt > now) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by priority first, then by creation time
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      return a.createdAt - b.createdAt;
+    });
+}
+
+/**
+ * Processes a single queue item
+ */
+async function processQueueItem(item: QueuedUploadItem): Promise<void> {
+  // Update status to uploading
+  item.status = 'uploading';
+  item.updatedAt = Date.now();
+  await saveQueueItem(item);
+  await emitQueueEvent('item-updated', item);
+
+  // Create abort controller
+  const controller = new AbortController();
+  activeUploads.set(item.id, controller);
+
+  try {
+    // Convert base64 back to Uint8Array
+    const encryptedData = base64ToUint8Array(item.encryptedDataBase64);
+
+    // Attempt upload
+    const result = await uploadPhoto({
+      photoId: item.photoId,
+      variant: item.variant,
+      storageKey: item.storageKey,
+      encryptedData,
+      contentType: item.contentType,
+      authToken: item.authToken,
+      signal: controller.signal,
+    });
+
+    if (result.success) {
+      // Upload succeeded - mark as completed
+      item.status = 'completed';
+      item.updatedAt = Date.now();
+      await saveQueueItem(item);
+      await emitQueueEvent('item-completed', item);
+
+      // Remove completed item from queue after a short delay
+      setTimeout(async () => {
+        try {
+          await deleteQueueItem(item.id);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }, 1000);
+    } else {
+      // Upload failed
+      await handleUploadFailure(item, result.error, result.errorCode);
+    }
+  } catch (error) {
+    // Handle unexpected errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorCode: PhotoSyncErrorCode = error instanceof PhotoSyncError
+      ? error.code
+      : 'UPLOAD_FAILED';
+    await handleUploadFailure(item, errorMessage, errorCode);
+  } finally {
+    activeUploads.delete(item.id);
+  }
+}
+
+/**
+ * Handles an upload failure with retry logic
+ */
+async function handleUploadFailure(
+  item: QueuedUploadItem,
+  errorMessage?: string,
+  errorCode?: PhotoSyncErrorCode
+): Promise<void> {
+  item.retryCount++;
+  item.lastError = errorMessage;
+  item.lastErrorCode = errorCode;
+  item.updatedAt = Date.now();
+
+  // Determine if we should retry
+  const isRetryable = isRetryableError(errorCode);
+  const hasRetriesLeft = item.retryCount < item.maxRetries;
+
+  if (isRetryable && hasRetriesLeft) {
+    // Schedule retry with exponential backoff
+    const retryDelay = calculateRetryDelay(item.retryCount);
+    item.status = 'retrying';
+    item.nextRetryAt = Date.now() + retryDelay;
+    await saveQueueItem(item);
+    await emitQueueEvent('item-updated', item);
+  } else {
+    // Mark as permanently failed
+    item.status = 'failed';
+    item.nextRetryAt = null;
+    await saveQueueItem(item);
+    await emitQueueEvent('item-failed', item);
+  }
+}
+
+/**
+ * Determines if an error is retryable
+ */
+function isRetryableError(errorCode?: PhotoSyncErrorCode): boolean {
+  if (!errorCode) {
+    return true; // Default to retryable
+  }
+
+  const nonRetryableErrors: PhotoSyncErrorCode[] = [
+    'AUTH_ERROR',
+    'INVALID_DATA',
+    'NOT_FOUND',
+    'ABORTED',
+  ];
+
+  return !nonRetryableErrors.includes(errorCode);
+}
+
+/**
+ * Checks if the queue is currently processing
+ */
+export function isQueueActive(): boolean {
+  return isQueueProcessing;
+}
+
+/**
+ * Checks if the device is currently online (from queue's perspective)
+ */
+export function isQueueOnlineStatus(): boolean {
+  return isQueueOnline;
+}
+
+/**
+ * Stops queue processing and cleanup.
+ * Call this when the user logs out.
+ */
+export function destroyPhotoQueue(): void {
+  // Stop processing interval
+  if (processingInterval) {
+    clearInterval(processingInterval);
+    processingInterval = null;
+  }
+
+  // Cleanup network listeners
+  cleanupQueueNetworkListeners();
+
+  // Abort all active uploads
+  for (const [, controller] of activeUploads) {
+    controller.abort();
+  }
+  activeUploads.clear();
+
+  // Reset state
+  isQueueProcessing = false;
+  queueEventListeners.clear();
+  queueDbPromise = null;
+}
+
+// ============================================================================
+// Queue Testing Exports
+// ============================================================================
+
+/**
+ * Resets queue module state (for testing only)
+ * @internal
+ */
+export function _resetPhotoQueueState(): void {
+  destroyPhotoQueue();
+  isQueueOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  queueConfig = {
+    concurrency: 2,
+    baseRetryDelay: 1000,
+    maxRetryDelay: 60000,
+    backoffMultiplier: 2,
+    autoProcess: true,
+    processOnForeground: true,
+  };
+}
+
+/**
+ * Gets the queue configuration (for testing only)
+ * @internal
+ */
+export function _getQueueConfig(): Required<QueueConfig> {
+  return { ...queueConfig };
+}
+
+/**
+ * Sets queue online status (for testing only)
+ * @internal
+ */
+export function _setQueueOnline(online: boolean): void {
+  isQueueOnline = online;
+}
