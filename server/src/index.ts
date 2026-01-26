@@ -46,8 +46,11 @@ app.get('/api', (c) => {
       authStatus: 'GET /api/auth/status?username=...',
       registerBegin: 'POST /api/auth/register/begin',
       registerFinish: 'POST /api/auth/register/finish',
-      authenticateBegin: 'POST /api/auth/authenticate/begin (TODO)',
-      authenticateFinish: 'POST /api/auth/authenticate/finish (TODO)',
+      authenticateBegin: 'POST /api/auth/authenticate/begin',
+      authenticateFinish: 'POST /api/auth/authenticate/finish',
+      tokenRefresh: 'POST /api/auth/token/refresh',
+      logout: 'POST /api/auth/logout',
+      session: 'GET /api/auth/session',
     },
   });
 });

@@ -2,7 +2,7 @@
  * Auth Routes
  *
  * WebAuthn registration and authentication endpoints for TrichoApp.
- * Handles passkey-based authentication flows.
+ * Handles passkey-based authentication flows and session management.
  */
 
 import { Hono } from 'hono';
@@ -16,6 +16,14 @@ import {
   hasCredentials,
   getRpConfig,
 } from '../services/webauthn.js';
+import {
+  issueTokens,
+  refreshAccessToken,
+  revokeSession,
+  getActiveSessionCount,
+  getTokenConfig,
+} from '../services/tokens.js';
+import { requireAuth, requireTokenType, type AuthVariables } from '../middleware/auth.js';
 
 // ============================================================================
 // Types
@@ -37,6 +45,11 @@ interface AuthenticateBeginBody {
 interface AuthenticateFinishBody {
   userId: string;
   response: AuthenticationResponseJSON;
+  deviceInfo?: string;
+}
+
+interface RefreshTokenBody {
+  refreshToken: string;
 }
 
 // ============================================================================
@@ -207,16 +220,26 @@ authRouter.post('/authenticate/begin', async (c) => {
  * POST /api/auth/authenticate/finish
  *
  * Complete WebAuthn authentication ceremony.
- * Verifies the credential response from the client.
+ * Verifies the credential response from the client and issues tokens.
  *
  * Request body:
  *   {
  *     userId: string,        - The user ID from /authenticate/begin
  *     response: object       - The response from navigator.credentials.get()
+ *     deviceInfo?: string    - Optional device identifier for session tracking
  *   }
  *
  * Response:
- *   200: { verified: boolean, userId: string, username: string, credentialId: string }
+ *   200: {
+ *     verified: boolean,
+ *     userId: string,
+ *     username: string,
+ *     credentialId: string,
+ *     accessToken: string,
+ *     refreshToken: string,
+ *     expiresIn: number,
+ *     tokenType: 'Bearer'
+ *   }
  *   400: { error: string } - Invalid request or verification failed
  *   404: { error: string } - User or credential not found
  */
@@ -236,11 +259,18 @@ authRouter.post('/authenticate/finish', async (c) => {
     // Verify authentication
     const result = await finishAuthentication(body.userId, body.response);
 
+    // Issue tokens on successful authentication
+    const tokens = await issueTokens(result.userId, result.username, body.deviceInfo);
+
     return c.json({
       verified: result.verified,
       userId: result.userId,
       username: result.username,
       credentialId: result.credentialId,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      tokenType: tokens.tokenType,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Authentication failed';
@@ -298,15 +328,148 @@ authRouter.get('/status', async (c) => {
  * Useful for debugging and client configuration.
  *
  * Response:
- *   200: { rpName: string, rpId: string }
+ *   200: { rpName: string, rpId: string, tokens: { accessTokenExpiry, refreshTokenExpiry } }
  */
 authRouter.get('/config', async (c) => {
-  const config = getRpConfig();
+  const rpConfig = getRpConfig();
+  const tokenCfg = getTokenConfig();
 
   return c.json({
-    rpName: config.name,
-    rpId: config.id,
+    rpName: rpConfig.name,
+    rpId: rpConfig.id,
+    tokens: {
+      accessTokenExpiry: tokenCfg.accessTokenExpiry,
+      refreshTokenExpiry: tokenCfg.refreshTokenExpiry,
+    },
   });
 });
+
+// ============================================================================
+// Token Management Endpoints
+// ============================================================================
+
+/**
+ * POST /api/auth/token/refresh
+ *
+ * Refresh access token using a valid refresh token.
+ * Issues a new token pair and invalidates the old refresh token.
+ *
+ * Request body:
+ *   { refreshToken: string }
+ *
+ * Response:
+ *   200: { accessToken, refreshToken, expiresIn, tokenType }
+ *   400: { error: string } - Missing refresh token
+ *   401: { error: string } - Invalid or expired refresh token
+ */
+authRouter.post('/token/refresh', async (c) => {
+  try {
+    const body = await c.req.json<RefreshTokenBody>();
+
+    if (!body.refreshToken) {
+      return c.json({ error: 'Refresh token is required' }, 400);
+    }
+
+    const tokens = await refreshAccessToken(body.refreshToken);
+
+    if (!tokens) {
+      return c.json({ error: 'Invalid or expired refresh token' }, 401);
+    }
+
+    return c.json({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      tokenType: tokens.tokenType,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Token refresh failed';
+    return c.json({ error: message }, 500);
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ *
+ * Revoke the current session (logout).
+ * Requires a valid access token.
+ * Optionally revokes all sessions for the user.
+ *
+ * Query params:
+ *   all: boolean - If true, revoke all sessions for the user
+ *
+ * Request body (optional):
+ *   { refreshToken?: string } - Specific refresh token to revoke
+ *
+ * Response:
+ *   200: { success: boolean, sessionsRevoked: number }
+ *   401: { error: string } - Unauthorized
+ */
+const logoutRouter = new Hono<{ Variables: AuthVariables }>();
+logoutRouter.use(requireAuth());
+logoutRouter.post('/', async (c) => {
+  try {
+    const user = c.get('user');
+    const revokeAll = c.req.query('all') === 'true';
+
+    let refreshToken: string | undefined;
+
+    // Try to get refresh token from body (optional)
+    try {
+      const body = await c.req.json<{ refreshToken?: string }>();
+      refreshToken = body.refreshToken;
+    } catch {
+      // No body or invalid JSON - that's OK
+    }
+
+    let revokedCount: number;
+
+    if (revokeAll) {
+      // Revoke all sessions for this user
+      revokedCount = await revokeSession(user.userId);
+    } else if (refreshToken) {
+      // Revoke specific session
+      revokedCount = await revokeSession(user.userId, refreshToken);
+    } else {
+      // Just acknowledge logout - client should discard tokens
+      revokedCount = 0;
+    }
+
+    return c.json({
+      success: true,
+      sessionsRevoked: revokedCount,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Logout failed';
+    return c.json({ error: message }, 500);
+  }
+});
+
+authRouter.route('/logout', logoutRouter);
+
+/**
+ * GET /api/auth/session
+ *
+ * Get current session information.
+ * Requires a valid access token.
+ *
+ * Response:
+ *   200: { userId, username, activeSessions }
+ *   401: { error: string } - Unauthorized
+ */
+const sessionRouter = new Hono<{ Variables: AuthVariables }>();
+sessionRouter.use(requireAuth());
+sessionRouter.get('/', async (c) => {
+  const user = c.get('user');
+  const activeSessions = getActiveSessionCount(user.userId);
+
+  return c.json({
+    userId: user.userId,
+    username: user.username,
+    activeSessions,
+  });
+});
+
+authRouter.route('/session', sessionRouter);
 
 export default authRouter;
