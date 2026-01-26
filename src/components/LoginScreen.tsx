@@ -38,8 +38,9 @@ import React, {
   type FormEvent,
 } from 'react';
 import { useAuth, AuthState, type SetupResult } from '../context/AuthContext';
-import type { RecoverySecret, DataEncryptionKey, DeviceSalt, DerivedKek } from '../crypto/keys';
-import type { PrfCapabilities, UnlockResult } from '../auth/prf';
+import { RecoveryQRDisplay } from './RecoveryQRDisplay';
+import type { RecoverySecret, DataEncryptionKey, DerivedKek } from '../crypto/keys';
+import type { PrfCapabilities } from '../auth/prf';
 
 // ============================================================================
 // Types
@@ -79,20 +80,26 @@ type ScreenState =
   | 'entering_username'
   | 'registering'
   | 'authenticating'
+  | 'showing_recovery'
+  | 'completing_setup'
   | 'setup_complete'
   | 'error';
 
 /**
- * Setup data collected during registration
+ * Pending setup result (before completing setup)
+ * Stores all the data needed to complete setup after user saves recovery QR
  */
-interface SetupData {
-  username: string;
-  userId: string;
-  credentialId: string;
-  recoverySecret: RecoverySecret;
-  dek: DataEncryptionKey;
-  deviceSalt: DeviceSalt;
+interface PendingSetupResult {
+  user: {
+    userId: string;
+    username: string;
+    credentialId?: string;
+  };
   kek: DerivedKek;
+  dek: DataEncryptionKey;
+  recoverySecret: RecoverySecret;
+  deviceSalt: Uint8Array;
+  prfSalt: Uint8Array;
   prfSucceeded: boolean;
 }
 
@@ -235,6 +242,7 @@ export function LoginScreen({
   const [error, setError] = useState<string | null>(null);
   const [prfCapabilities, setPrfCapabilities] = useState<PrfCapabilities | null>(null);
   const [webAuthnSupported, setWebAuthnSupported] = useState(true);
+  const [pendingSetup, setPendingSetup] = useState<PendingSetupResult | null>(null);
 
   // ========================================================================
   // Capability Detection
@@ -293,9 +301,9 @@ export function LoginScreen({
       try {
         // Dynamically import auth modules
         const { registerPasskey, getDeviceInfo } = await import('../auth/passkey');
-        const { generateRecoverySecret, generateDataEncryptionKey, generateDeviceSalt, deriveKek, wrapDek } =
+        const { generateRecoverySecret, generateDataEncryptionKey, generateDeviceSalt, deriveKek } =
           await import('../crypto/keys');
-        const { generatePrfSalt, getPrfCapabilities } = await import('../auth/prf');
+        const { generatePrfSalt } = await import('../auth/prf');
 
         // Step 1: Register passkey with server
         const registrationResult = await registerPasskey(trimmedUsername, {
@@ -308,16 +316,14 @@ export function LoginScreen({
         const deviceSalt = generateDeviceSalt();
         const prfSalt = generatePrfSalt();
 
-        // Step 3: Check PRF capabilities and derive KEK
-        const caps = await getPrfCapabilities();
-        let kek: DerivedKek;
-
+        // Step 3: Derive KEK from recovery secret
         // For setup, we always use RS to derive KEK initially
         // PRF-based KEK derivation happens during authentication
-        kek = await deriveKek(null, recoverySecret, deviceSalt);
+        const kek = await deriveKek(null, recoverySecret, deviceSalt);
 
-        // Step 4: Build setup result and complete
-        const setupResult: SetupResult = {
+        // Step 4: Store pending setup result and show recovery QR
+        // The user MUST save their recovery QR before we complete setup
+        const pendingResult: PendingSetupResult = {
           user: {
             userId: registrationResult.userId,
             username: trimmedUsername,
@@ -331,9 +337,8 @@ export function LoginScreen({
           prfSucceeded: false, // PRF is tested during auth, not registration
         };
 
-        await completeSetup(setupResult);
-        setScreenState('setup_complete');
-        onSetupComplete?.();
+        setPendingSetup(pendingResult);
+        setScreenState('showing_recovery');
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Setup failed';
 
@@ -428,6 +433,82 @@ export function LoginScreen({
   );
 
   // ========================================================================
+  // Complete Setup After Recovery QR Saved
+  // ========================================================================
+
+  const handleRecoveryConfirmed = useCallback(async () => {
+    if (!pendingSetup) {
+      setError('Setup data was lost. Please try again.');
+      setScreenState('error');
+      return;
+    }
+
+    setScreenState('completing_setup');
+
+    try {
+      // Build the setup result from pending data
+      const setupResult: SetupResult = {
+        user: pendingSetup.user,
+        kek: pendingSetup.kek,
+        dek: pendingSetup.dek,
+        recoverySecret: pendingSetup.recoverySecret,
+        deviceSalt: pendingSetup.deviceSalt,
+        prfSalt: pendingSetup.prfSalt,
+        prfSucceeded: pendingSetup.prfSucceeded,
+      };
+
+      // Now complete the setup (wraps DEK, inits DB)
+      await completeSetup(setupResult);
+
+      // Clear the pending setup data (RS will be cleared by RecoveryQRDisplay)
+      setPendingSetup(null);
+
+      // Mark as complete
+      setScreenState('setup_complete');
+      onSetupComplete?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Setup failed';
+      setError(message);
+      setScreenState('error');
+    }
+  }, [pendingSetup, completeSetup, onSetupComplete]);
+
+  const handleRecoverySkipped = useCallback(async () => {
+    // User chose to skip saving recovery - still complete setup but they'll be reminded later
+    if (!pendingSetup) {
+      setError('Setup data was lost. Please try again.');
+      setScreenState('error');
+      return;
+    }
+
+    setScreenState('completing_setup');
+
+    try {
+      const setupResult: SetupResult = {
+        user: pendingSetup.user,
+        kek: pendingSetup.kek,
+        dek: pendingSetup.dek,
+        recoverySecret: pendingSetup.recoverySecret,
+        deviceSalt: pendingSetup.deviceSalt,
+        prfSalt: pendingSetup.prfSalt,
+        prfSucceeded: pendingSetup.prfSucceeded,
+      };
+
+      await completeSetup(setupResult);
+
+      // Clear the pending setup but user hasn't saved recovery
+      // hasUnsavedRecovery will remain true in AuthContext
+      setPendingSetup(null);
+      setScreenState('setup_complete');
+      onSetupComplete?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Setup failed';
+      setError(message);
+      setScreenState('error');
+    }
+  }, [pendingSetup, completeSetup, onSetupComplete]);
+
+  // ========================================================================
   // Recovery Flow
   // ========================================================================
 
@@ -456,7 +537,8 @@ export function LoginScreen({
 
   const isSetup = actualMode === 'setup';
   const isLoading = screenState === 'checking_capabilities';
-  const isProcessing = screenState === 'registering' || screenState === 'authenticating';
+  const isProcessing = screenState === 'registering' || screenState === 'authenticating' || screenState === 'completing_setup';
+  const isShowingRecovery = screenState === 'showing_recovery' || screenState === 'completing_setup';
   const hasError = screenState === 'error' || !!error || !!authError;
   const displayError = error || authError;
 
@@ -500,6 +582,34 @@ export function LoginScreen({
               recent version.
             </p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show recovery QR display after registration
+  // User MUST save their recovery QR before we complete setup and init the database
+  if (isShowingRecovery && pendingSetup) {
+    return (
+      <div className={`${containerClasses} login-screen--recovery`}>
+        <div className="login-content login-content--recovery">
+          {screenState === 'completing_setup' ? (
+            <div className="login-loading">
+              <LoadingSpinner size={48} />
+              <p>Setting up your account...</p>
+            </div>
+          ) : (
+            <RecoveryQRDisplay
+              recoverySecret={pendingSetup.recoverySecret}
+              userId={pendingSetup.user.userId}
+              mode="setup"
+              onConfirm={handleRecoveryConfirmed}
+              onSkip={handleRecoverySkipped}
+              showTextBackup={true}
+              showPrintOption={false}
+              appName={appName}
+            />
+          )}
         </div>
       </div>
     );

@@ -438,6 +438,268 @@ import TrichoApp from '../components/TrichoApp';
     color: var(--color-text-secondary, #666666);
   }
 
+  /* =========================================================================
+   * Recovery QR Display Styles
+   * ========================================================================= */
+
+  .login-screen--recovery .login-content {
+    max-width: 480px;
+  }
+
+  .login-content--recovery {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Recovery Display Component */
+  .recovery-display {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .recovery-header {
+    text-align: center;
+  }
+
+  .recovery-icon--shield {
+    color: var(--color-primary, #2e7d32);
+    margin-bottom: 0.5rem;
+  }
+
+  .recovery-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text, #1a1a1a);
+  }
+
+  .recovery-subtitle {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--color-text-secondary, #666666);
+  }
+
+  .recovery-warning {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--color-warning-light, #fff3e0);
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-warning, #f57c00);
+  }
+
+  .recovery-icon--warning {
+    flex-shrink: 0;
+    color: var(--color-warning, #f57c00);
+  }
+
+  .recovery-warning-content {
+    flex: 1;
+  }
+
+  .recovery-warning-content strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--color-text, #1a1a1a);
+  }
+
+  .recovery-warning-content p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #666666);
+  }
+
+  .recovery-qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .recovery-qr-container {
+    padding: 1rem;
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .recovery-qr-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  .recovery-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid var(--color-border, #e5e5e5);
+    border-radius: 0.375rem;
+    background: var(--color-surface, #ffffff);
+    color: var(--color-text, #1a1a1a);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .recovery-button:hover {
+    background: var(--color-background, #f5f5f5);
+  }
+
+  .recovery-button--icon {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .recovery-button--primary {
+    background: var(--color-primary, #2e7d32);
+    color: white;
+    border-color: var(--color-primary, #2e7d32);
+  }
+
+  .recovery-button--primary:hover {
+    background: var(--color-primary-dark, #1b5e20);
+  }
+
+  .recovery-button--primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .recovery-button--text {
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary, #666666);
+    font-size: 0.8125rem;
+  }
+
+  .recovery-button--text:hover {
+    color: var(--color-text, #1a1a1a);
+    background: transparent;
+  }
+
+  .recovery-button--copy {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .recovery-text-section {
+    width: 100%;
+  }
+
+  .recovery-text-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--color-primary, #2e7d32);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .recovery-text-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: var(--color-background, #f5f5f5);
+    border-radius: 0.5rem;
+  }
+
+  .recovery-text-code {
+    flex: 1;
+    font-size: 0.75rem;
+    word-break: break-all;
+    color: var(--color-text, #1a1a1a);
+  }
+
+  .recovery-instructions {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #666666);
+  }
+
+  .recovery-instructions-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text, #1a1a1a);
+  }
+
+  .recovery-instructions-list {
+    margin: 0;
+    padding-left: 1.5rem;
+  }
+
+  .recovery-instructions-list li {
+    margin-bottom: 0.375rem;
+  }
+
+  .recovery-instructions-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--color-primary-light, #e8f5e9);
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .recovery-confirmations {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .recovery-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .recovery-checkbox input[type="checkbox"] {
+    margin-top: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--color-primary, #2e7d32);
+  }
+
+  .recovery-checkbox-label {
+    font-size: 0.875rem;
+    color: var(--color-text, #1a1a1a);
+  }
+
+  .recovery-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .recovery-note {
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary, #666666);
+  }
+
+  .recovery-loading,
+  .recovery-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    text-align: center;
+  }
+
   /* Responsive adjustments */
   @media (min-width: 768px) {
     .main-content-header {
