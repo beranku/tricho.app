@@ -803,20 +803,27 @@ export function AuthProvider({ children, initialPrfSupported = false }: AuthProv
 
   /**
    * Recover account with recovery secret
+   *
+   * This function expects that:
+   * 1. The wrapped DEK is already stored in localStorage (tricho:wrapped_dek)
+   * 2. The device credentials including device salt are already stored (tricho:device_creds)
+   *
+   * The device salt stored in credentials was used to derive the KEK that wrapped the DEK,
+   * so we must use the same salt to derive the same KEK and unwrap the DEK.
    */
   const recoverWithSecret = useCallback(async (recoverySecret: RecoverySecret) => {
     try {
       dispatch({ type: 'LOGIN_START' });
 
       // For recovery, we need to:
-      // 1. Derive KEK from RS
-      // 2. Generate new device salt
-      // 3. Get wrapped DEK from server (or fail if no sync available)
-      // 4. Unwrap DEK and init database
+      // 1. Load stored device salt (MUST match what was used to wrap DEK)
+      // 2. Derive KEK from RS + stored device salt
+      // 3. Unwrap DEK and init database
 
       const { deriveKekFromRS, generateDeviceSalt, unwrapDek, deserializeWrappedDek } = await import('../crypto/keys');
       const { base64urlDecode } = await import('../crypto/utils');
       const { markDeviceAsRecovered } = await import('../auth/recovery');
+      const { loadStoredCredentials } = await import('../auth/prf');
 
       // Check for wrapped DEK (must exist for recovery to work)
       const wrappedDekStr = localStorage.getItem(STORAGE_KEYS.WRAPPED_DEK);
@@ -824,10 +831,22 @@ export function AuthProvider({ children, initialPrfSupported = false }: AuthProv
         throw new Error('No encrypted data found on this device. Sync with server first.');
       }
 
-      // Generate new device salt for this recovered device
-      const deviceSalt = generateDeviceSalt();
+      // Load stored device credentials to get the device salt
+      // The device salt used when wrapping the DEK must be reused for unwrapping
+      const storedCreds = loadStoredCredentials();
+      let deviceSalt: Uint8Array;
 
-      // Derive KEK from recovery secret
+      if (storedCreds && storedCreds.deviceSalt) {
+        // Use the stored device salt (this is what was used to derive KEK for wrapping)
+        deviceSalt = base64urlDecode(storedCreds.deviceSalt);
+      } else {
+        // No stored credentials - this shouldn't happen in normal recovery flow
+        // The recovery flow should have stored credentials before calling this
+        // But as a fallback, generate new salt (may fail if DEK was wrapped with different salt)
+        deviceSalt = generateDeviceSalt();
+      }
+
+      // Derive KEK from recovery secret using the same device salt
       const kek = await deriveKekFromRS(recoverySecret, deviceSalt);
 
       // Unwrap DEK (decode from base64url first)

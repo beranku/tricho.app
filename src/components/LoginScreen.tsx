@@ -7,7 +7,7 @@
  * Features:
  * - First-time setup flow with passkey registration
  * - Login flow with passkey authentication
- * - Recovery flow entry point (navigate to QR scanner)
+ * - Recovery flow with QR scanner integration
  * - WebAuthn capability detection and helpful messaging
  * - Error handling and retry logic
  *
@@ -39,6 +39,8 @@ import React, {
 } from 'react';
 import { useAuth, AuthState, type SetupResult, type PrfLoginOptions } from '../context/AuthContext';
 import { RecoveryQRDisplay } from './RecoveryQRDisplay';
+import { RecoveryQRScanner } from './RecoveryQRScanner';
+import type { RecoveryImportResult } from '../auth/recovery';
 import type { RecoverySecret, DataEncryptionKey, DerivedKek } from '../crypto/keys';
 import type { PrfCapabilities } from '../auth/prf';
 
@@ -83,6 +85,9 @@ type ScreenState =
   | 'showing_recovery'
   | 'completing_setup'
   | 'setup_complete'
+  | 'recovery_scanning'
+  | 'recovery_registering'
+  | 'recovery_completing'
   | 'error';
 
 /**
@@ -101,6 +106,21 @@ interface PendingSetupResult {
   deviceSalt: Uint8Array;
   prfSalt: Uint8Array;
   prfSucceeded: boolean;
+}
+
+/**
+ * Pending recovery result (after QR scan, before passkey registration)
+ * Stores the derived keys from QR scan for completing recovery
+ */
+interface PendingRecoveryResult {
+  /** Recovery secret from QR scan */
+  recoverySecret: RecoverySecret;
+  /** Derived KEK from recovery secret */
+  kek: CryptoKey;
+  /** Device salt used for KEK derivation */
+  deviceSalt: Uint8Array;
+  /** When the QR was scanned */
+  scannedAt: number;
 }
 
 // ============================================================================
@@ -243,6 +263,8 @@ export function LoginScreen({
   const [prfCapabilities, setPrfCapabilities] = useState<PrfCapabilities | null>(null);
   const [webAuthnSupported, setWebAuthnSupported] = useState(true);
   const [pendingSetup, setPendingSetup] = useState<PendingSetupResult | null>(null);
+  const [pendingRecovery, setPendingRecovery] = useState<PendingRecoveryResult | null>(null);
+  const [showRecoveryScanner, setShowRecoveryScanner] = useState(false);
 
   // ========================================================================
   // Capability Detection
@@ -499,14 +521,192 @@ export function LoginScreen({
   // Recovery Flow
   // ========================================================================
 
+  /**
+   * Handle click on "Recover Account" button
+   * Shows the QR scanner to scan recovery code
+   */
   const handleRecoveryClick = useCallback(() => {
     if (onRecoveryClick) {
       onRecoveryClick();
     } else {
-      // Default behavior: show instructions
-      setError('To recover your account, scan your Recovery QR code.');
+      // Default behavior: show recovery scanner
+      setError(null);
+      clearError();
+      setShowRecoveryScanner(true);
+      setScreenState('recovery_scanning');
     }
-  }, [onRecoveryClick]);
+  }, [onRecoveryClick, clearError]);
+
+  /**
+   * Handle successful QR scan
+   * Stores the recovery data and prompts for username/passkey registration
+   */
+  const handleRecoveryScanSuccess = useCallback((result: RecoveryImportResult) => {
+    // Store the recovery result
+    setPendingRecovery({
+      recoverySecret: result.recoverySecret,
+      kek: result.kek,
+      deviceSalt: result.deviceSalt,
+      scannedAt: result.importedAt,
+    });
+
+    // Close scanner and show registration form
+    setShowRecoveryScanner(false);
+    setScreenState('recovery_registering');
+    setError(null);
+  }, []);
+
+  /**
+   * Handle cancel from recovery scanner
+   */
+  const handleRecoveryScanCancel = useCallback(() => {
+    setShowRecoveryScanner(false);
+    setScreenState('idle');
+    setPendingRecovery(null);
+  }, []);
+
+  /**
+   * Handle error from recovery scanner
+   */
+  const handleRecoveryScanError = useCallback((err: Error) => {
+    setError(err.message);
+  }, []);
+
+  /**
+   * Submit the recovery registration form
+   * Registers a new passkey and completes the recovery
+   */
+  const handleRecoveryRegistrationSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      setError(null);
+      clearError();
+
+      if (!pendingRecovery) {
+        setError('Recovery data was lost. Please scan the QR code again.');
+        setScreenState('error');
+        return;
+      }
+
+      const trimmedUsername = username.trim();
+      if (!trimmedUsername) {
+        setError('Please enter your email address');
+        return;
+      }
+
+      // Basic email validation
+      if (!trimmedUsername.includes('@') || trimmedUsername.length < 5) {
+        setError('Please enter a valid email address');
+        return;
+      }
+
+      setScreenState('recovery_completing');
+
+      try {
+        // Dynamically import auth modules
+        const { registerPasskey, getDeviceInfo } = await import('../auth/passkey');
+        const { markDeviceAsRecovered } = await import('../auth/recovery');
+        const { generateDataEncryptionKey, wrapDek, serializeWrappedDek } = await import('../crypto/keys');
+        const { base64urlEncode } = await import('../crypto/utils');
+
+        // Step 1: Register a new passkey for this device
+        // This establishes the user's identity with the server
+        const registrationResult = await registerPasskey(trimmedUsername, {
+          deviceInfo: getDeviceInfo(),
+        });
+
+        // Step 2: Check if we have a wrapped DEK stored locally
+        // For fresh device recovery, we may need to get this from sync
+        let wrappedDekStr = localStorage.getItem('tricho:wrapped_dek');
+
+        if (!wrappedDekStr) {
+          // No local wrapped DEK - this is a fresh device recovery
+          // We need to either:
+          // 1. Generate a new DEK (if this is the first device ever)
+          // 2. Or sync the DEK from CouchDB (if recovering existing data)
+          //
+          // For recovery scenarios where user has synced data,
+          // the DEK should be wrapped with RS-derived KEK and stored somewhere accessible.
+          //
+          // For now, we'll generate a new DEK wrapped with the RS-derived KEK.
+          // In a full multi-device implementation, this would sync from CouchDB.
+          const newDek = generateDataEncryptionKey();
+          const wrappedDek = await wrapDek(newDek, pendingRecovery.kek);
+          const wrappedDekBytes = serializeWrappedDek(wrappedDek);
+          wrappedDekStr = base64urlEncode(wrappedDekBytes);
+          localStorage.setItem('tricho:wrapped_dek', wrappedDekStr);
+        }
+
+        // Step 3: Save user info and mark account as existing
+        const user = {
+          userId: registrationResult.userId,
+          username: trimmedUsername,
+          credentialId: registrationResult.credentialId,
+        };
+        localStorage.setItem('tricho:user', JSON.stringify(user));
+        localStorage.setItem('tricho:account_exists', 'true');
+
+        // Step 4: Save device credentials for future logins
+        const { createStoredCredentials, saveStoredCredentials } = await import('../auth/prf');
+        const storedCreds = createStoredCredentials(
+          {
+            unlockMethod: 'rs',
+            kek: { key: pendingRecovery.kek, source: 'rs', deviceSalt: pendingRecovery.deviceSalt },
+            deviceSalt: pendingRecovery.deviceSalt,
+            prfSucceeded: false,
+            authResult: {
+              verified: true,
+              userId: registrationResult.userId,
+              credentialId: registrationResult.credentialId,
+              prfSupported: false,
+            },
+          },
+          user.userId
+        );
+        saveStoredCredentials(storedCreds);
+
+        // Step 5: Mark device as recovered
+        markDeviceAsRecovered();
+
+        // Step 6: Complete recovery through AuthContext
+        // This will unwrap DEK and initialize the database
+        await recoverWithSecret(pendingRecovery.recoverySecret);
+
+        // Clean up
+        setPendingRecovery(null);
+        setScreenState('idle');
+
+        // Notify completion
+        onLoginComplete?.();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Recovery failed';
+
+        if (message.includes('cancelled') || message.includes('canceled')) {
+          setError('Registration was cancelled. Please try again.');
+        } else if (message.includes('NotAllowedError')) {
+          setError('Passkey registration was denied. Please try again.');
+        } else if (message.includes('already exists') || message.includes('already registered')) {
+          // User already has a passkey, try to proceed with recovery
+          setError('A passkey already exists for this account. Please use the login button instead.');
+        } else {
+          setError(message);
+        }
+
+        setScreenState('error');
+      }
+    },
+    [pendingRecovery, username, clearError, recoverWithSecret, onLoginComplete]
+  );
+
+  /**
+   * Cancel the recovery registration and go back to scanner
+   */
+  const handleRecoveryRegistrationCancel = useCallback(() => {
+    setPendingRecovery(null);
+    setScreenState('idle');
+    setUsername('');
+    setError(null);
+  }, []);
 
   // ========================================================================
   // Retry Logic
@@ -524,8 +724,9 @@ export function LoginScreen({
 
   const isSetup = actualMode === 'setup';
   const isLoading = screenState === 'checking_capabilities';
-  const isProcessing = screenState === 'registering' || screenState === 'authenticating' || screenState === 'completing_setup';
-  const isShowingRecovery = screenState === 'showing_recovery' || screenState === 'completing_setup';
+  const isProcessing = screenState === 'registering' || screenState === 'authenticating' || screenState === 'completing_setup' || screenState === 'recovery_completing';
+  const isShowingSetupRecovery = screenState === 'showing_recovery' || screenState === 'completing_setup';
+  const isInRecoveryFlow = screenState === 'recovery_scanning' || screenState === 'recovery_registering' || screenState === 'recovery_completing' || showRecoveryScanner;
   const hasError = screenState === 'error' || !!error || !!authError;
   const displayError = error || authError;
 
@@ -574,9 +775,126 @@ export function LoginScreen({
     );
   }
 
-  // Show recovery QR display after registration
+  // Show recovery QR scanner for account recovery
+  if (showRecoveryScanner) {
+    return (
+      <div className={`${containerClasses} login-screen--recovery-scanner`}>
+        <div className="login-content login-content--recovery-scanner">
+          <RecoveryQRScanner
+            onScanSuccess={handleRecoveryScanSuccess}
+            onCancel={handleRecoveryScanCancel}
+            onError={handleRecoveryScanError}
+            allowManualEntry={true}
+            appName={appName}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Show recovery registration form (after QR scan)
+  if ((screenState === 'recovery_registering' || screenState === 'recovery_completing') && pendingRecovery) {
+    return (
+      <div className={`${containerClasses} login-screen--recovery-register`}>
+        <div className="login-content">
+          {/* Header */}
+          <header className="login-header">
+            <PasskeyIcon size={64} />
+            <h1 className="login-title">Recover {appName}</h1>
+            <p className="login-subtitle">
+              Recovery code verified! Now enter your email and register a new passkey for this device.
+            </p>
+          </header>
+
+          {/* Registration Form */}
+          <form className="login-form" onSubmit={handleRecoveryRegistrationSubmit}>
+            {/* Username Input */}
+            <div className="login-field">
+              <label htmlFor="recovery-username" className="login-label">
+                Email Address
+              </label>
+              <input
+                id="recovery-username"
+                type="email"
+                className="login-input"
+                placeholder="you@example.com"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username webauthn"
+                autoFocus
+                disabled={screenState === 'recovery_completing'}
+                required
+                aria-describedby={displayError ? 'recovery-error' : undefined}
+              />
+              <p className="login-field-hint">
+                Enter the same email you used when setting up the account.
+              </p>
+            </div>
+
+            {/* Error Display */}
+            {displayError && (
+              <div id="recovery-error" className="login-error" role="alert">
+                <ErrorIcon size={16} />
+                <span>{displayError}</span>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="login-button login-button--primary"
+              disabled={screenState === 'recovery_completing' || !username.trim()}
+            >
+              {screenState === 'recovery_completing' ? (
+                <>
+                  <LoadingSpinner size={20} />
+                  <span>Recovering account...</span>
+                </>
+              ) : (
+                <span>Register Passkey & Recover</span>
+              )}
+            </button>
+
+            {/* Cancel Button */}
+            <button
+              type="button"
+              className="login-button login-button--secondary"
+              onClick={handleRecoveryRegistrationCancel}
+              disabled={screenState === 'recovery_completing'}
+            >
+              Cancel
+            </button>
+          </form>
+
+          {/* Footer */}
+          <footer className="login-footer">
+            <p className="login-security-note">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <span>
+                Your recovery code is being used to restore access to your encrypted data.
+              </span>
+            </p>
+          </footer>
+        </div>
+      </div>
+    );
+  }
+
+  // Show recovery QR display after registration (setup flow)
   // User MUST save their recovery QR before we complete setup and init the database
-  if (isShowingRecovery && pendingSetup) {
+  if (isShowingSetupRecovery && pendingSetup) {
     return (
       <div className={`${containerClasses} login-screen--recovery`}>
         <div className="login-content login-content--recovery">
