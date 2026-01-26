@@ -1,6 +1,6 @@
 # TrichoApp Developer Guide
 
-Technical documentation for developers building and maintaining TrichoApp.
+Comprehensive technical documentation for developers building and maintaining TrichoApp.
 
 ## Table of Contents
 
@@ -12,50 +12,138 @@ Technical documentation for developers building and maintaining TrichoApp.
 6. [Database Layer (RxDB)](#database-layer-rxdb)
 7. [Sync System](#sync-system)
 8. [Photo Pipeline](#photo-pipeline)
-9. [API Reference](#api-reference)
-10. [Testing](#testing)
-11. [Security Considerations](#security-considerations)
-12. [Deployment](#deployment)
+9. [React Components](#react-components)
+10. [API Reference](#api-reference)
+11. [Testing](#testing)
+12. [Security Considerations](#security-considerations)
+13. [Deployment](#deployment)
+14. [Troubleshooting](#troubleshooting)
+15. [Contributing](#contributing)
 
 ---
 
 ## Architecture Overview
 
-TrichoApp follows an **offline-first, end-to-end encrypted** architecture:
+TrichoApp follows an **offline-first, end-to-end encrypted** architecture designed for privacy-conscious applications.
+
+### System Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        CLIENT (Browser/PWA)                         │
-│                                                                      │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
-│  │    React     │    │   RxDB       │    │   Crypto     │          │
-│  │  Components  │───▶│  (Dexie)     │───▶│   Engine     │          │
-│  └──────────────┘    └──────────────┘    └──────────────┘          │
-│         │                   │                   │                   │
-│         │                   │                   │                   │
-│  ┌──────▼──────────────────▼───────────────────▼──────┐            │
-│  │                   Sync Orchestrator                 │            │
-│  │              (RxDB CouchDB Replication)             │            │
-│  └─────────────────────────┬───────────────────────────┘            │
-└─────────────────────────────┼───────────────────────────────────────┘
-                              │ HTTPS (encrypted at rest + in transit)
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                            CLOUD                                     │
-│                                                                      │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
-│  │ Auth Service │    │   CouchDB    │    │ Object Store │          │
-│  │  (WebAuthn)  │    │ (encrypted)  │    │   (photos)   │          │
-│  └──────────────┘    └──────────────┘    └──────────────┘          │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            CLIENT (Browser/PWA)                              │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                           REACT LAYER                                   │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                 │ │
+│  │  │   TrichoApp  │  │  LoginScreen │  │  Customer    │                 │ │
+│  │  │   (Root)     │──│  Setup/Auth  │──│  List/Detail │                 │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                 │ │
+│  │         │                                    │                          │ │
+│  │         ▼                                    ▼                          │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │ │
+│  │  │                        AuthContext                                │  │ │
+│  │  │   (auth state, DEK access, passkey management)                   │  │ │
+│  │  └──────────────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│  ┌─────────────────────────────────▼─────────────────────────────────────┐  │
+│  │                         DATA LAYER                                     │  │
+│  │                                                                         │  │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                         RxDB                                      │  │  │
+│  │  │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │  │  │
+│  │  │   │  Customers   │  │    Visits    │  │  PhotoMeta   │          │  │  │
+│  │  │   │  Collection  │  │  Collection  │  │  Collection  │          │  │  │
+│  │  │   └──────────────┘  └──────────────┘  └──────────────┘          │  │  │
+│  │  │                          │                                        │  │  │
+│  │  │   ┌──────────────────────▼────────────────────────────────────┐  │  │  │
+│  │  │   │  wrappedKeyEncryptionCryptoJsStorage                      │  │  │  │
+│  │  │   │  (encrypts/decrypts using DEK password)                   │  │  │  │
+│  │  │   └──────────────────────┬────────────────────────────────────┘  │  │  │
+│  │  │                          │                                        │  │  │
+│  │  │   ┌──────────────────────▼────────────────────────────────────┐  │  │  │
+│  │  │   │  Dexie (IndexedDB adapter)                                │  │  │  │
+│  │  │   └───────────────────────────────────────────────────────────┘  │  │  │
+│  │  └──────────────────────────────────────────────────────────────────┘  │  │
+│  │                                    │                                    │  │
+│  │  ┌─────────────────────────────────▼────────────────────────────────┐  │  │
+│  │  │                       SYNC ORCHESTRATOR                           │  │  │
+│  │  │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │  │  │
+│  │  │   │   CouchDB    │  │    Photo     │  │   Conflict   │          │  │  │
+│  │  │   │  Replication │  │    Queue     │  │   Handler    │          │  │  │
+│  │  │   └──────────────┘  └──────────────┘  └──────────────┘          │  │  │
+│  │  └──────────────────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                         │
+│  ┌─────────────────────────────────▼─────────────────────────────────────┐  │
+│  │                         CRYPTO LAYER                                   │  │
+│  │                                                                         │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                 │  │
+│  │  │    Keys      │  │   Envelope   │  │    Utils     │                 │  │
+│  │  │ (RS,DEK,KEK) │  │  (encrypt/   │  │  (base64url, │                 │  │
+│  │  │              │  │   decrypt)   │  │   helpers)   │                 │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                 │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                         │
+│  ┌─────────────────────────────────▼─────────────────────────────────────┐  │
+│  │                          AUTH LAYER                                    │  │
+│  │                                                                         │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                 │  │
+│  │  │   Passkey    │  │     PRF      │  │   Recovery   │                 │  │
+│  │  │ (WebAuthn)   │  │  Extension   │  │    Import/   │                 │  │
+│  │  │              │  │  & Fallback  │  │    Export    │                 │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                 │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ HTTPS (all data encrypted)
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                 CLOUD                                         │
+│                                                                               │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐           │
+│  │   Auth Service   │  │     CouchDB      │  │   Object Store   │           │
+│  │   (Hono/Node)    │  │  (per-user DB)   │  │  (S3-compatible) │           │
+│  │                  │  │                  │  │                  │           │
+│  │  ┌────────────┐  │  │  ┌────────────┐  │  │  ┌────────────┐  │           │
+│  │  │  WebAuthn  │  │  │  │ Encrypted  │  │  │  │ Encrypted  │  │           │
+│  │  │ Challenges │  │  │  │   Docs     │  │  │  │   Photos   │  │           │
+│  │  └────────────┘  │  │  └────────────┘  │  │  └────────────┘  │           │
+│  │  ┌────────────┐  │  │                  │  │                  │           │
+│  │  │  JWT Token │  │  │  Server CANNOT   │  │  Server CANNOT   │           │
+│  │  │   Issuer   │  │  │  read content    │  │  read content    │           │
+│  │  └────────────┘  │  │                  │  │                  │           │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘           │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Principles
+### Key Design Principles
 
-1. **Offline-First**: All operations work without network; sync happens opportunistically
-2. **E2E Encryption**: Server only sees ciphertext; decryption happens only on client
-3. **Passkey Auth**: WebAuthn for passwordless, phishing-resistant authentication
-4. **Recovery by Design**: Recovery QR ensures users never lose data access
+| Principle | Implementation | Rationale |
+|-----------|----------------|-----------|
+| **Offline-First** | RxDB with IndexedDB, local operations | Works without network, syncs opportunistically |
+| **E2E Encryption** | AES-256-GCM, client-side only | Server never sees plaintext |
+| **Passkey Auth** | WebAuthn with PRF extension | Phishing-resistant, no passwords |
+| **Recovery by Design** | QR-encoded Recovery Secret | Users never lose data access |
+| **Multi-Device** | CouchDB replication | Sync across phone, tablet, desktop |
+
+### Data Flow
+
+```
+1. USER INPUT
+   └──▶ React Component
+         └──▶ RxDB Collection.insert/update
+               └──▶ CryptoJS Encryption (DEK)
+                     └──▶ IndexedDB (encrypted)
+                           └──▶ CouchDB Replication (encrypted)
+                                 └──▶ Other devices
+
+2. DATA ACCESS
+   └──▶ React Hook (useCustomers, etc.)
+         └──▶ RxDB Query (reactive)
+               └──▶ CryptoJS Decryption (DEK)
+                     └──▶ Plaintext to Component
+```
 
 ---
 
@@ -63,72 +151,131 @@ TrichoApp follows an **offline-first, end-to-end encrypted** architecture:
 
 ### Prerequisites
 
-- Node.js >= 18
-- npm >= 9
-- Docker (for CouchDB)
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Node.js | >= 18.0.0 | LTS recommended |
+| npm | >= 9.0.0 | Comes with Node |
+| Docker | >= 20.0.0 | For CouchDB |
+| Git | >= 2.30.0 | Version control |
 
 ### Quick Start
 
 ```bash
-# Clone repository
+# 1. Clone repository
 git clone https://github.com/beranku/tricho-app.git
 cd tricho-app
 
-# Install dependencies
+# 2. Install frontend dependencies
 npm install
 
-# Install server dependencies
+# 3. Install server dependencies
 cd server && npm install && cd ..
 
-# Start CouchDB (Docker)
+# 4. Start CouchDB (Docker)
 docker run -d \
+  --name tricho-couchdb \
   -p 5984:5984 \
   -e COUCHDB_USER=admin \
   -e COUCHDB_PASSWORD=password \
   couchdb:3
 
-# Create .env file
+# 5. Verify CouchDB is running
+curl http://admin:password@localhost:5984/_up
+# Should return: {"status":"ok",...}
+
+# 6. Create environment file
 cp .env.example .env
 
-# Start development servers (two terminals)
-npm run dev              # Terminal 1: Frontend (port 4321)
-cd server && npm run dev # Terminal 2: Auth server (port 3000)
+# 7. Start development servers (2 terminals)
+# Terminal 1: Frontend
+npm run dev
+
+# Terminal 2: Auth server
+cd server && npm run dev
 ```
 
 ### Environment Variables
 
-Create a `.env` file:
+Create a `.env` file in the project root:
 
 ```env
-# Frontend
+# ============================================
+# FRONTEND CONFIGURATION (VITE)
+# ============================================
+
+# CouchDB URL for document sync
 VITE_COUCHDB_URL=http://localhost:5984
+
+# Auth service URL for WebAuthn
 VITE_AUTH_URL=http://localhost:3000
+
+# Object storage URL for photo uploads
 VITE_OBJECT_STORAGE_URL=http://localhost:9000
 
-# Server
+# ============================================
+# SERVER CONFIGURATION
+# ============================================
+
+# CouchDB connection
 COUCHDB_URL=http://localhost:5984
 COUCHDB_USER=admin
 COUCHDB_PASSWORD=password
-JWT_SECRET=your-secret-key-min-32-chars
+
+# JWT configuration (generate a strong secret!)
+JWT_SECRET=your-secret-key-minimum-32-characters-long
+JWT_ACCESS_EXPIRY=15m
+JWT_REFRESH_EXPIRY=7d
+
+# WebAuthn Relying Party configuration
 WEBAUTHN_RP_ID=localhost
 WEBAUTHN_RP_NAME=TrichoApp
 WEBAUTHN_ORIGIN=http://localhost:4321
+
+# Server port
+PORT=3000
 ```
 
-### Available Scripts
+### NPM Scripts
 
-```bash
-# Frontend
-npm run dev        # Start Astro dev server
-npm run build      # Build for production
-npm run preview    # Preview production build
-npm test           # Run Vitest tests
-npm run test:watch # Run tests in watch mode
+#### Frontend (root `package.json`)
 
-# Server
-npm run dev        # Start server with hot reload
-npm run build      # Compile TypeScript
-npm test           # Run server tests
+| Script | Command | Description |
+|--------|---------|-------------|
+| `dev` | `astro dev` | Start development server (port 4321) |
+| `build` | `astro build` | Build production bundle |
+| `preview` | `astro preview` | Preview production build locally |
+| `test` | `vitest run` | Run all tests once |
+| `test:watch` | `vitest` | Run tests in watch mode |
+| `test:coverage` | `vitest --coverage` | Run tests with coverage report |
+| `lint` | `eslint src/` | Lint TypeScript files |
+| `typecheck` | `tsc --noEmit` | Check TypeScript types |
+
+#### Server (`server/package.json`)
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `dev` | `tsx watch src/index.ts` | Start server with hot reload |
+| `build` | `tsc` | Compile TypeScript |
+| `start` | `node dist/index.js` | Start production server |
+| `test` | `vitest run` | Run server tests |
+
+### IDE Setup
+
+#### VS Code (Recommended)
+
+Install these extensions:
+- **ESLint** - Linting
+- **Prettier** - Code formatting
+- **TypeScript + JavaScript** - Built-in
+- **Astro** - Astro file support
+
+Settings (`.vscode/settings.json`):
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.tsdk": "node_modules/typescript/lib"
+}
 ```
 
 ---
@@ -137,90 +284,93 @@ npm test           # Run server tests
 
 ```
 tricho-app/
-├── src/
-│   ├── components/           # React UI components
-│   │   ├── App.tsx          # Main app shell with auth routing
-│   │   ├── LoginScreen.tsx  # Login/setup screen
-│   │   ├── CustomerList.tsx # Customer list component
-│   │   ├── CustomerDetail.tsx
-│   │   ├── CustomerForm.tsx
-│   │   ├── PhotoCapture.tsx
-│   │   ├── RecoveryQRDisplay.tsx
-│   │   ├── RecoveryQRScanner.tsx
-│   │   ├── SettingsScreen.tsx
-│   │   └── SyncStatus.tsx
+├── src/                          # Frontend source
+│   ├── components/               # React UI components
+│   │   ├── App.tsx              # Main app shell, auth routing
+│   │   ├── TrichoApp.tsx        # Root component (Astro entry)
+│   │   ├── MainContent.tsx      # Authenticated user content
+│   │   ├── LoginScreen.tsx      # Login/setup/recovery screens
+│   │   ├── CustomerList.tsx     # Customer list view
+│   │   ├── CustomerDetail.tsx   # Customer detail view
+│   │   ├── CustomerForm.tsx     # Create/edit customer form
+│   │   ├── PhotoCapture.tsx     # Camera capture component
+│   │   ├── RecoveryQRDisplay.tsx # Show recovery QR code
+│   │   ├── RecoveryQRScanner.tsx # Scan recovery QR code
+│   │   ├── SettingsScreen.tsx   # App settings
+│   │   └── SyncStatus.tsx       # Sync status indicator
 │   │
-│   ├── context/             # React context providers
-│   │   └── AuthContext.tsx  # Authentication state management
+│   ├── context/                  # React context providers
+│   │   └── AuthContext.tsx      # Authentication state, DEK access
 │   │
-│   ├── crypto/              # Encryption modules
-│   │   ├── keys.ts          # Key generation, wrapping, HKDF
-│   │   ├── keys.test.ts     # Key module tests
-│   │   ├── envelope.ts      # Document/photo encryption
-│   │   ├── envelope.test.ts # Envelope tests
-│   │   └── utils.ts         # Base64url, helpers
+│   ├── crypto/                   # Cryptographic operations
+│   │   ├── keys.ts              # Key generation, KEK derivation, wrapping
+│   │   ├── keys.test.ts         # Key tests
+│   │   ├── envelope.ts          # Document/photo encryption
+│   │   ├── envelope.test.ts     # Envelope tests
+│   │   └── utils.ts             # Base64url, QR formatting
 │   │
-│   ├── auth/                # Authentication modules
-│   │   ├── passkey.ts       # WebAuthn registration/auth
-│   │   ├── prf.ts           # PRF extension handling
-│   │   ├── prf.test.ts      # PRF tests
-│   │   └── recovery.ts      # Recovery QR import/export
+│   ├── auth/                     # Authentication modules
+│   │   ├── passkey.ts           # WebAuthn registration/authentication
+│   │   ├── prf.ts               # PRF extension, graceful degradation
+│   │   ├── prf.test.ts          # PRF tests
+│   │   └── recovery.ts          # Recovery QR import/export
 │   │
-│   ├── db/                  # Database layer
-│   │   ├── index.ts         # RxDB initialization
-│   │   ├── hooks.ts         # React hooks for RxDB
-│   │   └── schemas/         # Document schemas
-│   │       ├── index.ts     # Schema registry
-│   │       ├── customer.ts  # Customer schema
-│   │       ├── visit.ts     # Visit schema
-│   │       └── photo-meta.ts # Photo metadata schema
+│   ├── db/                       # Database layer
+│   │   ├── index.ts             # RxDB initialization, singleton
+│   │   ├── hooks.ts             # React hooks (useCustomers, etc.)
+│   │   └── schemas/             # RxDB collection schemas
+│   │       ├── index.ts         # Schema registry
+│   │       ├── customer.ts      # Customer document schema
+│   │       ├── visit.ts         # Visit document schema
+│   │       └── photo-meta.ts    # Photo metadata schema
 │   │
-│   ├── sync/                # Sync orchestration
-│   │   ├── orchestrator.ts  # CouchDB replication manager
-│   │   ├── photos.ts        # Photo upload/download
-│   │   └── hooks.ts         # Sync React hooks
+│   ├── sync/                     # Synchronization
+│   │   ├── orchestrator.ts      # CouchDB replication manager
+│   │   ├── photos.ts            # Photo upload queue
+│   │   └── hooks.ts             # Sync React hooks
 │   │
-│   ├── photos/              # Photo processing
-│   │   ├── capture.ts       # Camera capture, import
-│   │   ├── encrypt.ts       # Photo encryption
-│   │   ├── thumbnail.ts     # Thumbnail generation
-│   │   ├── pipeline.ts      # Full photo pipeline
-│   │   └── hooks.ts         # Photo React hooks
+│   ├── photos/                   # Photo processing
+│   │   ├── capture.ts           # Camera capture, file import
+│   │   ├── encrypt.ts           # Photo encryption/decryption
+│   │   ├── thumbnail.ts         # Thumbnail generation
+│   │   ├── pipeline.ts          # Full photo pipeline
+│   │   └── hooks.ts             # Photo React hooks
 │   │
-│   ├── pages/               # Astro pages
-│   │   └── index.astro      # Main entry point
+│   ├── config/                   # Configuration
+│   │   └── env.ts               # Environment variable access
 │   │
-│   └── config/
-│       └── env.ts           # Environment configuration
+│   └── pages/                    # Astro pages
+│       └── index.astro          # Main entry point
 │
-├── server/                  # Auth service
+├── server/                       # Auth service (Node.js)
 │   ├── src/
-│   │   ├── index.ts         # Server entry point (Hono)
+│   │   ├── index.ts             # Server entry (Hono framework)
 │   │   ├── routes/
-│   │   │   └── auth.ts      # WebAuthn endpoints
+│   │   │   └── auth.ts          # WebAuthn API routes
 │   │   ├── services/
-│   │   │   ├── webauthn.ts  # WebAuthn logic
-│   │   │   ├── tokens.ts    # JWT management
-│   │   │   └── tenant.ts    # User provisioning
+│   │   │   ├── webauthn.ts      # WebAuthn logic
+│   │   │   ├── tokens.ts        # JWT token management
+│   │   │   └── tenant.ts        # User/database provisioning
 │   │   └── middleware/
-│   │       └── auth.ts      # Auth middleware
+│   │       └── auth.ts          # Authentication middleware
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── public/                  # Static assets
-│   ├── manifest.webmanifest
-│   ├── sw.js               # Service worker
-│   └── icons/
+├── public/                       # Static assets
+│   ├── manifest.webmanifest     # PWA manifest
+│   ├── sw.js                    # Service worker
+│   └── icons/                   # App icons
 │
-├── docs/                   # Documentation
-│   ├── USER_GUIDE.md
-│   └── DEVELOPER.md
+├── docs/                         # Documentation
+│   ├── USER_GUIDE.md            # End-user documentation
+│   └── DEVELOPER.md             # This file
 │
-├── package.json
-├── tsconfig.json
-├── astro.config.mjs
-├── vitest.config.ts
-└── .env.example
+├── package.json                  # Frontend dependencies
+├── tsconfig.json                 # TypeScript config
+├── astro.config.mjs             # Astro configuration
+├── vitest.config.ts             # Test configuration
+├── .env.example                 # Environment template
+└── README.md                    # Project overview
 ```
 
 ---
@@ -229,246 +379,613 @@ tricho-app/
 
 ### Key Hierarchy
 
+TrichoApp uses a hierarchical key structure for security and flexibility:
+
 ```
-Recovery Secret (RS)
-    │  32 bytes, random
-    │  Shown once as QR code
-    │  Ultimate recovery mechanism
-    │
-    ├──────────────────────────────────────┐
-    │                                      │
-    ▼                                      ▼
-KEK (from PRF)                    KEK (from RS fallback)
-    │  Derived via HKDF                   │  Derived via HKDF
-    │  Uses passkey's PRF output          │  Uses RS + device salt
-    │                                      │
-    └──────────────────┬───────────────────┘
-                       │
-                       ▼
-           Data Encryption Key (DEK)
-               │  32 bytes, random
-               │  Wrapped with KEK
-               │  Stored in localStorage
-               │
-               ├────────────────────────────┐
-               │                            │
-               ▼                            ▼
-    RxDB Database Encryption       Per-Document Keys
-        Password = base64url(DEK)      Derived via HKDF
-                                       "tricho:envelope:doc:v1:${docId}"
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          KEY HIERARCHY                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    RECOVERY SECRET (RS)                               │  │
+│  │                                                                        │  │
+│  │  • 32 bytes (256 bits) of cryptographic randomness                    │  │
+│  │  • Generated once during first-time setup                             │  │
+│  │  • Displayed as QR code for user to save                              │  │
+│  │  • NEVER stored on device after initial display                       │  │
+│  │  • Ultimate recovery mechanism - if lost, data is unrecoverable       │  │
+│  │                                                                        │  │
+│  │  Generation: crypto.getRandomValues(new Uint8Array(32))               │  │
+│  │  Storage: None (shown once, user saves externally)                    │  │
+│  │  Format: tricho://recover/<base64url-encoded-RS>                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                              │                                               │
+│              ┌───────────────┴───────────────┐                              │
+│              │                               │                              │
+│              ▼                               ▼                              │
+│  ┌────────────────────────┐    ┌────────────────────────┐                  │
+│  │   KEK (from PRF)       │    │   KEK (from RS)        │                  │
+│  │                        │    │                        │                  │
+│  │ • Preferred method     │    │ • Fallback method      │                  │
+│  │ • Uses passkey PRF     │    │ • Uses RS directly     │                  │
+│  │ • Stateless unlock     │    │ • Requires RS scan     │                  │
+│  │                        │    │                        │                  │
+│  │ Derivation:            │    │ Derivation:            │                  │
+│  │ HKDF(SHA-256,          │    │ HKDF(SHA-256,          │                  │
+│  │   prfOutput,           │    │   recoverySecret,      │                  │
+│  │   deviceSalt,          │    │   deviceSalt,          │                  │
+│  │   "tricho:kek:prf:v1") │    │   "tricho:kek:rs:v1")  │                  │
+│  └────────────────────────┘    └────────────────────────┘                  │
+│              │                               │                              │
+│              └───────────────┬───────────────┘                              │
+│                              │                                               │
+│                              ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    KEY ENCRYPTION KEY (KEK)                           │  │
+│  │                                                                        │  │
+│  │  • AES-256 CryptoKey (non-extractable)                                │  │
+│  │  • Used to wrap/unwrap the DEK                                        │  │
+│  │  • Per-device (allows device revocation)                              │  │
+│  │  • Derived differently per device                                     │  │
+│  │                                                                        │  │
+│  │  Type: CryptoKey { algorithm: AES-GCM, usages: [wrapKey, unwrapKey] } │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                              │                                               │
+│                              │ wrapKey/unwrapKey                            │
+│                              ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    DATA ENCRYPTION KEY (DEK)                          │  │
+│  │                                                                        │  │
+│  │  • 32 bytes (256 bits) of cryptographic randomness                    │  │
+│  │  • The actual key that encrypts user data                             │  │
+│  │  • Stored WRAPPED (encrypted with KEK) in localStorage                │  │
+│  │  • Same DEK across all user's devices                                 │  │
+│  │                                                                        │  │
+│  │  Generation: crypto.getRandomValues(new Uint8Array(32))               │  │
+│  │  Storage: localStorage['dek_wrapped'] = { iv, ciphertext }            │  │
+│  │  Usage: RxDB password, per-document key derivation                    │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                              │                                               │
+│                              │ HKDF                                         │
+│                              ▼                                               │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    PER-DOCUMENT KEYS                                  │  │
+│  │                                                                        │  │
+│  │  Document Key: HKDF(DEK, salt, "tricho:envelope:doc:v1:<docId>")      │  │
+│  │  Photo Key:    HKDF(DEK, salt, "tricho:envelope:photo:v1:<id>:<var>") │  │
+│  │                                                                        │  │
+│  │  Each document/photo encrypted with unique key                         │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Generation (`src/crypto/keys.ts`)
+### Key Operations Code Examples
+
+#### Key Generation (`src/crypto/keys.ts`)
 
 ```typescript
-// Generate new keys on first setup
-const rs = generateRecoverySecret();  // 32 bytes
-const dek = generateDataEncryptionKey();  // 32 bytes
-const deviceSalt = generateDeviceSalt();  // 32 bytes
+import { hkdf } from '@noble/hashes/hkdf';
+import { sha256 } from '@noble/hashes/sha256';
+
+// Constants
+export const KEY_LENGTH = 32;    // 256 bits
+export const IV_LENGTH = 12;     // 96 bits (NIST GCM recommendation)
+export const SALT_LENGTH = 32;   // 256 bits
+
+// Generate Recovery Secret
+export function generateRecoverySecret(): Uint8Array {
+  return crypto.getRandomValues(new Uint8Array(KEY_LENGTH));
+}
+
+// Generate Data Encryption Key
+export function generateDataEncryptionKey(): Uint8Array {
+  return crypto.getRandomValues(new Uint8Array(KEY_LENGTH));
+}
+
+// Generate per-device salt
+export function generateDeviceSalt(): Uint8Array {
+  return crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+}
 
 // Derive KEK from PRF output (preferred)
-const kek = await deriveKekFromPRF(prfOutput, deviceSalt);
+export async function deriveKekFromPRF(
+  prfOutput: Uint8Array,
+  deviceSalt: Uint8Array
+): Promise<CryptoKey> {
+  const keyBytes = hkdf(sha256, prfOutput, deviceSalt, 'tricho:kek:prf:v1', KEY_LENGTH);
+  return crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false, // non-extractable
+    ['wrapKey', 'unwrapKey']
+  );
+}
 
-// OR derive KEK from RS (fallback)
-const kek = await deriveKekFromRS(rs, deviceSalt);
-
-// Wrap DEK for storage
-const wrappedDek = await wrapDek(dek, kek);
-localStorage.setItem('dek_wrapped', serializeWrappedDek(wrappedDek));
+// Derive KEK from Recovery Secret (fallback)
+export async function deriveKekFromRS(
+  recoverySecret: Uint8Array,
+  deviceSalt: Uint8Array
+): Promise<CryptoKey> {
+  const keyBytes = hkdf(sha256, recoverySecret, deviceSalt, 'tricho:kek:rs:v1', KEY_LENGTH);
+  return crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['wrapKey', 'unwrapKey']
+  );
+}
 ```
 
-### HKDF Domain Separation
-
-All key derivation uses domain-separated HKDF:
-
-| Key Purpose | HKDF Info String |
-|-------------|------------------|
-| KEK from PRF | `tricho:kek:prf:v1` |
-| KEK from RS | `tricho:kek:rs:v1` |
-| Document key | `tricho:envelope:doc:v1:${docId}` |
-| Photo key | `tricho:envelope:photo:v1:${photoId}:${variant}` |
-
-### Envelope Encryption (`src/crypto/envelope.ts`)
+#### DEK Wrapping (`src/crypto/keys.ts`)
 
 ```typescript
-// Encrypt a document
-const encrypted = await encryptDocument(plaintext, dek, docId);
-// Returns: { ciphertext, iv, salt, tag }
+export interface WrappedDek {
+  iv: Uint8Array;
+  ciphertext: Uint8Array;
+}
 
-// Decrypt a document
-const plaintext = await decryptDocument(encrypted, dek, docId);
+// Wrap DEK with KEK for storage
+export async function wrapDek(dek: Uint8Array, kek: CryptoKey): Promise<WrappedDek> {
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 
-// Encrypt a photo
-const encryptedPhoto = await encryptPhoto(photoBlob, dek, photoId, 'original');
+  // Import DEK as CryptoKey for wrapping
+  const dekKey = await crypto.subtle.importKey(
+    'raw',
+    dek,
+    { name: 'AES-GCM' },
+    true, // extractable (to unwrap later)
+    ['encrypt', 'decrypt']
+  );
 
-// Decrypt a photo
-const photoBlob = await decryptPhoto(encryptedPhoto, dek, photoId, 'original');
+  // Wrap with AES-GCM
+  const ciphertext = await crypto.subtle.wrapKey(
+    'raw',
+    dekKey,
+    kek,
+    { name: 'AES-GCM', iv }
+  );
+
+  return { iv, ciphertext: new Uint8Array(ciphertext) };
+}
+
+// Unwrap DEK with KEK
+export async function unwrapDek(wrapped: WrappedDek, kek: CryptoKey): Promise<Uint8Array> {
+  const dekKey = await crypto.subtle.unwrapKey(
+    'raw',
+    wrapped.ciphertext,
+    kek,
+    { name: 'AES-GCM', iv: wrapped.iv },
+    { name: 'AES-GCM' },
+    true,
+    ['encrypt', 'decrypt']
+  );
+
+  const rawKey = await crypto.subtle.exportKey('raw', dekKey);
+  return new Uint8Array(rawKey);
+}
+
+// Serialize for localStorage
+export function serializeWrappedDek(wrapped: WrappedDek): string {
+  return JSON.stringify({
+    iv: base64urlEncode(wrapped.iv),
+    ciphertext: base64urlEncode(wrapped.ciphertext)
+  });
+}
+
+// Deserialize from localStorage
+export function deserializeWrappedDek(serialized: string): WrappedDek {
+  const { iv, ciphertext } = JSON.parse(serialized);
+  return {
+    iv: base64urlDecode(iv),
+    ciphertext: base64urlDecode(ciphertext)
+  };
+}
+```
+
+#### Envelope Encryption (`src/crypto/envelope.ts`)
+
+```typescript
+// Derive per-document key using HKDF
+export function deriveDocumentKey(
+  dek: Uint8Array,
+  salt: Uint8Array,
+  documentId: string
+): Uint8Array {
+  const info = `tricho:envelope:doc:v1:${documentId}`;
+  return hkdf(sha256, dek, salt, info, KEY_LENGTH);
+}
+
+// Encrypt document
+export async function encryptDocument(
+  plaintext: object,
+  dek: Uint8Array,
+  documentId: string
+): Promise<EncryptedDocument> {
+  const salt = generateEnvelopeSalt();
+  const docKey = deriveDocumentKey(dek, salt, documentId);
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+
+  const key = await crypto.subtle.importKey(
+    'raw', docKey, { name: 'AES-GCM' }, false, ['encrypt']
+  );
+
+  const data = new TextEncoder().encode(JSON.stringify(plaintext));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, tagLength: 128 },
+    key,
+    data
+  );
+
+  return {
+    ciphertext: new Uint8Array(ciphertext),
+    iv,
+    salt
+  };
+}
+
+// Decrypt document
+export async function decryptDocument(
+  encrypted: EncryptedDocument,
+  dek: Uint8Array,
+  documentId: string
+): Promise<object> {
+  const docKey = deriveDocumentKey(dek, encrypted.salt, documentId);
+
+  const key = await crypto.subtle.importKey(
+    'raw', docKey, { name: 'AES-GCM' }, false, ['decrypt']
+  );
+
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: encrypted.iv, tagLength: 128 },
+    key,
+    encrypted.ciphertext
+  );
+
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
 ```
 
 ### Cryptographic Parameters
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Key size | 256 bits (32 bytes) | AES-256 standard |
-| IV size | 96 bits (12 bytes) | NIST GCM recommendation |
-| Auth tag | 128 bits (16 bytes) | Maximum security |
-| Salt size | 256 bits (32 bytes) | HKDF best practice |
-| HKDF hash | SHA-256 | Widely supported |
+| Parameter | Value | Standard | Rationale |
+|-----------|-------|----------|-----------|
+| Key size | 256 bits (32 bytes) | NIST SP 800-57 | AES-256 security level |
+| IV size | 96 bits (12 bytes) | NIST SP 800-38D | GCM recommended size |
+| Auth tag | 128 bits (16 bytes) | NIST SP 800-38D | Maximum integrity |
+| Salt size | 256 bits (32 bytes) | RFC 5869 | HKDF best practice |
+| HKDF hash | SHA-256 | RFC 5869 | Widely supported |
 
 ---
 
 ## Authentication System
 
-### WebAuthn Flow
+### WebAuthn Flow Diagrams
+
+#### Registration Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         REGISTRATION                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Client                         Server                               │
-│    │                               │                                 │
-│    │  POST /auth/register/begin    │                                 │
-│    │  { username }                 │                                 │
-│    │──────────────────────────────▶│                                 │
-│    │                               │  Generate challenge             │
-│    │◀──────────────────────────────│  Store for user                 │
-│    │  { options }                  │                                 │
-│    │                               │                                 │
-│    │  navigator.credentials.create │                                 │
-│    │  User verifies (biometric)    │                                 │
-│    │                               │                                 │
-│    │  POST /auth/register/finish   │                                 │
-│    │  { credential }               │                                 │
-│    │──────────────────────────────▶│                                 │
-│    │                               │  Verify & store credential      │
-│    │◀──────────────────────────────│                                 │
-│    │  { success }                  │                                 │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                        AUTHENTICATION                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Client                         Server                               │
-│    │                               │                                 │
-│    │  POST /auth/authenticate/begin│                                 │
-│    │  { username? }                │                                 │
-│    │──────────────────────────────▶│                                 │
-│    │                               │  Generate challenge             │
-│    │◀──────────────────────────────│                                 │
-│    │  { options }                  │                                 │
-│    │                               │                                 │
-│    │  navigator.credentials.get   │                                 │
-│    │  + PRF extension             │                                 │
-│    │  User verifies               │                                 │
-│    │                               │                                 │
-│    │  POST /auth/authenticate/finish                                │
-│    │  { credential }               │                                 │
-│    │──────────────────────────────▶│                                 │
-│    │                               │  Verify signature               │
-│    │◀──────────────────────────────│  Issue JWT tokens               │
-│    │  { accessToken, refreshToken }│                                 │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────┐                  ┌──────────────┐                  ┌──────────────┐
+│    Client    │                  │   Server     │                  │ Authenticator│
+│   (Browser)  │                  │  (Auth API)  │                  │ (Face ID)    │
+└──────────────┘                  └──────────────┘                  └──────────────┘
+       │                                 │                                 │
+       │  1. User enters email           │                                 │
+       │  ─────────────────────────►     │                                 │
+       │                                 │                                 │
+       │  POST /auth/register/begin      │                                 │
+       │  { username: "user@email.com" } │                                 │
+       │  ───────────────────────────────►                                 │
+       │                                 │                                 │
+       │                                 │  Generate challenge             │
+       │                                 │  Create user record             │
+       │                                 │                                 │
+       │  ◄───────────────────────────────                                 │
+       │  PublicKeyCredentialCreationOptions                               │
+       │  { challenge, rp, user, pubKeyCredParams,                         │
+       │    authenticatorSelection: {                                      │
+       │      residentKey: "required",                                     │
+       │      userVerification: "required" }}                              │
+       │                                 │                                 │
+       │  2. startRegistration(options)  │                                 │
+       │  ───────────────────────────────────────────────────────────────► │
+       │                                 │                                 │
+       │                                 │         User verifies           │
+       │                                 │         (Face ID scan)          │
+       │                                 │                                 │
+       │  ◄─────────────────────────────────────────────────────────────── │
+       │  { id, response: { attestation... } }                             │
+       │                                 │                                 │
+       │  POST /auth/register/finish     │                                 │
+       │  { credential }                 │                                 │
+       │  ───────────────────────────────►                                 │
+       │                                 │                                 │
+       │                                 │  Verify attestation             │
+       │                                 │  Store credential               │
+       │                                 │                                 │
+       │  ◄───────────────────────────────                                 │
+       │  { success: true, userId }      │                                 │
+       │                                 │                                 │
 ```
 
-### PRF Extension (`src/auth/prf.ts`)
+#### Authentication Flow (with PRF)
 
-The PRF (Pseudo-Random Function) extension provides deterministic key material from passkeys:
+```
+┌──────────────┐                  ┌──────────────┐                  ┌──────────────┐
+│    Client    │                  │   Server     │                  │ Authenticator│
+└──────────────┘                  └──────────────┘                  └──────────────┘
+       │                                 │                                 │
+       │  GET device salt from storage   │                                 │
+       │                                 │                                 │
+       │  POST /auth/authenticate/begin  │                                 │
+       │  { username? }                  │  (username optional for         │
+       │  ───────────────────────────────►   discoverable credentials)     │
+       │                                 │                                 │
+       │  ◄───────────────────────────────                                 │
+       │  PublicKeyCredentialRequestOptions                                │
+       │  { challenge, rpId, allowCredentials }                            │
+       │                                 │                                 │
+       │  navigator.credentials.get({    │                                 │
+       │    publicKey: { ...options,     │                                 │
+       │      extensions: {              │                                 │
+       │        prf: { eval: {           │                                 │
+       │          first: deviceSalt      │                                 │
+       │        }}                       │                                 │
+       │      }                          │                                 │
+       │    }                            │                                 │
+       │  })                             │                                 │
+       │  ───────────────────────────────────────────────────────────────► │
+       │                                 │                                 │
+       │                                 │         User verifies           │
+       │                                 │         (Face ID scan)          │
+       │                                 │                                 │
+       │  ◄─────────────────────────────────────────────────────────────── │
+       │  credential + extensions: { prf: { results: { first: prfOutput }}}│
+       │                                 │                                 │
+       │  POST /auth/authenticate/finish │                                 │
+       │  { credential }                 │                                 │
+       │  ───────────────────────────────►                                 │
+       │                                 │                                 │
+       │                                 │  Verify assertion               │
+       │                                 │  Update counter                 │
+       │                                 │                                 │
+       │  ◄───────────────────────────────                                 │
+       │  { accessToken, refreshToken }  │                                 │
+       │                                 │                                 │
+       │  3. Derive KEK from PRF output  │                                 │
+       │     or fall back to RS          │                                 │
+       │                                 │                                 │
+       │  4. Unwrap DEK using KEK        │                                 │
+       │                                 │                                 │
+       │  5. Initialize RxDB with DEK    │                                 │
+       │                                 │                                 │
+```
+
+### PRF Extension Implementation
 
 ```typescript
-// Check PRF support
-const capabilities = await getPrfCapabilities();
-// { supported: boolean, platform: string, warnings: string[] }
+// src/auth/prf.ts
 
-// Authenticate with PRF
-const result = await authenticateWithPRF({
-  options: authOptions,
-  prfSalt: deviceSalt,
-});
+export interface PrfCapabilities {
+  supported: boolean;
+  platform: string;
+  warnings: string[];
+}
 
-if (result.prfOutput) {
-  // PRF supported - derive KEK from PRF output
-  const kek = await deriveKekFromPRF(result.prfOutput, deviceSalt);
-} else {
-  // PRF not supported - need recovery secret
+// Detect PRF support and platform quirks
+export async function getPrfCapabilities(): Promise<PrfCapabilities> {
+  const platform = detectPlatform();
+  const warnings: string[] = [];
+
+  // Check WebAuthn support
+  if (!window.PublicKeyCredential) {
+    return { supported: false, platform, warnings: ['WebAuthn not supported'] };
+  }
+
+  // Platform-specific warnings
+  if (platform === 'safari' || platform === 'ios') {
+    warnings.push('PRF only works with iCloud Keychain, not hardware keys');
+    if (isIOS18()) {
+      warnings.push('iOS 18.0-18.1 have PRF bugs; update to iOS 18.2+');
+    }
+  }
+
+  if (platform === 'firefox') {
+    warnings.push('Firefox has limited PRF support; RS fallback recommended');
+  }
+
+  // Check for prf extension support
+  const supported = await checkPrfSupport();
+
+  return { supported, platform, warnings };
+}
+
+// Authenticate with PRF extension
+export async function authenticateWithPRF(
+  authOptions: PublicKeyCredentialRequestOptions,
+  prfSalt: Uint8Array
+): Promise<{ credential: PublicKeyCredential; prfOutput?: Uint8Array }> {
+
+  const credential = await navigator.credentials.get({
+    publicKey: {
+      ...authOptions,
+      extensions: {
+        prf: {
+          eval: { first: prfSalt.buffer }
+        }
+      }
+    }
+  }) as PublicKeyCredential;
+
+  const extResults = credential.getClientExtensionResults() as {
+    prf?: { results?: { first?: ArrayBuffer } }
+  };
+
+  const prfOutput = extResults.prf?.results?.first
+    ? new Uint8Array(extResults.prf.results.first)
+    : undefined;
+
+  return { credential, prfOutput };
+}
+
+// Unified unlock with automatic fallback
+export async function unlockWithPasskey(options: {
+  authOptions: PublicKeyCredentialRequestOptions;
+  deviceSalt: Uint8Array;
+  wrappedDek: WrappedDek;
+  recoverySecret?: Uint8Array; // Only needed for fallback
+}): Promise<UnlockResult> {
+
+  // Try PRF first
+  const { credential, prfOutput } = await authenticateWithPRF(
+    options.authOptions,
+    options.deviceSalt
+  );
+
+  let kek: CryptoKey;
+  let kekSource: 'prf' | 'rs';
+
+  if (prfOutput) {
+    // PRF succeeded - derive KEK from PRF output
+    kek = await deriveKekFromPRF(prfOutput, options.deviceSalt);
+    kekSource = 'prf';
+  } else if (options.recoverySecret) {
+    // PRF failed, fall back to RS
+    kek = await deriveKekFromRS(options.recoverySecret, options.deviceSalt);
+    kekSource = 'rs';
+  } else {
+    throw new UnlockFailedError('PRF not supported and no recovery secret provided');
+  }
+
+  // Unwrap DEK
+  const dek = await unwrapDek(options.wrappedDek, kek);
+
+  return { credential, kek, dek, kekSource };
 }
 ```
 
-### Platform-Specific PRF Gotchas
+### Platform-Specific PRF Notes
 
 | Platform | PRF Support | Notes |
 |----------|-------------|-------|
-| Chrome (desktop/Android) | ✅ Full | Works with all authenticators |
-| Safari (macOS/iOS) | ⚠️ Limited | Only iCloud Keychain, not hardware keys |
-| Firefox | ⚠️ Limited | Partial support, fallback recommended |
-| iOS 18 | ⚠️ Buggy | Early versions have data loss bugs |
+| Chrome (Desktop/Android) | ✅ Full | Works with platform and roaming authenticators |
+| Safari (macOS) | ⚠️ Limited | Only iCloud Keychain passkeys, not hardware keys |
+| Safari (iOS) | ⚠️ Limited | Only iCloud Keychain; iOS 18.2+ recommended |
+| Firefox | ⚠️ Limited | Partial support; RS fallback recommended |
+| Edge | ✅ Full | Same as Chrome (Chromium-based) |
 | Cross-device QR | ❌ Unreliable | PRF may fail or return different values |
-
-### Graceful Degradation
-
-```typescript
-// Unified unlock flow with automatic fallback
-const unlockResult = await unlockWithPasskey({
-  authOptions,
-  deviceSalt,
-  wrappedDek,
-});
-
-// Returns:
-// - kekSource: 'prf' | 'rs' - which method was used
-// - kek: CryptoKey - the derived KEK
-// - dek: Uint8Array - the unwrapped DEK
-```
 
 ---
 
 ## Database Layer (RxDB)
 
-### Initialization (`src/db/index.ts`)
+### Initialization
 
 ```typescript
-import { createRxDatabase } from 'rxdb';
+// src/db/index.ts
+import { createRxDatabase, RxDatabase } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
+import { addRxPlugin } from 'rxdb';
+import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+import { keyToPassword } from '../crypto/utils';
 
-// Create encrypted storage
-const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
-  storage: getRxStorageDexie()
-});
+// Add dev mode plugin in development
+if (import.meta.env.DEV) {
+  addRxPlugin(RxDBDevModePlugin);
+}
 
-// Initialize database with DEK
-const db = await createRxDatabase({
-  name: 'trichoapp',
-  storage: encryptedStorage,
-  password: keyToPassword(dek), // base64url encoded
-});
+// Singleton instance
+let dbPromise: Promise<RxDatabase> | null = null;
 
-// Add collections
-await setupCollections(db);
+export async function initDatabase(dek: Uint8Array): Promise<RxDatabase> {
+  if (dbPromise) {
+    return dbPromise;
+  }
+
+  dbPromise = (async () => {
+    // Validate DEK
+    if (!(dek instanceof Uint8Array) || dek.length !== 32) {
+      throw new DatabaseError('Invalid DEK: must be 32-byte Uint8Array');
+    }
+
+    // Create encrypted storage wrapper
+    const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
+      storage: getRxStorageDexie()
+    });
+
+    // Create database with DEK as password
+    const db = await createRxDatabase({
+      name: 'trichoapp',
+      storage: encryptedStorage,
+      password: keyToPassword(dek), // base64url encode for RxDB
+    });
+
+    // Add collections
+    await setupCollections(db);
+
+    return db;
+  })();
+
+  return dbPromise;
+}
+
+export function getDatabase(): RxDatabase | null {
+  return dbPromise ? await dbPromise : null;
+}
+
+export async function closeDatabase(): Promise<void> {
+  if (dbPromise) {
+    const db = await dbPromise;
+    await db.destroy();
+    dbPromise = null;
+  }
+}
 ```
 
 ### Schema Pattern
 
-Documents use an **encrypted payload pattern**:
+All documents follow the **encrypted payload pattern**:
 
 ```typescript
 // src/db/schemas/customer.ts
+
+export const CUSTOMER_DOC_TYPE = 'customer';
+
+export interface CustomerEncryptedPayload {
+  name: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+  allergies?: string;
+  preferredProducts?: string;
+  dateOfBirth?: string;
+}
+
+export interface CustomerDocType {
+  // Unencrypted metadata (queryable, indexable)
+  id: string;
+  type: typeof CUSTOMER_DOC_TYPE;
+  updatedAt: number;
+  createdAt: number;
+  deleted: boolean;
+
+  // Encrypted payload (NOT queryable)
+  enc: CustomerEncryptedPayload;
+}
+
 export const customerSchema = {
   version: 0,
   primaryKey: 'id',
   type: 'object',
   properties: {
-    // Unencrypted metadata (can be queried/indexed)
     id: { type: 'string', maxLength: 100 },
     type: { type: 'string' },
     updatedAt: { type: 'number' },
     createdAt: { type: 'number' },
     deleted: { type: 'boolean' },
-
-    // Encrypted payload (cannot be queried)
     enc: {
       type: 'object',
       properties: {
@@ -477,147 +994,385 @@ export const customerSchema = {
         email: { type: 'string' },
         notes: { type: 'string' },
         allergies: { type: 'string' },
+        preferredProducts: { type: 'string' },
+        dateOfBirth: { type: 'string' }
       }
     }
   },
-  encrypted: ['enc'], // Mark for encryption
-  indexes: ['updatedAt', ['type', 'updatedAt']] // Only unencrypted fields
+  required: ['id', 'type', 'updatedAt', 'createdAt'],
+  encrypted: ['enc'], // This field is encrypted
+  indexes: [
+    'updatedAt',
+    ['type', 'updatedAt']
+    // NOTE: Cannot index encrypted fields!
+  ]
 };
 ```
 
-### React Hooks (`src/db/hooks.ts`)
+### React Hooks
 
 ```typescript
-// Get all customers
-const { data: customers, loading, error } = useCustomers();
+// src/db/hooks.ts
 
-// Get single customer
-const { data: customer } = useCustomer(customerId);
+import { useState, useEffect } from 'react';
+import { getDatabase } from './index';
 
-// Search customers (client-side, decrypted)
-const { results, search } = useCustomerSearch();
+// Generic hook for reactive RxDB queries
+export function useRxQuery<T>(
+  collectionName: string,
+  queryFn: (collection: RxCollection) => RxQuery<T>
+): { data: T[]; loading: boolean; error: Error | null } {
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-// Get visits for customer
-const { data: visits } = useVisits({ customerId });
+  useEffect(() => {
+    const db = getDatabase();
+    if (!db) return;
 
-// Get photos for visit
-const { data: photos } = usePhotos({ visitId });
+    const collection = db[collectionName];
+    if (!collection) return;
+
+    const query = queryFn(collection);
+    const subscription = query.$.subscribe({
+      next: (results) => {
+        setData(results);
+        setLoading(false);
+      },
+      error: (err) => {
+        setError(err);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [collectionName]);
+
+  return { data, loading, error };
+}
+
+// Customers hook
+export function useCustomers() {
+  return useRxQuery<CustomerDocType>('customers', (collection) =>
+    collection.find({ selector: { deleted: false } })
+  );
+}
+
+// Single customer hook
+export function useCustomer(customerId: string) {
+  const [customer, setCustomer] = useState<CustomerDocType | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const db = getDatabase();
+    if (!db) return;
+
+    const subscription = db.customers
+      .findOne(customerId)
+      .$.subscribe((doc) => {
+        setCustomer(doc?.toJSON() ?? null);
+        setLoading(false);
+      });
+
+    return () => subscription.unsubscribe();
+  }, [customerId]);
+
+  return { data: customer, loading };
+}
+
+// Customer search (client-side, works with encrypted data)
+export function useCustomerSearch() {
+  const { data: allCustomers, loading } = useCustomers();
+  const [query, setQuery] = useState('');
+
+  const results = useMemo(() => {
+    if (!query.trim()) return allCustomers;
+
+    const lowerQuery = query.toLowerCase();
+    return allCustomers.filter((c) =>
+      c.enc.name.toLowerCase().includes(lowerQuery) ||
+      c.enc.phone?.includes(query) ||
+      c.enc.email?.toLowerCase().includes(lowerQuery)
+    );
+  }, [allCustomers, query]);
+
+  return { results, loading, query, setQuery };
+}
 ```
 
 ---
 
 ## Sync System
 
-### Orchestrator (`src/sync/orchestrator.ts`)
+### Orchestrator Configuration
 
 ```typescript
-// Initialize sync
-await initSync({
-  database: db,
-  couchDbUrl: 'http://localhost:5984',
-  authToken: accessToken,
-  userId: user.id,
-  enableNetworkSync: true,    // Auto-sync on network change
-  enableForegroundSync: true, // iOS PWA foreground sync
-});
+// src/sync/orchestrator.ts
 
-// Manual sync trigger
-await triggerSync();
+import { replicateCouchDB } from 'rxdb/plugins/replication-couchdb';
 
-// Get sync state
-const state = getSyncState();
-// { status: 'synced', lastSyncAt: Date, pendingWrites: 0 }
+export interface SyncConfig {
+  database: RxDatabase;
+  couchDbUrl: string;
+  authToken: string;
+  userId: string;
+  enableNetworkSync?: boolean;  // Auto-sync on network change
+  enableForegroundSync?: boolean; // Sync when app becomes visible (iOS)
+}
 
-// Subscribe to sync events
-const unsubscribe = subscribeSyncEvents((event) => {
-  console.log(event.type, event.data);
-});
-```
+export async function initSync(config: SyncConfig): Promise<void> {
+  const {
+    database,
+    couchDbUrl,
+    authToken,
+    userId,
+    enableNetworkSync = true,
+    enableForegroundSync = true
+  } = config;
 
-### Conflict Resolution
+  // User-specific database URL
+  const userDbUrl = `${couchDbUrl}/user_${userId}`;
 
-Uses **last-write-wins** based on `updatedAt` timestamp:
+  // Set up replication for each collection
+  for (const collectionName of ['customers', 'visits', 'photos']) {
+    const collection = database[collectionName];
+    if (!collection) continue;
 
-```typescript
-const conflictHandler = (local, remote) => {
-  // Compare timestamps
-  if (local.updatedAt > remote.updatedAt) {
-    return local; // Keep local version
+    const replication = replicateCouchDB({
+      collection,
+      url: `${userDbUrl}`,
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      },
+      pull: {
+        batchSize: 100,
+        heartbeat: 30000
+      },
+      push: {
+        batchSize: 100
+      },
+      live: true,
+      retryTime: 5000, // Retry failed sync after 5s
+      autoStart: true
+    });
+
+    // Set up conflict handler
+    replication.setConflictHandler(lastWriteWinsConflictHandler);
+
+    // Store replication for later control
+    replications.set(collectionName, replication);
   }
-  return remote; // Keep remote version
-};
-```
 
-### iOS Foreground Sync
+  // Set up network change listener
+  if (enableNetworkSync) {
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+  }
 
-iOS PWA doesn't support Background Sync API. TrichoApp handles this:
+  // Set up foreground sync (iOS PWA)
+  if (enableForegroundSync) {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
+}
 
-```typescript
-// Sync on visibility change (app comes to foreground)
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && isOnline()) {
+// Last-write-wins conflict resolution
+function lastWriteWinsConflictHandler(
+  documentData: WithDeleted<any>,
+  conflictData: WithDeleted<any>
+): WithDeleted<any> {
+  // Compare timestamps
+  if (documentData.updatedAt > conflictData.updatedAt) {
+    return documentData;
+  }
+  return conflictData;
+}
+
+// iOS foreground sync
+function handleVisibilityChange(): void {
+  if (document.visibilityState === 'visible' && navigator.onLine) {
     triggerSync();
   }
-});
+}
+
+// Manual sync trigger
+export async function triggerSync(): Promise<void> {
+  for (const replication of replications.values()) {
+    await replication.reSync();
+  }
+}
+```
+
+### Photo Upload Queue
+
+```typescript
+// src/sync/photos.ts
+
+interface QueuedUpload {
+  id: string;
+  photoId: string;
+  variant: PhotoVariant;
+  encryptedData: Uint8Array;
+  storageKey: string;
+  status: 'pending' | 'uploading' | 'failed';
+  retryCount: number;
+  lastError?: string;
+  createdAt: number;
+}
+
+// IndexedDB-based upload queue
+const DB_NAME = 'tricho-upload-queue';
+
+export async function queuePhotoUpload(item: Omit<QueuedUpload, 'id' | 'status' | 'retryCount' | 'createdAt'>): Promise<string> {
+  const db = await openQueueDatabase();
+  const id = crypto.randomUUID();
+
+  await db.put('uploads', {
+    ...item,
+    id,
+    status: 'pending',
+    retryCount: 0,
+    createdAt: Date.now()
+  });
+
+  // Trigger processing if online
+  if (navigator.onLine) {
+    processQueue();
+  }
+
+  return id;
+}
+
+// Process queue with exponential backoff
+async function processQueue(): Promise<void> {
+  const db = await openQueueDatabase();
+  const pending = await db.getAllFromIndex('uploads', 'by-status', 'pending');
+
+  for (const item of pending) {
+    try {
+      // Update status
+      await db.put('uploads', { ...item, status: 'uploading' });
+
+      // Get presigned URL
+      const uploadUrl = await getPresignedUploadUrl(item.storageKey);
+
+      // Upload encrypted data
+      await uploadPhoto(uploadUrl, item.encryptedData);
+
+      // Remove from queue on success
+      await db.delete('uploads', item.id);
+
+      // Emit success event
+      emitSyncEvent({ type: 'photo-uploaded', photoId: item.photoId });
+
+    } catch (error) {
+      // Calculate backoff delay
+      const delay = Math.min(
+        BASE_DELAY * Math.pow(2, item.retryCount),
+        MAX_DELAY
+      );
+
+      await db.put('uploads', {
+        ...item,
+        status: 'failed',
+        retryCount: item.retryCount + 1,
+        lastError: error.message
+      });
+
+      // Retry after delay
+      setTimeout(() => retryQueueItem(item.id), delay);
+    }
+  }
+}
 ```
 
 ---
 
 ## Photo Pipeline
 
-### Full Pipeline (`src/photos/pipeline.ts`)
-
-```
-Capture → Compress → Generate Variants → Encrypt → Queue Upload → Sync Metadata
-   │          │             │               │            │             │
-   ▼          ▼             ▼               ▼            ▼             ▼
-Camera/   Resize to     thumbnail        AES-GCM    IndexedDB    CouchDB doc
- File    max 2048px     preview        per-variant   queue        (encrypted)
-                        original                                     │
-                                                                     │
-                            ┌────────────────────────────────────────┘
-                            ▼
-                    Object Storage (S3)
-                    (encrypted blobs)
-```
-
-### Photo Encryption
+### Complete Photo Flow
 
 ```typescript
-// Process and encrypt a captured photo
-const result = await processPhoto({
-  source: capturedBlob,
-  customerId,
-  visitId,
-  dek,
-  metadata: { caption, bodyRegion }
-});
+// src/photos/pipeline.ts
 
-// Returns:
-// - encryptedVariants: { thumbnail, preview, original }
-// - photoMetaDoc: RxDB document to save
-// - uploadQueue: items queued for upload
-```
+export interface PhotoPipelineResult {
+  photoId: string;
+  variants: Map<PhotoVariant, EncryptedPhotoData>;
+  metaDoc: PhotoMetaDocType;
+  uploadIds: string[];
+}
 
-### Upload Queue
+export async function processPhoto(options: {
+  source: Blob | File;
+  customerId: string;
+  visitId?: string;
+  dek: Uint8Array;
+  metadata?: { caption?: string; bodyRegion?: string; notes?: string };
+}): Promise<PhotoPipelineResult> {
+  const { source, customerId, visitId, dek, metadata } = options;
 
-Photos upload asynchronously with retry logic:
+  const photoId = crypto.randomUUID();
+  const capturedAt = Date.now();
 
-```typescript
-// Queue automatically processes when online
-queuePhotoUpload({
-  photoId,
-  variant: 'original',
-  encryptedData,
-  storageKey,
-});
+  // Step 1: Generate variants (original, preview, thumbnail)
+  const captured = await importFromBlob(source);
+  const variantBlobs = await generateVariants(captured.blob);
 
-// Check queue status
-const queue = getUploadQueue();
-// { pending: 3, uploading: 1, failed: 0 }
+  // Step 2: Encrypt each variant
+  const variants = new Map<PhotoVariant, EncryptedPhotoData>();
+  const uploadIds: string[] = [];
 
-// Retry failed uploads
-await retryAllFailed();
+  for (const [variant, blob] of variantBlobs) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const encrypted = await encryptPhotoBlob(
+      new Uint8Array(arrayBuffer),
+      dek,
+      photoId,
+      variant
+    );
+
+    variants.set(variant, encrypted);
+
+    // Queue for upload
+    const storageKey = generateStorageKey(customerId, photoId, variant);
+    const uploadId = await queuePhotoUpload({
+      photoId,
+      variant,
+      encryptedData: encrypted.ciphertext,
+      storageKey
+    });
+    uploadIds.push(uploadId);
+  }
+
+  // Step 3: Create metadata document
+  const metaDoc: PhotoMetaDocType = {
+    id: photoId,
+    type: PHOTO_META_DOC_TYPE,
+    customerId,
+    visitId: visitId ?? null,
+    variant: 'original',
+    uploadStatus: 'pending',
+    capturedAt,
+    storageKey: generateStorageKey(customerId, photoId, 'original'),
+    mimeType: source.type,
+    width: captured.width,
+    height: captured.height,
+    sizeBytes: source.size,
+    updatedAt: capturedAt,
+    createdAt: capturedAt,
+    deleted: false,
+    enc: {
+      caption: metadata?.caption,
+      bodyRegion: metadata?.bodyRegion,
+      notes: metadata?.notes
+    }
+  };
+
+  // Save metadata to RxDB
+  const db = await getDatabase();
+  await db.photos.insert(metaDoc);
+
+  return { photoId, variants, metaDoc, uploadIds };
+}
 ```
 
 ---
@@ -626,109 +1381,153 @@ await retryAllFailed();
 
 ### Auth Service Endpoints
 
-#### Registration
+#### `POST /api/auth/register/begin`
 
-```http
-POST /api/auth/register/begin
-Content-Type: application/json
+Start WebAuthn registration.
 
+**Request:**
+```json
 { "username": "user@example.com" }
+```
 
-Response:
+**Response:**
+```json
 {
-  "challenge": "...",
+  "challenge": "base64url-encoded-challenge",
   "rp": { "name": "TrichoApp", "id": "localhost" },
-  "user": { "id": "...", "name": "user@example.com" },
-  "pubKeyCredParams": [...],
+  "user": { "id": "base64url-user-id", "name": "user@example.com", "displayName": "user@example.com" },
+  "pubKeyCredParams": [
+    { "type": "public-key", "alg": -7 },
+    { "type": "public-key", "alg": -257 }
+  ],
   "authenticatorSelection": {
     "residentKey": "required",
     "userVerification": "required"
+  },
+  "timeout": 60000
+}
+```
+
+#### `POST /api/auth/register/finish`
+
+Complete WebAuthn registration.
+
+**Request:**
+```json
+{
+  "id": "credential-id",
+  "rawId": "base64url-raw-id",
+  "type": "public-key",
+  "response": {
+    "clientDataJSON": "base64url-client-data",
+    "attestationObject": "base64url-attestation"
   }
 }
 ```
 
-```http
-POST /api/auth/register/finish
-Content-Type: application/json
-
-{ "id": "...", "response": {...}, "type": "public-key" }
-
-Response:
-{ "success": true, "userId": "..." }
+**Response:**
+```json
+{
+  "success": true,
+  "userId": "user-uuid"
+}
 ```
 
-#### Authentication
+#### `POST /api/auth/authenticate/begin`
 
-```http
-POST /api/auth/authenticate/begin
-Content-Type: application/json
+Start WebAuthn authentication.
 
-{ "username": "user@example.com" }  // Optional for discoverable credentials
+**Request:**
+```json
+{ "username": "user@example.com" }
+```
 
-Response:
+**Response:**
+```json
 {
-  "challenge": "...",
+  "challenge": "base64url-challenge",
   "rpId": "localhost",
-  "allowCredentials": [...]
+  "allowCredentials": [
+    { "type": "public-key", "id": "credential-id" }
+  ],
+  "timeout": 60000,
+  "userVerification": "required"
 }
 ```
 
-```http
-POST /api/auth/authenticate/finish
-Content-Type: application/json
+#### `POST /api/auth/authenticate/finish`
 
-{ "id": "...", "response": {...}, "type": "public-key" }
+Complete WebAuthn authentication.
 
-Response:
+**Request:**
+```json
 {
-  "accessToken": "eyJ...",
-  "refreshToken": "...",
-  "user": { "id": "...", "username": "..." }
+  "id": "credential-id",
+  "rawId": "base64url-raw-id",
+  "type": "public-key",
+  "response": {
+    "clientDataJSON": "base64url-client-data",
+    "authenticatorData": "base64url-auth-data",
+    "signature": "base64url-signature"
+  }
 }
 ```
 
-#### Token Management
-
-```http
-POST /api/auth/token/refresh
-Authorization: Bearer {refreshToken}
-
-Response:
+**Response:**
+```json
 {
-  "accessToken": "eyJ...",
-  "refreshToken": "..."  // Rotated
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "refresh-token-string",
+  "user": {
+    "id": "user-uuid",
+    "username": "user@example.com"
+  }
 }
 ```
 
-```http
-POST /api/auth/logout
-Authorization: Bearer {accessToken}
+#### `POST /api/auth/token/refresh`
 
-Response:
-{ "success": true }
+Refresh access token.
+
+**Headers:**
+```
+Authorization: Bearer <refreshToken>
+```
+
+**Response:**
+```json
+{
+  "accessToken": "new-access-token",
+  "refreshToken": "new-refresh-token"
+}
 ```
 
 ---
 
 ## Testing
 
-### Running Tests
+### Test Configuration
 
-```bash
-# Run all tests
-npm test
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
 
-# Run with coverage
-npm run test:coverage
-
-# Run in watch mode
-npm run test:watch
-
-# Run specific test file
-npm test -- src/crypto/keys.test.ts
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/test/**']
+    }
+  }
+});
 ```
 
-### Test Structure
+### Example Tests
 
 ```typescript
 // src/crypto/keys.test.ts
@@ -736,68 +1535,123 @@ import { describe, it, expect } from 'vitest';
 import {
   generateRecoverySecret,
   generateDataEncryptionKey,
+  generateDeviceSalt,
+  deriveKekFromRS,
   wrapDek,
   unwrapDek,
+  KEY_LENGTH,
+  constantTimeEqual
 } from './keys';
 
 describe('Key Generation', () => {
   it('generates 32-byte recovery secret', () => {
     const rs = generateRecoverySecret();
     expect(rs).toBeInstanceOf(Uint8Array);
-    expect(rs.length).toBe(32);
+    expect(rs.length).toBe(KEY_LENGTH);
   });
 
-  it('generates unique keys each time', () => {
+  it('generates unique keys each call', () => {
     const rs1 = generateRecoverySecret();
     const rs2 = generateRecoverySecret();
-    expect(rs1).not.toEqual(rs2);
+    expect(constantTimeEqual(rs1, rs2)).toBe(false);
   });
 });
 
 describe('Key Wrapping', () => {
   it('wraps and unwraps DEK correctly', async () => {
     const dek = generateDataEncryptionKey();
-    const kek = await deriveKekFromRS(generateRecoverySecret(), salt);
+    const rs = generateRecoverySecret();
+    const salt = generateDeviceSalt();
 
+    const kek = await deriveKekFromRS(rs, salt);
     const wrapped = await wrapDek(dek, kek);
     const unwrapped = await unwrapDek(wrapped, kek);
 
-    expect(unwrapped).toEqual(dek);
+    expect(constantTimeEqual(dek, unwrapped)).toBe(true);
+  });
+
+  it('fails with wrong KEK', async () => {
+    const dek = generateDataEncryptionKey();
+    const rs1 = generateRecoverySecret();
+    const rs2 = generateRecoverySecret();
+    const salt = generateDeviceSalt();
+
+    const kek1 = await deriveKekFromRS(rs1, salt);
+    const kek2 = await deriveKekFromRS(rs2, salt);
+
+    const wrapped = await wrapDek(dek, kek1);
+
+    await expect(unwrapDek(wrapped, kek2)).rejects.toThrow();
+  });
+});
+
+describe('Constant Time Comparison', () => {
+  it('returns true for equal arrays', () => {
+    const a = new Uint8Array([1, 2, 3]);
+    const b = new Uint8Array([1, 2, 3]);
+    expect(constantTimeEqual(a, b)).toBe(true);
+  });
+
+  it('returns false for different arrays', () => {
+    const a = new Uint8Array([1, 2, 3]);
+    const b = new Uint8Array([1, 2, 4]);
+    expect(constantTimeEqual(a, b)).toBe(false);
   });
 });
 ```
 
-### Test Files
+### Running Tests
 
-| File | Tests |
-|------|-------|
-| `src/crypto/keys.test.ts` | Key generation, wrapping, constant-time comparison |
-| `src/crypto/envelope.test.ts` | Document encryption/decryption, HKDF derivation |
-| `src/auth/prf.test.ts` | Platform detection, PRF capabilities |
+```bash
+# Run all tests
+npm test
+
+# Run with watch mode
+npm run test:watch
+
+# Run with coverage
+npm run test:coverage
+
+# Run specific file
+npm test -- src/crypto/keys.test.ts
+
+# Run tests matching pattern
+npm test -- --grep "Key Wrapping"
+```
 
 ---
 
 ## Security Considerations
 
-### DO
+### MUST DO
 
-- Use Web Crypto API for all cryptographic operations
-- Generate fresh IV for every encryption
-- Use constant-time comparison for cryptographic values
-- Clear sensitive data from memory when done
-- Validate all inputs before cryptographic operations
-- Use HKDF domain separation for different key purposes
+| Rule | Rationale |
+|------|-----------|
+| Use Web Crypto API for all crypto | Hardware-accelerated, audited implementation |
+| Generate fresh IV for every encryption | IV reuse with same key breaks GCM security |
+| Use 12-byte (96-bit) IV for AES-GCM | NIST recommendation for GCM mode |
+| Clear sensitive data from memory | Reduce exposure window |
+| Use constant-time comparison for secrets | Prevent timing attacks |
+| Use HKDF domain separation | Prevent cross-context key misuse |
+| Validate all cryptographic inputs | Prevent malformed data attacks |
+| Use non-extractable CryptoKeys | Prevent key extraction via JavaScript |
 
-### DON'T
+### MUST NOT DO
 
-- Store DEK or RS on the server
-- Log sensitive cryptographic material
-- Reuse IVs with the same key
-- Use 16-byte IV (use 12 bytes for GCM)
-- Trust client-supplied key material without validation
-- Skip authentication checks on API endpoints
+| Rule | Rationale |
+|------|-----------|
+| Store DEK/RS on server | Violates E2EE principle |
+| Log cryptographic material | Security exposure |
+| Reuse IVs with same key | Breaks GCM confidentiality |
+| Use 16-byte IV for GCM | Non-standard, less secure |
+| Trust client-supplied key material | Potential for attack |
+| Skip authentication on APIs | Unauthorized access |
+| Use `eval()` or dynamic code | Code injection risk |
+| Store secrets in source code | Exposure in version control |
 
 ### Security Checklist
+
+Before release:
 
 - [ ] All PII encrypted before leaving device
 - [ ] Recovery secret shown only once
@@ -806,6 +1660,9 @@ describe('Key Wrapping', () => {
 - [ ] No secrets in code or logs
 - [ ] HTTPS required in production
 - [ ] WebAuthn user verification required
+- [ ] Input validation on all API endpoints
+- [ ] Rate limiting on auth endpoints
+- [ ] CORS properly configured
 
 ---
 
@@ -821,66 +1678,66 @@ npm run build
 cd server && npm run build
 ```
 
-### Environment Configuration
-
-Production `.env`:
-
-```env
-# Frontend (build-time)
-VITE_COUCHDB_URL=https://couch.tricho.app
-VITE_AUTH_URL=https://auth.tricho.app
-VITE_OBJECT_STORAGE_URL=https://storage.tricho.app
-
-# Server (runtime)
-NODE_ENV=production
-COUCHDB_URL=http://couchdb:5984
-COUCHDB_USER=${COUCHDB_USER}
-COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
-JWT_SECRET=${JWT_SECRET}
-WEBAUTHN_RP_ID=tricho.app
-WEBAUTHN_RP_NAME=TrichoApp
-WEBAUTHN_ORIGIN=https://tricho.app
-```
-
 ### Docker Compose
 
 ```yaml
 version: '3.8'
+
 services:
   frontend:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
     ports:
       - "443:443"
     environment:
-      - VITE_AUTH_URL=https://auth.tricho.app
+      - NODE_ENV=production
+    depends_on:
+      - auth
 
   auth:
-    build: ./server
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - COUCHDB_URL=http://couchdb:5984
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN}
+    depends_on:
+      - couchdb
 
   couchdb:
     image: couchdb:3
+    ports:
+      - "5984:5984"
     volumes:
       - couchdb_data:/opt/couchdb/data
     environment:
       - COUCHDB_USER=${COUCHDB_USER}
       - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+
+volumes:
+  couchdb_data:
 ```
 
 ### Health Checks
 
 ```bash
 # Frontend
-curl https://tricho.app/
+curl -f https://tricho.app/ || exit 1
 
 # Auth service
-curl https://auth.tricho.app/health
+curl -f https://auth.tricho.app/health || exit 1
 
 # CouchDB
-curl https://couch.tricho.app/_up
+curl -f https://couch.tricho.app/_up || exit 1
 ```
 
 ---
@@ -889,46 +1746,87 @@ curl https://couch.tricho.app/_up
 
 ### Common Issues
 
-**TypeScript errors with RxDB**
-```
-Solution: Ensure rxdb types are installed
-npm install --save-dev @types/pouchdb-core
-```
+#### WebAuthn Not Working
 
-**WebAuthn not working on localhost**
-```
-Solution: Use HTTPS or localhost (not 127.0.0.1)
-WebAuthn requires secure context
-```
+**Symptoms:** Registration/authentication fails immediately
 
-**PRF returning undefined**
-```
-Solution: Check browser/authenticator support
-Use getPrfCapabilities() to detect support
-Fall back to RS-based KEK derivation
-```
+**Solutions:**
+1. Ensure HTTPS (or localhost)
+2. Check RP ID matches hostname
+3. Verify browser supports WebAuthn
+4. Check device has enrolled authenticator
 
-**Sync not completing**
-```
-Solution:
+#### PRF Returns Undefined
+
+**Symptoms:** `prfOutput` is undefined after authentication
+
+**Solutions:**
+1. Check browser/platform PRF support with `getPrfCapabilities()`
+2. Fall back to RS-based KEK derivation
+3. On Safari, verify using iCloud Keychain (not hardware key)
+
+#### Sync Stuck
+
+**Symptoms:** Data not syncing between devices
+
+**Solutions:**
 1. Check network connectivity
-2. Verify CouchDB is running
-3. Check auth token is valid
-4. Look for CORS issues in console
-```
+2. Verify CouchDB is running and accessible
+3. Check auth token is valid (not expired)
+4. Look for CORS errors in console
+5. Verify per-user database exists in CouchDB
+
+#### RxDB Encryption Errors
+
+**Symptoms:** Database operations fail with encryption errors
+
+**Solutions:**
+1. Verify DEK is 32-byte Uint8Array
+2. Check `keyToPassword()` encoding is consistent
+3. Clear database and re-initialize (dev only)
+4. Verify CryptoJS plugin is loaded
 
 ---
 
 ## Contributing
 
-1. Read this guide thoroughly
-2. Follow existing code patterns
-3. Add tests for new functionality
-4. Update documentation
-5. Run `npm test` before submitting PR
+### Development Workflow
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/my-feature`
+3. Make changes following code style
+4. Write/update tests
+5. Run tests: `npm test`
+6. Run linter: `npm run lint`
+7. Commit with conventional commits
+8. Push and create pull request
+
+### Code Style
+
+- Use TypeScript strict mode
+- Follow ESLint configuration
+- Use Prettier for formatting
+- Write JSDoc comments for public APIs
+- Add unit tests for new functionality
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add photo thumbnail generation
+fix: correct PRF detection on Safari
+docs: update API reference
+test: add key wrapping tests
+refactor: simplify sync orchestrator
+```
 
 ---
 
 ## License
 
 MIT License - see LICENSE file for details.
+
+---
+
+*TrichoApp - Secure, encrypted CRM for hairdressers.*
