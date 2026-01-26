@@ -406,49 +406,153 @@ export function subscribeSyncEvents(listener: SyncEventListener): () => void {
 // ============================================================================
 
 /**
- * Default conflict handler implementing last-write-wins strategy.
- * Uses the updatedAt field to determine the winner.
- *
- * @param fork - The local version (client changes)
- * @param assumedMasterState - The server version (or last known server state)
- * @param newDocumentState - The incoming document from server
- * @returns The resolved document
+ * Document type with optional updatedAt for conflict resolution
  */
-function lastWriteWinsConflictHandler<T extends { updatedAt?: number }>(
-  fork: T,
-  assumedMasterState: T | undefined,
-  newDocumentState: T
-): T {
-  // Get timestamps (default to 0 if not present)
-  const forkTime = fork.updatedAt ?? 0;
-  const serverTime = newDocumentState.updatedAt ?? 0;
-
-  // Last write wins - prefer the newer document
-  if (forkTime > serverTime) {
-    return fork;
-  } else if (serverTime > forkTime) {
-    return newDocumentState;
-  }
-
-  // Same timestamp - prefer server for consistency
-  return newDocumentState;
+interface ConflictableDocument {
+  updatedAt?: number;
+  _deleted?: boolean;
+  [key: string]: unknown;
 }
 
 /**
- * Creates a conflict handler based on the strategy
+ * RxDB conflict handler input structure
  */
-function createConflictHandler(strategy: ConflictStrategy) {
+interface RxConflictHandlerInput<T> {
+  /** The local version (client changes, aka "fork") */
+  newDocumentState: T;
+  /** The assumed state on the server when changes were made */
+  realMasterState: T;
+}
+
+/**
+ * RxDB conflict handler output structure
+ */
+interface RxConflictHandlerOutput<T> {
+  /** Whether this was an actual conflict (both modified) */
+  isEqual: boolean;
+  /** The resolved document state */
+  documentData: T;
+}
+
+/**
+ * Default conflict handler implementing last-write-wins strategy.
+ * Uses the updatedAt field to determine the winner.
+ *
+ * This handler follows RxDB's conflict handler signature:
+ * - Input: { newDocumentState, realMasterState }
+ * - Output: Promise<{ isEqual, documentData }>
+ *
+ * @param input - The conflict handler input with both document states
+ * @returns Promise resolving to the conflict handler output
+ *
+ * @example
+ * ```typescript
+ * // The handler compares updatedAt timestamps:
+ * // - If local (newDocumentState) is newer, keep local
+ * // - If server (realMasterState) is newer, keep server
+ * // - If equal timestamps, prefer server for consistency
+ * ```
+ */
+async function lastWriteWinsConflictHandler<T extends ConflictableDocument>(
+  input: RxConflictHandlerInput<T>
+): Promise<RxConflictHandlerOutput<T>> {
+  const { newDocumentState, realMasterState } = input;
+
+  // Get timestamps (default to 0 if not present)
+  const localTime = newDocumentState.updatedAt ?? 0;
+  const serverTime = realMasterState.updatedAt ?? 0;
+
+  // Check if documents are effectively the same
+  // (same timestamp and neither is a conflict situation)
+  if (localTime === serverTime) {
+    // Same timestamp - documents are considered equal, prefer server for consistency
+    return {
+      isEqual: true,
+      documentData: realMasterState,
+    };
+  }
+
+  // Last write wins - prefer the newer document
+  if (localTime > serverTime) {
+    // Local changes are newer - keep local
+    return {
+      isEqual: false,
+      documentData: newDocumentState,
+    };
+  } else {
+    // Server changes are newer - keep server
+    return {
+      isEqual: false,
+      documentData: realMasterState,
+    };
+  }
+}
+
+/**
+ * Server-wins conflict handler.
+ * Always prefers the server (master) state.
+ */
+async function serverWinsConflictHandler<T extends ConflictableDocument>(
+  input: RxConflictHandlerInput<T>
+): Promise<RxConflictHandlerOutput<T>> {
+  return {
+    isEqual: false,
+    documentData: input.realMasterState,
+  };
+}
+
+/**
+ * Client-wins conflict handler.
+ * Always prefers the client (local) state.
+ */
+async function clientWinsConflictHandler<T extends ConflictableDocument>(
+  input: RxConflictHandlerInput<T>
+): Promise<RxConflictHandlerOutput<T>> {
+  return {
+    isEqual: false,
+    documentData: input.newDocumentState,
+  };
+}
+
+/**
+ * Type for RxDB conflict handler function
+ */
+type RxConflictHandler<T extends ConflictableDocument> = (
+  input: RxConflictHandlerInput<T>
+) => Promise<RxConflictHandlerOutput<T>>;
+
+/**
+ * Creates a conflict handler based on the strategy.
+ *
+ * @param strategy - The conflict resolution strategy to use
+ * @returns A conflict handler function compatible with RxDB replication
+ *
+ * @example
+ * ```typescript
+ * const handler = createConflictHandler('last-write-wins');
+ * // Use in replication setup:
+ * replicateCouchDB({
+ *   collection,
+ *   url,
+ *   push: { conflictHandler: handler },
+ *   pull: {},
+ * });
+ * ```
+ */
+function createConflictHandler<T extends ConflictableDocument>(
+  strategy: ConflictStrategy
+): RxConflictHandler<T> {
   switch (strategy) {
     case 'last-write-wins':
-      return lastWriteWinsConflictHandler;
+      return lastWriteWinsConflictHandler as RxConflictHandler<T>;
     case 'server-wins':
-      return <T>(_fork: T, _assumed: T | undefined, server: T) => server;
+      return serverWinsConflictHandler as RxConflictHandler<T>;
     case 'client-wins':
-      return <T>(fork: T) => fork;
+      return clientWinsConflictHandler as RxConflictHandler<T>;
     case 'custom':
     default:
-      // Default to last-write-wins
-      return lastWriteWinsConflictHandler;
+      // Default to last-write-wins for safety
+      return lastWriteWinsConflictHandler as RxConflictHandler<T>;
   }
 }
 
@@ -508,7 +612,13 @@ async function setupCollectionReplication(
   const isPush = options.direction === 'push' || options.direction === 'both';
   const isPull = options.direction === 'pull' || options.direction === 'both';
 
+  // Create conflict handler based on strategy
+  const conflictStrategy = options.conflictStrategy ?? 'last-write-wins';
+  const conflictHandler = createConflictHandler<ConflictableDocument>(conflictStrategy);
+
   // Create replication state
+  // Note: RxDB replication-couchdb uses collection's conflict handler by default
+  // We configure push with our conflict handler for write conflicts
   const replication = replicateCouchDB({
     collection,
     url: couchDbUrl,
@@ -526,12 +636,29 @@ async function setupCollectionReplication(
     live: options.live ?? true,
     retryTime: options.retryInterval ?? 5000,
     autoStart: true,
-    push: isPush ? {} : undefined,
+    push: isPush
+      ? {
+          /**
+           * Conflict handler for push operations.
+           * When local changes conflict with server state, this handler
+           * resolves the conflict using the configured strategy.
+           *
+           * For 'last-write-wins' (default): newer updatedAt timestamp wins
+           * For 'server-wins': server state always wins
+           * For 'client-wins': local state always wins
+           */
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          conflictHandler: conflictHandler as any,
+        }
+      : undefined,
     pull: isPull
       ? {
-          // Include conflict handler for pull operations
+          /**
+           * Pull handler for incoming documents from the server.
+           * Ensures documents have proper _deleted flag for RxDB.
+           */
           handler: async (docs) => {
-            // Process each document with conflict handling
+            // Process each document - ensure _deleted is properly set
             return docs.map((doc) => ({
               ...doc,
               _deleted: doc._deleted ?? false,
@@ -1198,6 +1325,76 @@ export function isSyncStale(threshold = 5 * 60 * 1000): boolean {
 }
 
 // ============================================================================
+// Conflict Resolution Exports
+// ============================================================================
+
+/**
+ * Gets the conflict handler function for a given strategy.
+ * Useful for testing or custom replication setups.
+ *
+ * @param strategy - The conflict resolution strategy
+ * @returns The conflict handler function
+ *
+ * @example
+ * ```typescript
+ * const handler = getConflictHandler('last-write-wins');
+ * const result = await handler({
+ *   newDocumentState: localDoc,
+ *   realMasterState: serverDoc,
+ * });
+ * console.log('Winner:', result.documentData);
+ * ```
+ */
+export function getConflictHandler(
+  strategy: ConflictStrategy = 'last-write-wins'
+): RxConflictHandler<ConflictableDocument> {
+  return createConflictHandler(strategy);
+}
+
+/**
+ * Resolves a conflict between two document states using last-write-wins.
+ * Convenience function for manual conflict resolution.
+ *
+ * @param localDoc - The local document state
+ * @param serverDoc - The server document state
+ * @returns Promise resolving to the winning document
+ *
+ * @example
+ * ```typescript
+ * const winner = await resolveConflict(localCustomer, serverCustomer);
+ * ```
+ */
+export async function resolveConflict<T extends ConflictableDocument>(
+  localDoc: T,
+  serverDoc: T
+): Promise<T> {
+  const result = await lastWriteWinsConflictHandler({
+    newDocumentState: localDoc,
+    realMasterState: serverDoc,
+  });
+  return result.documentData as T;
+}
+
+/**
+ * Compares two documents and determines which is newer.
+ *
+ * @param docA - First document
+ * @param docB - Second document
+ * @returns -1 if docA is newer, 1 if docB is newer, 0 if equal
+ */
+export function compareDocumentTimestamps<T extends ConflictableDocument>(
+  docA: T,
+  docB: T
+): -1 | 0 | 1 {
+  const timeA = docA.updatedAt ?? 0;
+  const timeB = docB.updatedAt ?? 0;
+
+  if (timeA > timeB) return -1;
+  if (timeB > timeA) return 1;
+  return 0;
+}
+
+// ============================================================================
 // Exports for Testing
 // ============================================================================
 
@@ -1212,3 +1409,14 @@ export function _resetSyncState(): void {
   syncOptions = null;
   currentState = createInitialState();
 }
+
+/**
+ * Exposes the conflict handler for testing purposes.
+ * @internal
+ */
+export const _conflictHandlers = {
+  lastWriteWins: lastWriteWinsConflictHandler,
+  serverWins: serverWinsConflictHandler,
+  clientWins: clientWinsConflictHandler,
+  create: createConflictHandler,
+} as const;
