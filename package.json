@@ -9,6 +9,7 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@noble/hashes": "^1.7.1",
     "@simplewebauthn/browser": "^13.0.0",
     "astro": "^5.16.5",
     "crypto-js": "^4.2.0",
