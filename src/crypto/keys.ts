@@ -17,6 +17,13 @@ export const KEY_LENGTH = 32;
 export const SALT_LENGTH = 32;
 
 /**
+ * IV length for AES-GCM
+ * Using 12 bytes (96 bits) as recommended by NIST
+ * This is the optimal IV length for AES-GCM performance and security
+ */
+export const IV_LENGTH = 12;
+
+/**
  * HKDF info strings for domain separation
  * These ensure keys derived for different purposes are cryptographically independent
  */
@@ -74,6 +81,18 @@ export interface DerivedKek {
   key: CryptoKey;
   source: KekSource;
   deviceSalt: DeviceSalt;
+}
+
+/**
+ * Wrapped DEK structure
+ * Contains the IV and ciphertext needed for unwrapping
+ * The IV must never be reused with the same KEK
+ */
+export interface WrappedDek {
+  /** 12-byte initialization vector (unique per wrap operation) */
+  iv: Uint8Array;
+  /** AES-GCM encrypted DEK with authentication tag */
+  ciphertext: Uint8Array;
 }
 
 /**
@@ -232,6 +251,161 @@ export async function deriveKek(
 
   const key = await deriveKekFromRS(recoverySecret, salt);
   return { key, source: 'rs', deviceSalt: salt };
+}
+
+/**
+ * Wraps (encrypts) a DEK using a KEK with AES-GCM.
+ * The wrapped DEK can be safely stored locally alongside the device salt.
+ *
+ * AES-GCM provides both confidentiality and integrity protection.
+ * A fresh random IV is generated for each wrap operation to ensure
+ * the same DEK wrapped twice produces different ciphertexts.
+ *
+ * @param dek - The Data Encryption Key to wrap (32 bytes)
+ * @param kek - The Key Encryption Key (CryptoKey with wrapKey usage)
+ * @returns Promise resolving to WrappedDek containing IV and ciphertext
+ * @throws Error if DEK is invalid or Web Crypto API unavailable
+ */
+export async function wrapDek(
+  dek: DataEncryptionKey,
+  kek: CryptoKey
+): Promise<WrappedDek> {
+  if (!isValidKey(dek)) {
+    throw new Error('Invalid DEK: must be a 32-byte Uint8Array');
+  }
+
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('Web Crypto API not available');
+  }
+
+  // Generate a fresh IV for this wrap operation
+  // Using 12 bytes (96 bits) as recommended by NIST for AES-GCM
+  const iv = new Uint8Array(IV_LENGTH);
+  crypto.getRandomValues(iv);
+
+  // Import DEK as a CryptoKey so we can use wrapKey
+  // This is more secure than using encrypt() directly as it
+  // enforces proper key handling semantics
+  const dekKey = await crypto.subtle.importKey(
+    'raw',
+    dek,
+    { name: 'AES-GCM', length: 256 },
+    true, // extractable - needed for wrapping
+    ['encrypt', 'decrypt']
+  );
+
+  // Wrap the DEK using AES-GCM
+  // wrapKey returns the encrypted key with authentication tag appended
+  const wrappedBuffer = await crypto.subtle.wrapKey(
+    'raw',
+    dekKey,
+    kek,
+    { name: 'AES-GCM', iv }
+  );
+
+  return {
+    iv,
+    ciphertext: new Uint8Array(wrappedBuffer),
+  };
+}
+
+/**
+ * Unwraps (decrypts) a DEK using a KEK with AES-GCM.
+ * This reverses the wrapDek operation to recover the original DEK.
+ *
+ * The operation will fail if:
+ * - The KEK is incorrect
+ * - The IV or ciphertext has been tampered with
+ * - The authentication tag verification fails
+ *
+ * @param wrappedDek - The wrapped DEK (IV + ciphertext with auth tag)
+ * @param kek - The Key Encryption Key (CryptoKey with unwrapKey usage)
+ * @returns Promise resolving to the unwrapped DEK as Uint8Array
+ * @throws Error if unwrapping fails (wrong key, tampered data, etc.)
+ */
+export async function unwrapDek(
+  wrappedDek: WrappedDek,
+  kek: CryptoKey
+): Promise<DataEncryptionKey> {
+  if (
+    !wrappedDek ||
+    !(wrappedDek.iv instanceof Uint8Array) ||
+    wrappedDek.iv.length !== IV_LENGTH
+  ) {
+    throw new Error('Invalid wrapped DEK: IV must be a 12-byte Uint8Array');
+  }
+
+  if (
+    !(wrappedDek.ciphertext instanceof Uint8Array) ||
+    wrappedDek.ciphertext.length === 0
+  ) {
+    throw new Error('Invalid wrapped DEK: ciphertext must be a non-empty Uint8Array');
+  }
+
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('Web Crypto API not available');
+  }
+
+  try {
+    // Unwrap the DEK using AES-GCM
+    // This will verify the authentication tag and decrypt
+    const dekKey = await crypto.subtle.unwrapKey(
+      'raw',
+      wrappedDek.ciphertext,
+      kek,
+      { name: 'AES-GCM', iv: wrappedDek.iv },
+      { name: 'AES-GCM', length: 256 },
+      true, // extractable - needed to get raw bytes
+      ['encrypt', 'decrypt']
+    );
+
+    // Export the unwrapped key as raw bytes
+    const dekBuffer = await crypto.subtle.exportKey('raw', dekKey);
+    return new Uint8Array(dekBuffer);
+  } catch (error) {
+    // AES-GCM unwrap failures indicate tampering or wrong key
+    // We don't expose the underlying error to avoid information leakage
+    throw new Error(
+      'Failed to unwrap DEK: decryption failed (wrong key or tampered data)'
+    );
+  }
+}
+
+/**
+ * Serializes a WrappedDek to a Uint8Array for storage.
+ * Format: [iv (12 bytes)] [ciphertext (variable)]
+ *
+ * @param wrappedDek - The wrapped DEK to serialize
+ * @returns Uint8Array containing serialized wrapped DEK
+ */
+export function serializeWrappedDek(wrappedDek: WrappedDek): Uint8Array {
+  const result = new Uint8Array(IV_LENGTH + wrappedDek.ciphertext.length);
+  result.set(wrappedDek.iv, 0);
+  result.set(wrappedDek.ciphertext, IV_LENGTH);
+  return result;
+}
+
+/**
+ * Deserializes a Uint8Array back to a WrappedDek.
+ * Reverses the serializeWrappedDek operation.
+ *
+ * @param data - Serialized wrapped DEK bytes
+ * @returns WrappedDek structure
+ * @throws Error if data is too short to contain valid wrapped DEK
+ */
+export function deserializeWrappedDek(data: Uint8Array): WrappedDek {
+  // Minimum size: 12 bytes IV + at least 32 bytes ciphertext (for 32-byte key) + 16 bytes auth tag
+  const minSize = IV_LENGTH + KEY_LENGTH + 16; // 60 bytes minimum
+  if (!(data instanceof Uint8Array) || data.length < minSize) {
+    throw new Error(
+      `Invalid wrapped DEK data: expected at least ${minSize} bytes, got ${data?.length ?? 0}`
+    );
+  }
+
+  return {
+    iv: data.slice(0, IV_LENGTH),
+    ciphertext: data.slice(IV_LENGTH),
+  };
 }
 
 /**
