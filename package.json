@@ -6,9 +6,27 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "astro": "^5.16.5"
+    "@astrojs/react": "^4.4.2",
+    "@noble/hashes": "^1.7.1",
+    "@simplewebauthn/browser": "^13.0.0",
+    "astro": "^5.16.5",
+    "crypto-js": "^4.2.0",
+    "dexie": "^4.2.1",
+    "html5-qrcode": "^2.3.8",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "rxdb": "^16.21.1"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/dom": "^10.0.0",
+    "jsdom": "^26.0.0"
   }
 }
