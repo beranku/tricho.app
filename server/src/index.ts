@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import authRouter from './routes/auth.js';
 
 // Server configuration
 const PORT = Number(process.env.PORT) || 3000;
@@ -34,20 +35,25 @@ app.get('/health', (c) => {
   });
 });
 
-// API routes placeholder - will be implemented in subtask-2-2
+// API info endpoint
 app.get('/api', (c) => {
   return c.json({
     message: 'TrichoApp Auth Service API',
     version: '0.0.1',
     endpoints: {
       health: 'GET /health',
+      authConfig: 'GET /api/auth/config',
+      authStatus: 'GET /api/auth/status?username=...',
       registerBegin: 'POST /api/auth/register/begin',
       registerFinish: 'POST /api/auth/register/finish',
-      authenticateBegin: 'POST /api/auth/authenticate/begin',
-      authenticateFinish: 'POST /api/auth/authenticate/finish',
+      authenticateBegin: 'POST /api/auth/authenticate/begin (TODO)',
+      authenticateFinish: 'POST /api/auth/authenticate/finish (TODO)',
     },
   });
 });
+
+// Mount auth routes
+app.route('/api/auth', authRouter);
 
 // Start server
 serve(
