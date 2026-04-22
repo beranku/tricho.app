@@ -1,0 +1,15 @@
+# Caddy is used here purely as a static file server behind Traefik. It serves
+# the PWA bundle; TLS/ACME is handled by Traefik at the edge.
+:80 {
+    root * /srv
+    encode zstd gzip
+    try_files {path} /index.html
+    file_server
+    header {
+        Cache-Control "public, max-age=600, must-revalidate"
+    }
+    @assets {
+        path /_astro/* /favicon.svg /manifest.webmanifest
+    }
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+}

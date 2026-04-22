@@ -1,0 +1,50 @@
+# CouchDB + auth-proxy. Works standalone for local dev. Layer the Traefik
+# overlay on top for prod (see ../traefik/docker-compose.yml).
+services:
+  couchdb:
+    image: couchdb:3
+    container_name: tricho_couchdb
+    restart: unless-stopped
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-changeme}
+    ports:
+      - "${COUCHDB_PORT:-5984}:5984"
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      - ./local.ini:/opt/couchdb/etc/local.d/tricho.ini:ro
+    networks:
+      - tricho-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5984/_up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # tricho-auth: CouchDB user provisioning, OAuth, JWT sessions, device mgmt.
+  # Holds CouchDB admin creds internally; clients never see them. The only
+  # service that talks to CouchDB as admin.
+  auth-proxy:
+    build: ./tricho-auth
+    container_name: tricho_auth
+    restart: unless-stopped
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_ADMIN_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_ADMIN_PASSWORD: ${COUCHDB_PASSWORD:-changeme}
+      TRICHO_META_DB: ${TRICHO_META_DB:-tricho_meta}
+      PORT: 4545
+    ports:
+      - "${AUTH_PROXY_PORT:-4545}:4545"
+    networks:
+      - tricho-net
+    depends_on:
+      couchdb:
+        condition: service_healthy
+
+volumes:
+  couchdb-data:
+
+networks:
+  tricho-net:
+    name: tricho-net

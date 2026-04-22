@@ -1,0 +1,25 @@
+# Shared middlewares referenced via @file from the compose labels.
+http:
+  middlewares:
+    tricho-security:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        # CSP is deliberately permissive enough to let the PWA talk to the same
+        # origin for /auth/* and /userdb-*. Tighten further as the app surface
+        # stabilises.
+        contentSecurityPolicy: >-
+          default-src 'self';
+          connect-src 'self';
+          img-src 'self' data: blob:;
+          script-src 'self';
+          style-src 'self' 'unsafe-inline';
+          font-src 'self' data:;
+          frame-ancestors 'none';
+          base-uri 'self';
+          form-action 'self'

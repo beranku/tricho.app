@@ -1,0 +1,91 @@
+# Production Traefik stack.
+#
+# Includes the base CouchDB + auth-proxy services (via compose `include`, which
+# resolves their relative paths against their own file — no path surprises) and
+# adds Traefik + a static file server for the PWA in front of them.
+#
+# Usage:
+#   docker network create tricho-net         # one-time
+#   cd infrastructure/traefik
+#   cp .env.example .env && $EDITOR .env
+#   docker compose --env-file .env up -d
+#
+# In this compose file, `couchdb` and `auth-proxy` get Traefik labels. They
+# keep their internal port mappings from the included file; Traefik routes to
+# them over the shared `tricho-net` network. The public ports (5984, 4545)
+# remain bound on the host for debugging — remove them from the included file
+# or add a firewall rule to lock them down in hardened deployments.
+
+include:
+  - ../couchdb/docker-compose.yml
+
+services:
+  traefik:
+    image: traefik:v3
+    container_name: tricho_traefik
+    restart: unless-stopped
+    command:
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=tricho-net
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${TRAEFIK_ACME_EMAIL:?set TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+      - ./dynamic:/etc/traefik/dynamic:ro
+    networks:
+      - tricho-net
+    labels:
+      traefik.enable: "true"
+      # Route couchdb by path (only the public surface).
+      traefik.http.routers.couch.rule: |-
+        Host(`${APP_HOST:?set APP_HOST}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
+      traefik.http.routers.couch.entrypoints: websecure
+      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.tls.certresolver: le
+      traefik.http.routers.couch.middlewares: tricho-security@file
+      traefik.http.services.couch.loadbalancer.server.port: "5984"
+      # Route auth service.
+      traefik.http.routers.auth.rule: Host(`${APP_HOST}`) && PathPrefix(`/auth`)
+      traefik.http.routers.auth.entrypoints: websecure
+      traefik.http.routers.auth.service: auth@docker
+      traefik.http.routers.auth.tls.certresolver: le
+      traefik.http.routers.auth.middlewares: tricho-security@file
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
+
+  pwa:
+    image: caddy:2-alpine
+    container_name: tricho_pwa
+    restart: unless-stopped
+    volumes:
+      - ${PWA_DIST_DIR:-../../dist}:/srv:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - tricho-net
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.routers.pwa.rule: Host(`${APP_HOST}`)
+      traefik.http.routers.pwa.priority: "1"
+      traefik.http.routers.pwa.entrypoints: websecure
+      traefik.http.routers.pwa.tls.certresolver: le
+      traefik.http.routers.pwa.middlewares: tricho-security@file
+      traefik.http.services.pwa.loadbalancer.server.port: "80"
+
+# Network is declared in the included couchdb compose file; referenced here
+# via `networks: [tricho-net]` on each service.

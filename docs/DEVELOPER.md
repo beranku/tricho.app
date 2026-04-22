@@ -1,5 +1,7 @@
 # TrichoApp Developer Guide
 
+> ⚠️ **Migration notice** — this document predates the current v3 architecture. **For what's current, read [`ARCHITECTURE_CHANGES.md`](./ARCHITECTURE_CHANGES.md).** The text below describes earlier iterations and is kept for historical reference only. Sections that refer to `server/`, `src/auth/passkey.ts`, `src/auth/prf.ts`, `src/crypto/keys.ts`, `src/photos/pipeline.ts`, `CustomerList/Form/Detail.tsx`, RxDB collections, Supabase, or the CouchDB replication via `replicateRxCollection` have all been replaced — the current stack is PouchDB (browser) + CouchDB (server) with a tiny Node provisioning proxy.
+
 Comprehensive technical documentation for developers building and maintaining TrichoApp.
 
 ## Table of Contents

@@ -16,6 +16,11 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+.env.local
+infrastructure/.env
+
+# Infrastructure secrets
+infrastructure/traefik/acme.json
 
 # macOS-specific files
 .DS_Store
@@ -25,11 +30,13 @@ pnpm-debug.log*
 
 # Auto Claude data directory
 .auto-claude/
-
-# Auto Claude generated files
 .auto-claude-security.json
 .auto-claude-status
 .claude_settings.json
-.worktrees/
-.security-key
-logs/security/
+
+# Traefik Let's Encrypt state
+infrastructure/traefik/letsencrypt/
+infrastructure/traefik/.env
+
+# Tricho-auth generated dev JWT keys
+infrastructure/couchdb/tricho-auth/node_modules/

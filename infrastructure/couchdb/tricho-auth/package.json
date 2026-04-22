@@ -1,0 +1,14 @@
+{
+  "name": "tricho-auth",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "jose": "^5.9.0",
+    "openid-client": "^5.7.0"
+  }
+}

@@ -1,389 +1,242 @@
 /**
- * Recovery QR Export Module
+ * Recovery Secret (RS) module for vault recovery
  *
- * Provides functionality for exporting and displaying the Recovery Secret (RS)
- * as a QR code. The RS is the ultimate "break glass" mechanism for account
- * recovery when passkeys are unavailable or deleted.
+ * This module handles:
+ * - Recovery Secret generation and encoding (Base32)
+ * - RS checksum generation and validation for confirmation flow
+ * - Recovery export sessions with confirmation requirement
  *
- * SECURITY CONSIDERATIONS:
- * - The RS is extremely powerful and must be treated as a secret
- * - RS should only be displayed once during initial setup
- * - Users must be clearly instructed to save the QR securely
- * - The RS should never be transmitted to any server
- * - Clear the RS from memory as soon as possible after display
- *
- * @module auth/recovery
- *
- * @example
- * ```typescript
- * import {
- *   prepareRecoveryQRData,
- *   createRecoveryExportSession,
- *   confirmRecoveryExported,
- *   hasUserExportedRecovery,
- * } from '@/auth/recovery';
- *
- * // During first-time setup, after key generation
- * const recoverySecret = generateRecoverySecret();
- * const qrData = prepareRecoveryQRData(recoverySecret);
- *
- * // Track the export session
- * const session = createRecoveryExportSession(userId);
- *
- * // Display QR code to user (use qrcode.react component)
- * <QRCode value={qrData.uri} />
- *
- * // After user confirms they've saved it
- * confirmRecoveryExported(session.sessionId, userId);
- *
- * // Clear sensitive data
- * clearRecoverySecret(recoverySecret);
- * ```
+ * The RS checksum confirmation flow ensures users have properly saved their RS
+ * before vault creation by requiring re-entry of the last 4 characters of the
+ * Base32-encoded RS.
  */
 
 import {
-  type RecoverySecret,
-  type DataEncryptionKey,
-  type DeviceSalt,
-  type WrappedDek,
-  isValidKey,
-  clearKey,
-  KEY_LENGTH,
-  generateRecoverySecret,
-  generateDeviceSalt,
-  deriveKekFromRS,
-  wrapDek,
-} from '../crypto/keys';
-import {
-  formatRecoveryQRData,
-  parseRecoveryQRData,
-  base64urlEncode,
-  base64urlDecode,
-  isValidBase64url,
-} from '../crypto/utils';
+  confirmRecoverySecret,
+  getVaultState,
+  updateWrappedDekRs,
+  type WrappedKeyData,
+} from '../db/keystore';
 
-// ============================================================================
-// Types
-// ============================================================================
+/** Version string for domain separation */
+export const RECOVERY_VERSION = 'v1';
+
+/** Session storage key for recovery export session */
+const SESSION_STORAGE_KEY = 'tricho_recovery_export_session';
+
+/** RS length in bytes (256 bits) */
+export const RS_LENGTH_BYTES = 32;
+
+/** Checksum length (last N characters of Base32 RS) */
+export const CHECKSUM_LENGTH = 4;
 
 /**
- * Data prepared for QR code display
+ * Base32 alphabet (RFC 4648)
+ * Using uppercase letters A-Z and digits 2-7
  */
-export interface RecoveryQRData {
-  /** Full URI for QR code (tricho://recover/{base64url}) */
-  uri: string;
-  /** Base64url-encoded recovery secret (for text backup) */
-  base64url: string;
-  /** Length of the recovery secret in bytes */
-  secretLength: number;
-  /** Timestamp when data was prepared */
-  preparedAt: number;
-}
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 /**
- * Recovery export session for tracking user acknowledgment
+ * Recovery export session for tracking RS confirmation state
  */
 export interface RecoveryExportSession {
   /** Unique session identifier */
   sessionId: string;
-  /** User ID associated with this export */
+  /** Associated vault ID */
+  vaultId: string;
+  /** User ID for the vault */
   userId: string;
   /** Timestamp when session was created */
   createdAt: number;
-  /** Whether user has confirmed saving the recovery QR */
+  /** Whether RS has been confirmed by checksum re-entry */
   confirmed: boolean;
-  /** Timestamp when user confirmed (if confirmed) */
+  /** Timestamp when RS was confirmed */
   confirmedAt?: number;
+  /** Expected checksum for validation */
+  expectedChecksum: string;
+  /** Base32-encoded RS (stored temporarily in session for confirmation) */
+  encodedRs: string;
 }
 
 /**
- * Stored recovery export status
+ * Result of RS generation
  */
-export interface RecoveryExportStatus {
-  /** User ID */
-  userId: string;
-  /** Whether recovery has been exported and confirmed */
-  exported: boolean;
-  /** When the export was confirmed */
-  exportedAt?: number;
-  /** Number of times recovery has been viewed (for audit) */
-  viewCount: number;
-  /** Last time recovery was viewed */
-  lastViewedAt?: number;
+export interface RecoverySecretResult {
+  /** Raw RS bytes (Uint8Array) */
+  raw: Uint8Array;
+  /** Base32-encoded RS for display/storage */
+  encoded: string;
+  /** Checksum (last 4 chars of encoded RS) */
+  checksum: string;
 }
 
 /**
- * Options for recovery QR display
- */
-export interface RecoveryDisplayOptions {
-  /** Error correction level for QR code (L, M, Q, H) */
-  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H';
-  /** Recommended QR code size in pixels */
-  recommendedSize: number;
-  /** Whether to show text backup option */
-  showTextBackup: boolean;
-}
-
-// ============================================================================
-// Recovery Import Types
-// ============================================================================
-
-/**
- * Result of recovery import operation.
- * Contains the derived KEK and all data needed to set up the device.
- */
-export interface RecoveryImportResult {
-  /** The recovery secret extracted from QR code */
-  recoverySecret: RecoverySecret;
-  /** The KEK derived from recovery secret for this device */
-  kek: CryptoKey;
-  /** Device-specific salt used in KEK derivation */
-  deviceSalt: DeviceSalt;
-  /** Timestamp when import was completed */
-  importedAt: number;
-}
-
-/**
- * Result of recovery import with DEK wrapping.
- * Extends RecoveryImportResult to include wrapped DEK for storage.
- */
-export interface RecoveryImportWithDekResult extends RecoveryImportResult {
-  /** The DEK wrapped with the derived KEK */
-  wrappedDek: WrappedDek;
-}
-
-/**
- * Recovery import session for tracking the import flow
- */
-export interface RecoveryImportSession {
-  /** Unique session identifier */
-  sessionId: string;
-  /** Timestamp when session was created */
-  createdAt: number;
-  /** Current step in the import flow */
-  step: RecoveryImportStep;
-  /** Timestamp when QR was successfully scanned */
-  scannedAt?: number;
-  /** Timestamp when keys were derived */
-  derivedAt?: number;
-  /** Whether the import was completed successfully */
-  completed: boolean;
-  /** Timestamp when import completed */
-  completedAt?: number;
-  /** Error message if import failed */
-  error?: string;
-}
-
-/**
- * Steps in the recovery import flow
- */
-export type RecoveryImportStep =
-  | 'awaiting_scan'
-  | 'validating'
-  | 'deriving_keys'
-  | 'completed'
-  | 'failed';
-
-/**
- * Stored recovery import status for a device
- */
-export interface RecoveryImportStatus {
-  /** Whether this device was set up via recovery */
-  recoveredDevice: boolean;
-  /** When the recovery was performed */
-  recoveredAt?: number;
-  /** Number of recovery attempts (for audit) */
-  attemptCount: number;
-  /** Last attempt timestamp */
-  lastAttemptAt?: number;
-}
-
-// ============================================================================
-// Error Classes
-// ============================================================================
-
-/**
- * Error thrown when recovery secret is invalid
- */
-export class InvalidRecoverySecretError extends Error {
-  constructor(message = 'Invalid recovery secret') {
-    super(message);
-    this.name = 'InvalidRecoverySecretError';
-  }
-}
-
-/**
- * Error thrown when recovery export session is invalid
- */
-export class InvalidExportSessionError extends Error {
-  constructor(message = 'Invalid or expired export session') {
-    super(message);
-    this.name = 'InvalidExportSessionError';
-  }
-}
-
-/**
- * Error thrown when recovery data parsing fails
- */
-export class RecoveryParseError extends Error {
-  constructor(message = 'Failed to parse recovery data') {
-    super(message);
-    this.name = 'RecoveryParseError';
-  }
-}
-
-/**
- * Error thrown when recovery import fails
- */
-export class RecoveryImportError extends Error {
-  /** The step at which the import failed */
-  step: RecoveryImportStep;
-
-  constructor(message = 'Recovery import failed', step: RecoveryImportStep = 'failed') {
-    super(message);
-    this.name = 'RecoveryImportError';
-    this.step = step;
-  }
-}
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-/** Storage key prefix for recovery export status */
-const STORAGE_KEY_PREFIX = 'tricho:recovery_export';
-
-/** Storage key prefix for recovery import status */
-const IMPORT_STORAGE_KEY_PREFIX = 'tricho:recovery_import';
-
-/** Storage key for active export sessions */
-const SESSION_STORAGE_KEY = 'tricho:recovery_session';
-
-/** Storage key for active import sessions */
-const IMPORT_SESSION_STORAGE_KEY = 'tricho:recovery_import_session';
-
-/** Export session timeout in milliseconds (30 minutes) */
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
-
-/** Import session timeout in milliseconds (15 minutes) */
-const IMPORT_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
-
-/** Default QR code display options */
-export const DEFAULT_DISPLAY_OPTIONS: RecoveryDisplayOptions = {
-  errorCorrectionLevel: 'M',
-  recommendedSize: 256,
-  showTextBackup: true,
-};
-
-// ============================================================================
-// QR Data Preparation
-// ============================================================================
-
-/**
- * Prepares recovery secret data for QR code display.
- * This creates the URI and formatted data needed for the QR component.
+ * Generates a cryptographically secure Recovery Secret
  *
- * @param recoverySecret - The 32-byte recovery secret to encode
- * @returns Prepared QR data including URI and base64url
- * @throws {InvalidRecoverySecretError} If the recovery secret is invalid
- *
- * @example
- * ```typescript
- * const recoverySecret = generateRecoverySecret();
- * const qrData = prepareRecoveryQRData(recoverySecret);
- *
- * // Use with qrcode.react
- * <QRCode value={qrData.uri} size={256} level="M" />
- *
- * // Also show text backup option
- * <p>Manual backup code: {qrData.base64url}</p>
- * ```
+ * @returns RecoverySecretResult with raw bytes, Base32 encoding, and checksum
  */
-export function prepareRecoveryQRData(recoverySecret: RecoverySecret): RecoveryQRData {
-  if (!isValidKey(recoverySecret)) {
-    throw new InvalidRecoverySecretError(
-      `Recovery secret must be a ${KEY_LENGTH}-byte Uint8Array`
-    );
-  }
+export function generateRecoverySecret(): RecoverySecretResult {
+  const raw = new Uint8Array(RS_LENGTH_BYTES);
+  crypto.getRandomValues(raw);
 
-  const uri = formatRecoveryQRData(recoverySecret);
-  const base64url = base64urlEncode(recoverySecret);
+  const encoded = encodeBase32(raw);
+  const checksum = generateRSChecksum(encoded);
 
   return {
-    uri,
-    base64url,
-    secretLength: recoverySecret.length,
-    preparedAt: Date.now(),
+    raw,
+    encoded,
+    checksum,
   };
 }
 
 /**
- * Validates a recovery secret without exposing its value.
- * Use this to check if a secret is valid before attempting operations.
+ * Encodes raw bytes as Base32 (RFC 4648)
  *
- * @param recoverySecret - The recovery secret to validate
- * @returns true if the recovery secret is valid (32 bytes)
+ * @param data - Raw bytes to encode
+ * @returns Base32-encoded string
  */
-export function isValidRecoverySecret(recoverySecret: unknown): recoverySecret is RecoverySecret {
-  return (
-    recoverySecret instanceof Uint8Array &&
-    recoverySecret.length === KEY_LENGTH
-  );
-}
-
-/**
- * Gets recommended display options for the recovery QR code.
- * These settings balance scannability with information density.
- *
- * @returns Display options for the QR component
- *
- * @example
- * ```typescript
- * const options = getRecoveryDisplayOptions();
- * <QRCode
- *   value={qrData.uri}
- *   size={options.recommendedSize}
- *   level={options.errorCorrectionLevel}
- * />
- * ```
- */
-export function getRecoveryDisplayOptions(): RecoveryDisplayOptions {
-  return { ...DEFAULT_DISPLAY_OPTIONS };
-}
-
-// ============================================================================
-// Export Session Management
-// ============================================================================
-
-/**
- * Creates a new recovery export session.
- * This tracks that the user is viewing the recovery QR and should confirm saving it.
- *
- * @param userId - The user ID for this export session
- * @returns New export session
- *
- * @example
- * ```typescript
- * const session = createRecoveryExportSession(userId);
- * // Show QR code to user
- * // ...
- * // When user clicks "I've saved my recovery code"
- * confirmRecoveryExported(session.sessionId, userId);
- * ```
- */
-export function createRecoveryExportSession(userId: string): RecoveryExportSession {
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('User ID is required');
+export function encodeBase32(data: Uint8Array): string {
+  if (data.length === 0) {
+    return '';
   }
 
+  let result = '';
+  let buffer = 0;
+  let bitsLeft = 0;
+
+  for (const byte of data) {
+    buffer = (buffer << 8) | byte;
+    bitsLeft += 8;
+
+    while (bitsLeft >= 5) {
+      bitsLeft -= 5;
+      result += BASE32_ALPHABET[(buffer >> bitsLeft) & 0x1f];
+    }
+  }
+
+  // Handle remaining bits
+  if (bitsLeft > 0) {
+    result += BASE32_ALPHABET[(buffer << (5 - bitsLeft)) & 0x1f];
+  }
+
+  return result;
+}
+
+/**
+ * Decodes Base32-encoded string to raw bytes
+ *
+ * @param encoded - Base32-encoded string
+ * @returns Raw bytes as Uint8Array
+ * @throws Error if input contains invalid characters
+ */
+export function decodeBase32(encoded: string): Uint8Array {
+  if (encoded.length === 0) {
+    return new Uint8Array(0);
+  }
+
+  // Normalize input: uppercase and remove whitespace/dashes
+  const normalized = encoded.toUpperCase().replace(/[\s-]/g, '');
+
+  const result: number[] = [];
+  let buffer = 0;
+  let bitsLeft = 0;
+
+  for (const char of normalized) {
+    const value = BASE32_ALPHABET.indexOf(char);
+    if (value === -1) {
+      throw new Error(`Invalid Base32 character: ${char}`);
+    }
+
+    buffer = (buffer << 5) | value;
+    bitsLeft += 5;
+
+    if (bitsLeft >= 8) {
+      bitsLeft -= 8;
+      result.push((buffer >> bitsLeft) & 0xff);
+    }
+  }
+
+  return new Uint8Array(result);
+}
+
+/**
+ * Generates checksum from Base32-encoded RS
+ *
+ * The checksum is the last CHECKSUM_LENGTH characters of the encoded RS,
+ * which provides verification that the user has correctly copied the RS.
+ *
+ * @param encodedRs - Base32-encoded Recovery Secret
+ * @returns Checksum string (last 4 characters, uppercase)
+ */
+export function generateRSChecksum(encodedRs: string): string {
+  if (encodedRs.length < CHECKSUM_LENGTH) {
+    throw new Error(`RS too short: must be at least ${CHECKSUM_LENGTH} characters`);
+  }
+
+  return encodedRs.slice(-CHECKSUM_LENGTH).toUpperCase();
+}
+
+/**
+ * Validates RS checksum
+ *
+ * Compares the provided checksum with the expected checksum derived from the RS.
+ * Comparison is case-insensitive.
+ *
+ * @param encodedRs - Base32-encoded Recovery Secret
+ * @param checksum - Checksum to validate (user input)
+ * @returns true if checksum matches, false otherwise
+ */
+export function validateRSChecksum(encodedRs: string, checksum: string): boolean {
+  if (!encodedRs || !checksum) {
+    return false;
+  }
+
+  const expectedChecksum = generateRSChecksum(encodedRs);
+  const normalizedInput = checksum.toUpperCase().replace(/[\s-]/g, '');
+
+  return expectedChecksum === normalizedInput;
+}
+
+/**
+ * Generates a unique session ID
+ *
+ * @returns Session ID string
+ */
+function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers
+  return `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+}
+
+/**
+ * Creates a new recovery export session
+ *
+ * A recovery export session tracks the RS confirmation state during vault creation.
+ * The user must re-enter the RS checksum to confirm they have saved the RS.
+ *
+ * @param vaultId - Vault ID being created
+ * @param userId - User ID for the vault
+ * @param encodedRs - Base32-encoded Recovery Secret
+ * @returns New RecoveryExportSession
+ */
+export function createRecoveryExportSession(
+  vaultId: string,
+  userId: string,
+  encodedRs: string
+): RecoveryExportSession {
   const session: RecoveryExportSession = {
     sessionId: generateSessionId(),
+    vaultId,
     userId,
     createdAt: Date.now(),
     confirmed: false,
+    expectedChecksum: generateRSChecksum(encodedRs),
+    encodedRs,
   };
 
-  // Store session in sessionStorage (cleared on browser close)
+  // Store in sessionStorage (cleared on browser close for security)
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   }
@@ -392,795 +245,567 @@ export function createRecoveryExportSession(userId: string): RecoveryExportSessi
 }
 
 /**
- * Gets the current active export session, if any.
+ * Retrieves the current recovery export session
  *
- * @returns Active session or null if none exists or expired
+ * @returns RecoveryExportSession or null if no session exists
  */
-export function getActiveExportSession(): RecoveryExportSession | null {
+export function getRecoveryExportSession(): RecoveryExportSession | null {
   if (typeof sessionStorage === 'undefined') {
     return null;
   }
 
-  const data = sessionStorage.getItem(SESSION_STORAGE_KEY);
-  if (!data) {
+  const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+  if (!stored) {
     return null;
   }
 
   try {
-    const session = JSON.parse(data) as RecoveryExportSession;
-
-    // Check if session has expired
-    if (Date.now() - session.createdAt > SESSION_TIMEOUT_MS) {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      return null;
-    }
-
-    return session;
-  } catch {
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    return null;
-  }
-}
-
-/**
- * Confirms that the user has exported/saved their recovery QR code.
- * This should be called when the user acknowledges they've saved the recovery data.
- *
- * @param sessionId - The session ID from createRecoveryExportSession
- * @param userId - The user ID to confirm for
- * @throws {InvalidExportSessionError} If session is invalid or expired
- *
- * @example
- * ```typescript
- * // User clicked "I've saved my recovery code"
- * confirmRecoveryExported(session.sessionId, userId);
- *
- * // Now check status
- * const status = getRecoveryExportStatus(userId);
- * console.log(status.exported); // true
- * ```
- */
-export function confirmRecoveryExported(sessionId: string, userId: string): void {
-  const session = getActiveExportSession();
-
-  if (!session) {
-    throw new InvalidExportSessionError('No active export session found');
-  }
-
-  if (session.sessionId !== sessionId) {
-    throw new InvalidExportSessionError('Session ID does not match');
-  }
-
-  if (session.userId !== userId) {
-    throw new InvalidExportSessionError('User ID does not match session');
-  }
-
-  // Update session
-  const updatedSession: RecoveryExportSession = {
-    ...session,
-    confirmed: true,
-    confirmedAt: Date.now(),
-  };
-
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
-  }
-
-  // Update persistent export status
-  updateExportStatus(userId, {
-    exported: true,
-    exportedAt: Date.now(),
-  });
-}
-
-/**
- * Clears the active export session.
- * Call this when the user cancels or leaves the export flow.
- */
-export function clearExportSession(): void {
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-  }
-}
-
-// ============================================================================
-// Export Status Tracking
-// ============================================================================
-
-/**
- * Gets the recovery export status for a user.
- *
- * @param userId - The user ID to check
- * @returns Export status or null if no status recorded
- */
-export function getRecoveryExportStatus(userId: string): RecoveryExportStatus | null {
-  if (typeof localStorage === 'undefined') {
-    return null;
-  }
-
-  const key = `${STORAGE_KEY_PREFIX}:${userId}`;
-  const data = localStorage.getItem(key);
-
-  if (!data) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(data) as RecoveryExportStatus;
+    return JSON.parse(stored) as RecoveryExportSession;
   } catch {
     return null;
   }
 }
 
 /**
- * Checks if the user has confirmed exporting their recovery QR.
- * Use this to determine if the user needs to be prompted to save recovery.
+ * Retrieves recovery export session by vault ID
  *
- * @param userId - The user ID to check
- * @returns true if user has confirmed saving recovery data
- *
- * @example
- * ```typescript
- * if (!hasUserExportedRecovery(userId)) {
- *   showRecoveryExportReminder();
- * }
- * ```
+ * @param vaultId - Vault ID to look up
+ * @returns RecoveryExportSession or null if not found or vault ID doesn't match
  */
-export function hasUserExportedRecovery(userId: string): boolean {
-  const status = getRecoveryExportStatus(userId);
-  return status?.exported ?? false;
-}
-
-/**
- * Records that the recovery QR was viewed (for audit purposes).
- * Call this each time the user views the recovery QR in settings.
- *
- * @param userId - The user ID
- */
-export function recordRecoveryViewed(userId: string): void {
-  const currentStatus = getRecoveryExportStatus(userId);
-  const now = Date.now();
-
-  const newStatus: RecoveryExportStatus = {
-    userId,
-    exported: currentStatus?.exported ?? false,
-    exportedAt: currentStatus?.exportedAt,
-    viewCount: (currentStatus?.viewCount ?? 0) + 1,
-    lastViewedAt: now,
-  };
-
-  saveExportStatus(newStatus);
-}
-
-/**
- * Clears recovery export status for a user.
- * Use this when resetting the app or during testing.
- *
- * @param userId - The user ID to clear
- */
-export function clearRecoveryExportStatus(userId: string): void {
-  if (typeof localStorage !== 'undefined') {
-    const key = `${STORAGE_KEY_PREFIX}:${userId}`;
-    localStorage.removeItem(key);
+export function getRecoveryExportSessionByVaultId(vaultId: string): RecoveryExportSession | null {
+  const session = getRecoveryExportSession();
+  if (!session || session.vaultId !== vaultId) {
+    return null;
   }
-}
-
-// ============================================================================
-// Recovery Secret Utilities
-// ============================================================================
-
-/**
- * Securely clears a recovery secret from memory.
- * Call this as soon as the recovery secret is no longer needed.
- *
- * Note: JavaScript doesn't guarantee immediate memory clearing,
- * but this reduces the window of exposure.
- *
- * @param recoverySecret - The recovery secret to clear
- *
- * @example
- * ```typescript
- * const recoverySecret = generateRecoverySecret();
- * const qrData = prepareRecoveryQRData(recoverySecret);
- *
- * // Display QR to user...
- *
- * // After user confirms saving, clear the secret
- * clearRecoverySecret(recoverySecret);
- * ```
- */
-export function clearRecoverySecret(recoverySecret: RecoverySecret): void {
-  clearKey(recoverySecret);
-}
-
-/**
- * Re-exports generateRecoverySecret from crypto/keys for convenience.
- * Generates a new 32-byte cryptographically secure recovery secret.
- *
- * @returns New 32-byte recovery secret
- * @throws Error if Web Crypto API is not available
- */
-export { generateRecoverySecret };
-
-// ============================================================================
-// QR Code Validation
-// ============================================================================
-
-/**
- * Validates QR code data format without parsing.
- * Use this for quick validation before attempting to parse.
- *
- * @param qrData - The QR code data to validate
- * @returns true if the data appears to be valid recovery data
- *
- * @example
- * ```typescript
- * const scannedData = "tricho://recover/...";
- * if (isValidRecoveryQRFormat(scannedData)) {
- *   const recoverySecret = parseRecoveryQR(scannedData);
- * }
- * ```
- */
-export function isValidRecoveryQRFormat(qrData: string): boolean {
-  if (typeof qrData !== 'string' || qrData.length === 0) {
-    return false;
-  }
-
-  // Check for tricho:// URI format
-  const uriPrefix = 'tricho://recover/';
-  if (qrData.startsWith(uriPrefix)) {
-    const base64urlPart = qrData.slice(uriPrefix.length);
-    return isValidBase64url(base64urlPart) && base64urlPart.length > 0;
-  }
-
-  // Check for plain base64url (43 chars for 32 bytes)
-  if (isValidBase64url(qrData) && qrData.length >= 42 && qrData.length <= 44) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Parses scanned QR code data to extract the recovery secret.
- * Supports both tricho:// URI format and plain base64url.
- *
- * This function will be extended in subtask-4-5 to handle the full
- * recovery import flow. For now, it provides the parsing functionality.
- *
- * @param qrData - The scanned QR code data
- * @returns The 32-byte recovery secret
- * @throws {RecoveryParseError} If the data is invalid
- *
- * @example
- * ```typescript
- * try {
- *   const recoverySecret = parseRecoveryQR(scannedData);
- *   // Use recovery secret to derive keys...
- * } catch (error) {
- *   if (error instanceof RecoveryParseError) {
- *     showError('Invalid recovery code');
- *   }
- * }
- * ```
- */
-export function parseRecoveryQR(qrData: string): RecoverySecret {
-  if (!isValidRecoveryQRFormat(qrData)) {
-    throw new RecoveryParseError('Invalid QR code format');
-  }
-
-  try {
-    return parseRecoveryQRData(qrData);
-  } catch (error) {
-    throw new RecoveryParseError(
-      error instanceof Error ? error.message : 'Failed to parse recovery QR'
-    );
-  }
-}
-
-// ============================================================================
-// Text Backup Utilities
-// ============================================================================
-
-/**
- * Formats recovery secret as a human-readable backup string.
- * Splits the base64url into groups for easier transcription.
- *
- * @param recoverySecret - The recovery secret to format
- * @param groupSize - Characters per group (default: 4)
- * @returns Formatted string with groups separated by spaces
- *
- * @example
- * ```typescript
- * const formatted = formatRecoveryForTextBackup(recoverySecret);
- * // "ABCD EFGH IJKL MNOP QRST UVWX YZab cdef ghij klm"
- * ```
- */
-export function formatRecoveryForTextBackup(
-  recoverySecret: RecoverySecret,
-  groupSize = 4
-): string {
-  if (!isValidKey(recoverySecret)) {
-    throw new InvalidRecoverySecretError('Invalid recovery secret');
-  }
-
-  const base64url = base64urlEncode(recoverySecret);
-  const groups: string[] = [];
-
-  for (let i = 0; i < base64url.length; i += groupSize) {
-    groups.push(base64url.slice(i, i + groupSize));
-  }
-
-  return groups.join(' ');
-}
-
-/**
- * Parses a human-readable backup string back to recovery secret.
- * Removes spaces and validates the format.
- *
- * @param textBackup - The text backup string (with or without spaces)
- * @returns The 32-byte recovery secret
- * @throws {RecoveryParseError} If the text is invalid
- *
- * @example
- * ```typescript
- * const userInput = "ABCD EFGH IJKL...";
- * const recoverySecret = parseTextBackup(userInput);
- * ```
- */
-export function parseTextBackup(textBackup: string): RecoverySecret {
-  if (typeof textBackup !== 'string' || textBackup.length === 0) {
-    throw new RecoveryParseError('Invalid text backup: must be a non-empty string');
-  }
-
-  // Remove spaces and normalize
-  const normalized = textBackup.replace(/\s+/g, '').trim();
-
-  if (!isValidBase64url(normalized)) {
-    throw new RecoveryParseError('Invalid text backup: contains invalid characters');
-  }
-
-  try {
-    return parseRecoveryQRData(normalized);
-  } catch (error) {
-    throw new RecoveryParseError(
-      error instanceof Error ? error.message : 'Failed to parse text backup'
-    );
-  }
-}
-
-// ============================================================================
-// Recovery Import Functions
-// ============================================================================
-
-/**
- * Creates a new recovery import session.
- * Call this when starting the recovery/import flow.
- *
- * @returns New import session
- *
- * @example
- * ```typescript
- * const session = createRecoveryImportSession();
- * // Show QR scanner to user...
- * // On scan success:
- * const result = await importFromRecoveryQR(scannedData);
- * completeRecoveryImportSession(session.sessionId, result);
- * ```
- */
-export function createRecoveryImportSession(): RecoveryImportSession {
-  const session: RecoveryImportSession = {
-    sessionId: generateSessionId(),
-    createdAt: Date.now(),
-    step: 'awaiting_scan',
-    completed: false,
-  };
-
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.setItem(IMPORT_SESSION_STORAGE_KEY, JSON.stringify(session));
-  }
-
-  // Record attempt for audit
-  recordRecoveryAttempt();
-
   return session;
 }
 
 /**
- * Gets the current active import session, if any.
+ * Confirms the recovery export session with checksum validation
  *
- * @returns Active session or null if none exists or expired
+ * This is the core of the RS confirmation flow. The user enters the checksum
+ * (last 4 characters of their RS), and this function validates it matches.
+ * If valid, the session is marked as confirmed and the KeyStore is updated.
+ *
+ * @param checksum - Checksum entered by user
+ * @returns true if confirmation successful, false if checksum invalid
+ * @throws Error if no active session exists
  */
-export function getActiveImportSession(): RecoveryImportSession | null {
+export async function confirmRecoveryExportSession(checksum: string): Promise<boolean> {
+  const session = getRecoveryExportSession();
+  if (!session) {
+    throw new Error('No active recovery export session');
+  }
+
+  if (session.confirmed) {
+    // Already confirmed
+    return true;
+  }
+
+  // Validate checksum
+  if (!validateRSChecksum(session.encodedRs, checksum)) {
+    return false;
+  }
+
+  // Mark session as confirmed
+  session.confirmed = true;
+  session.confirmedAt = Date.now();
+
+  // Update sessionStorage
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  }
+
+  // Update KeyStore to mark RS as confirmed
+  await confirmRecoverySecret(session.vaultId);
+
+  return true;
+}
+
+/**
+ * Confirms recovery export session for a specific vault
+ *
+ * @param vaultId - Vault ID to confirm
+ * @param checksum - Checksum entered by user
+ * @returns true if confirmation successful, false if checksum invalid or session not found
+ */
+export async function confirmRecoveryExportSessionForVault(
+  vaultId: string,
+  checksum: string
+): Promise<boolean> {
+  const session = getRecoveryExportSessionByVaultId(vaultId);
+  if (!session) {
+    return false;
+  }
+
+  return confirmRecoveryExportSession(checksum);
+}
+
+/**
+ * Checks if the current recovery session is confirmed
+ *
+ * @returns true if session exists and is confirmed, false otherwise
+ */
+export function isRecoverySessionConfirmed(): boolean {
+  const session = getRecoveryExportSession();
+  return session?.confirmed ?? false;
+}
+
+/**
+ * Checks if recovery is confirmed for a specific vault
+ *
+ * @param vaultId - Vault ID to check
+ * @returns true if session exists for vault and is confirmed
+ */
+export function isRecoveryConfirmedForVault(vaultId: string): boolean {
+  const session = getRecoveryExportSessionByVaultId(vaultId);
+  return session?.confirmed ?? false;
+}
+
+/**
+ * Clears the recovery export session
+ *
+ * Should be called after vault creation is complete or cancelled.
+ */
+export function clearRecoveryExportSession(): void {
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+}
+
+/**
+ * Gets the encoded RS from the current session
+ *
+ * This is only available during vault creation before the session is cleared.
+ *
+ * @returns Base32-encoded RS or null if no session exists
+ */
+export function getEncodedRsFromSession(): string | null {
+  const session = getRecoveryExportSession();
+  return session?.encodedRs ?? null;
+}
+
+/**
+ * Validates that a recovery session exists and is confirmed
+ *
+ * Use this as a guard before proceeding with vault finalization.
+ *
+ * @param vaultId - Optional vault ID to verify session belongs to
+ * @returns true if session is valid and confirmed
+ * @throws Error with descriptive message if validation fails
+ */
+export function requireConfirmedRecoverySession(vaultId?: string): void {
+  const session = getRecoveryExportSession();
+
+  if (!session) {
+    throw new Error('Recovery confirmation required: no active session');
+  }
+
+  if (vaultId && session.vaultId !== vaultId) {
+    throw new Error('Recovery confirmation required: session does not match vault');
+  }
+
+  if (!session.confirmed) {
+    throw new Error('Recovery confirmation required: checksum not verified');
+  }
+}
+
+/**
+ * Formats RS for display with grouping
+ *
+ * Groups the Base32 RS into chunks of 4 characters for readability.
+ * Example: "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567"
+ *
+ * @param encodedRs - Base32-encoded Recovery Secret
+ * @param groupSize - Size of each group (default: 4)
+ * @param separator - Separator between groups (default: '-')
+ * @returns Formatted RS string
+ */
+export function formatRsForDisplay(
+  encodedRs: string,
+  groupSize: number = 4,
+  separator: string = '-'
+): string {
+  const groups: string[] = [];
+  for (let i = 0; i < encodedRs.length; i += groupSize) {
+    groups.push(encodedRs.slice(i, i + groupSize));
+  }
+  return groups.join(separator);
+}
+
+/**
+ * Parses user-entered RS, removing formatting
+ *
+ * Handles various input formats (with dashes, spaces, lowercase).
+ *
+ * @param input - User input RS string
+ * @returns Normalized RS string (uppercase, no separators)
+ */
+export function parseRsInput(input: string): string {
+  return input.toUpperCase().replace(/[\s-]/g, '');
+}
+
+/**
+ * Validates RS format
+ *
+ * Checks that the RS is valid Base32 and correct length.
+ *
+ * @param encodedRs - RS string to validate
+ * @returns true if valid, false otherwise
+ */
+export function isValidRsFormat(encodedRs: string): boolean {
+  const normalized = parseRsInput(encodedRs);
+
+  // Check length (32 bytes = 52 Base32 characters)
+  if (normalized.length !== 52) {
+    return false;
+  }
+
+  // Check all characters are valid Base32
+  for (const char of normalized) {
+    if (BASE32_ALPHABET.indexOf(char) === -1) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Decodes user-entered RS to raw bytes
+ *
+ * Convenience function that handles input normalization and decoding.
+ *
+ * @param input - User input RS string
+ * @returns Raw RS bytes as Uint8Array
+ * @throws Error if RS format is invalid
+ */
+export function decodeRsFromInput(input: string): Uint8Array {
+  const normalized = parseRsInput(input);
+
+  if (!isValidRsFormat(normalized)) {
+    throw new Error('Invalid Recovery Secret format');
+  }
+
+  return decodeBase32(normalized);
+}
+
+// ============================================================================
+// RS Rotation
+// ============================================================================
+
+/**
+ * Handler function type for wrapping DEK with a new RS
+ *
+ * This callback is provided by the caller who has access to the DEK in memory.
+ * The handler should:
+ * 1. Derive KEK from RS using HKDF with the device salt
+ * 2. Wrap the DEK with the derived KEK using AES-GCM
+ * 3. Return the wrapped key data
+ *
+ * @param rs - New Recovery Secret raw bytes
+ * @param deviceSalt - Device salt for key derivation (Base64url encoded)
+ * @returns Promise resolving to WrappedKeyData
+ */
+export type WrapDekWithRsHandler = (rs: Uint8Array, deviceSalt: string) => Promise<WrappedKeyData>;
+
+/**
+ * Result of RS rotation operation
+ */
+export interface RotationResult {
+  /** Whether rotation was successful */
+  success: boolean;
+  /** New Recovery Secret (only present on success) */
+  newRs?: RecoverySecretResult;
+  /** Error message (only present on failure) */
+  error?: string;
+}
+
+/**
+ * Session storage key for RS rotation session
+ */
+const ROTATION_SESSION_STORAGE_KEY = 'tricho_rs_rotation_session';
+
+/**
+ * RS rotation session for tracking rotation state
+ */
+export interface RSRotationSession {
+  /** Unique session identifier */
+  sessionId: string;
+  /** Associated vault ID */
+  vaultId: string;
+  /** Timestamp when rotation was initiated */
+  initiatedAt: number;
+  /** Whether rotation has been confirmed */
+  confirmed: boolean;
+  /** Timestamp when rotation was confirmed */
+  confirmedAt?: number;
+  /** Expected checksum for new RS validation */
+  expectedChecksum: string;
+  /** Previous RS version (for audit) */
+  previousVersion: number;
+  /** New RS version */
+  newVersion: number;
+}
+
+/**
+ * Initiates RS rotation for a vault
+ *
+ * RS rotation allows users to generate a new Recovery Secret and re-wrap
+ * the DEK. The old RS is invalidated once the new wrapped DEK is stored.
+ *
+ * **Security considerations:**
+ * - Vault must be unlocked (DEK must be in memory)
+ * - Old RS can no longer unwrap the DEK after rotation
+ * - User should save the new RS before confirming rotation
+ *
+ * @param vaultId - Vault identifier to rotate RS for
+ * @param wrapDekHandler - Handler function to wrap DEK with new RS
+ * @returns Promise resolving to RotationResult
+ * @throws Error if vault doesn't exist or is not properly initialized
+ */
+export async function rotateRecoverySecret(
+  vaultId: string,
+  wrapDekHandler: WrapDekWithRsHandler
+): Promise<RotationResult> {
+  // Validate vault exists
+  const vault = await getVaultState(vaultId);
+  if (!vault) {
+    return {
+      success: false,
+      error: `Vault with ID ${vaultId} not found`,
+    };
+  }
+
+  // Validate vault has existing RS wrap (can't rotate if no RS exists)
+  if (!vault.wrappedDekRs) {
+    return {
+      success: false,
+      error: 'Vault does not have an existing RS wrap to rotate',
+    };
+  }
+
+  // Validate RS was previously confirmed
+  if (!vault.rsConfirmed) {
+    return {
+      success: false,
+      error: 'Cannot rotate RS: current RS has not been confirmed',
+    };
+  }
+
+  try {
+    // Generate new RS
+    const newRs = generateRecoverySecret();
+
+    // Wrap DEK with new RS using provided handler
+    const newWrappedDekRs = await wrapDekHandler(newRs.raw, vault.deviceSalt);
+
+    // Calculate new version
+    const newVersion = vault.wrappedDekRs.version + 1;
+
+    // Update the wrapped DEK with new version
+    const wrappedKeyWithVersion: WrappedKeyData = {
+      ...newWrappedDekRs,
+      version: newVersion,
+    };
+
+    // Update KeyStore with new wrapped DEK
+    await updateWrappedDekRs(vaultId, wrappedKeyWithVersion);
+
+    // Create rotation session for confirmation tracking
+    const rotationSession: RSRotationSession = {
+      sessionId: generateRotationSessionId(),
+      vaultId,
+      initiatedAt: Date.now(),
+      confirmed: false,
+      expectedChecksum: newRs.checksum,
+      previousVersion: vault.wrappedDekRs.version,
+      newVersion,
+    };
+
+    // Store rotation session
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(ROTATION_SESSION_STORAGE_KEY, JSON.stringify(rotationSession));
+    }
+
+    return {
+      success: true,
+      newRs,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error during RS rotation',
+    };
+  }
+}
+
+/**
+ * Generates a unique rotation session ID
+ *
+ * @returns Rotation session ID string
+ */
+function generateRotationSessionId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `rotation-${crypto.randomUUID()}`;
+  }
+  // Fallback for older browsers
+  return `rotation-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+}
+
+/**
+ * Retrieves the current RS rotation session
+ *
+ * @returns RSRotationSession or null if no session exists
+ */
+export function getRotationSession(): RSRotationSession | null {
   if (typeof sessionStorage === 'undefined') {
     return null;
   }
 
-  const data = sessionStorage.getItem(IMPORT_SESSION_STORAGE_KEY);
-  if (!data) {
+  const stored = sessionStorage.getItem(ROTATION_SESSION_STORAGE_KEY);
+  if (!stored) {
     return null;
   }
 
   try {
-    const session = JSON.parse(data) as RecoveryImportSession;
-
-    // Check if session has expired
-    if (Date.now() - session.createdAt > IMPORT_SESSION_TIMEOUT_MS) {
-      sessionStorage.removeItem(IMPORT_SESSION_STORAGE_KEY);
-      return null;
-    }
-
-    return session;
+    return JSON.parse(stored) as RSRotationSession;
   } catch {
-    sessionStorage.removeItem(IMPORT_SESSION_STORAGE_KEY);
     return null;
   }
 }
 
 /**
- * Updates the current import session step.
+ * Retrieves rotation session for a specific vault
  *
- * @param step - New step in the import flow
- * @param error - Optional error message if step is 'failed'
+ * @param vaultId - Vault ID to look up
+ * @returns RSRotationSession or null if not found or vault ID doesn't match
  */
-export function updateImportSessionStep(
-  step: RecoveryImportStep,
-  error?: string
-): void {
-  const session = getActiveImportSession();
+export function getRotationSessionByVaultId(vaultId: string): RSRotationSession | null {
+  const session = getRotationSession();
+  if (!session || session.vaultId !== vaultId) {
+    return null;
+  }
+  return session;
+}
+
+/**
+ * Confirms the RS rotation session
+ *
+ * User must re-enter the checksum of the new RS to confirm they have
+ * saved it. This is similar to the initial RS confirmation flow.
+ *
+ * @param checksum - Checksum entered by user (last 4 chars of new RS)
+ * @returns true if confirmation successful, false if checksum invalid
+ * @throws Error if no active rotation session exists
+ */
+export function confirmRotationSession(checksum: string): boolean {
+  const session = getRotationSession();
   if (!session) {
-    return;
+    throw new Error('No active RS rotation session');
   }
 
-  const updatedSession: RecoveryImportSession = {
-    ...session,
-    step,
-    error: step === 'failed' ? error : undefined,
-  };
-
-  if (step === 'validating') {
-    updatedSession.scannedAt = Date.now();
-  } else if (step === 'deriving_keys') {
-    updatedSession.derivedAt = Date.now();
-  } else if (step === 'completed') {
-    updatedSession.completed = true;
-    updatedSession.completedAt = Date.now();
+  if (session.confirmed) {
+    // Already confirmed
+    return true;
   }
 
+  // Validate checksum
+  const normalizedInput = checksum.toUpperCase().replace(/[\s-]/g, '');
+  if (session.expectedChecksum !== normalizedInput) {
+    return false;
+  }
+
+  // Mark session as confirmed
+  session.confirmed = true;
+  session.confirmedAt = Date.now();
+
+  // Update sessionStorage
   if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.setItem(IMPORT_SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
+    sessionStorage.setItem(ROTATION_SESSION_STORAGE_KEY, JSON.stringify(session));
   }
+
+  return true;
 }
 
 /**
- * Clears the active import session.
- * Call this when the user cancels or the import completes.
+ * Confirms rotation session for a specific vault
+ *
+ * @param vaultId - Vault ID to confirm
+ * @param checksum - Checksum entered by user
+ * @returns true if confirmation successful, false if checksum invalid or session not found
  */
-export function clearImportSession(): void {
+export function confirmRotationSessionForVault(vaultId: string, checksum: string): boolean {
+  const session = getRotationSessionByVaultId(vaultId);
+  if (!session) {
+    return false;
+  }
+
+  return confirmRotationSession(checksum);
+}
+
+/**
+ * Checks if the current rotation session is confirmed
+ *
+ * @returns true if session exists and is confirmed, false otherwise
+ */
+export function isRotationSessionConfirmed(): boolean {
+  const session = getRotationSession();
+  return session?.confirmed ?? false;
+}
+
+/**
+ * Checks if rotation is confirmed for a specific vault
+ *
+ * @param vaultId - Vault ID to check
+ * @returns true if session exists for vault and is confirmed
+ */
+export function isRotationConfirmedForVault(vaultId: string): boolean {
+  const session = getRotationSessionByVaultId(vaultId);
+  return session?.confirmed ?? false;
+}
+
+/**
+ * Clears the RS rotation session
+ *
+ * Should be called after rotation is complete or cancelled.
+ */
+export function clearRotationSession(): void {
   if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem(IMPORT_SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(ROTATION_SESSION_STORAGE_KEY);
   }
 }
 
 /**
- * Imports a recovery secret from scanned QR data and derives keys.
- * This is the main entry point for the recovery import flow.
+ * Gets the new RS version from the rotation session
  *
- * The function:
- * 1. Parses and validates the QR data
- * 2. Generates a new device salt for this device
- * 3. Derives a KEK from the recovery secret
- *
- * @param qrData - The scanned QR code data (URI or base64url)
- * @returns Promise resolving to RecoveryImportResult
- * @throws {RecoveryParseError} If QR data is invalid
- * @throws {RecoveryImportError} If key derivation fails
- *
- * @example
- * ```typescript
- * // Start import session
- * const session = createRecoveryImportSession();
- *
- * // User scans QR code
- * const scannedData = await scanQRCode();
- *
- * try {
- *   const result = await importFromRecoveryQR(scannedData);
- *
- *   // Result contains:
- *   // - recoverySecret: for further operations if needed
- *   // - kek: CryptoKey for wrapping/unwrapping DEK
- *   // - deviceSalt: to store alongside wrapped DEK
- *
- *   // Now register a new passkey and complete setup...
- * } catch (error) {
- *   if (error instanceof RecoveryParseError) {
- *     showError('Invalid QR code. Please try again.');
- *   }
- * } finally {
- *   clearImportSession();
- * }
- * ```
+ * @returns New version number or null if no session exists
  */
-export async function importFromRecoveryQR(
-  qrData: string
-): Promise<RecoveryImportResult> {
-  // Update session step
-  updateImportSessionStep('validating');
-
-  // Parse and validate QR data
-  let recoverySecret: RecoverySecret;
-  try {
-    recoverySecret = parseRecoveryQR(qrData);
-  } catch (error) {
-    updateImportSessionStep('failed', 'Invalid QR code format');
-    throw error;
-  }
-
-  // Update session step
-  updateImportSessionStep('deriving_keys');
-
-  // Generate device salt for this device
-  const deviceSalt = generateDeviceSalt();
-
-  // Derive KEK from recovery secret
-  let kek: CryptoKey;
-  try {
-    kek = await deriveKekFromRS(recoverySecret, deviceSalt);
-  } catch (error) {
-    updateImportSessionStep('failed', 'Failed to derive keys');
-    throw new RecoveryImportError(
-      error instanceof Error ? error.message : 'Failed to derive KEK from recovery secret',
-      'deriving_keys'
-    );
-  }
-
-  // Mark session as completed
-  updateImportSessionStep('completed');
-
-  return {
-    recoverySecret,
-    kek,
-    deviceSalt,
-    importedAt: Date.now(),
-  };
+export function getRotationNewVersion(): number | null {
+  const session = getRotationSession();
+  return session?.newVersion ?? null;
 }
 
 /**
- * Imports from recovery QR and wraps a provided DEK.
- * Use this during recovery when you have the DEK from sync.
+ * Validates that a rotation session exists and is confirmed
  *
- * @param qrData - The scanned QR code data
- * @param dek - The Data Encryption Key to wrap
- * @returns Promise resolving to result with wrapped DEK
+ * Use this as a guard after RS rotation before showing success.
  *
- * @example
- * ```typescript
- * // After syncing from another device, you have the DEK
- * const result = await importFromRecoveryQRAndWrapDek(scannedData, dek);
- *
- * // Store the wrapped DEK and device salt for this device
- * localStorage.setItem('wrapped_dek', serialize(result.wrappedDek));
- * localStorage.setItem('device_salt', serialize(result.deviceSalt));
- *
- * // Clear sensitive data
- * clearRecoverySecret(result.recoverySecret);
- * ```
+ * @param vaultId - Optional vault ID to verify session belongs to
+ * @throws Error with descriptive message if validation fails
  */
-export async function importFromRecoveryQRAndWrapDek(
-  qrData: string,
-  dek: DataEncryptionKey
-): Promise<RecoveryImportWithDekResult> {
-  // Import and derive keys
-  const importResult = await importFromRecoveryQR(qrData);
+export function requireConfirmedRotationSession(vaultId?: string): void {
+  const session = getRotationSession();
 
-  // Wrap the DEK with the derived KEK
-  let wrappedDek: WrappedDek;
-  try {
-    wrappedDek = await wrapDek(dek, importResult.kek);
-  } catch (error) {
-    throw new RecoveryImportError(
-      error instanceof Error ? error.message : 'Failed to wrap DEK',
-      'completed'
-    );
+  if (!session) {
+    throw new Error('RS rotation confirmation required: no active rotation session');
   }
 
-  return {
-    ...importResult,
-    wrappedDek,
-  };
-}
-
-/**
- * Validates QR data without performing full import.
- * Use this for quick validation before starting the full import flow.
- *
- * @param qrData - The scanned QR code data to validate
- * @returns Object with isValid flag and optional error message
- *
- * @example
- * ```typescript
- * const validation = validateRecoveryQRData(scannedData);
- * if (!validation.isValid) {
- *   showError(validation.error);
- *   return;
- * }
- *
- * // Proceed with full import
- * const result = await importFromRecoveryQR(scannedData);
- * ```
- */
-export function validateRecoveryQRData(qrData: string): {
-  isValid: boolean;
-  error?: string;
-  secretLength?: number;
-} {
-  if (!qrData || typeof qrData !== 'string') {
-    return { isValid: false, error: 'QR data is empty or invalid' };
+  if (vaultId && session.vaultId !== vaultId) {
+    throw new Error('RS rotation confirmation required: session does not match vault');
   }
 
-  if (!isValidRecoveryQRFormat(qrData)) {
-    return { isValid: false, error: 'Invalid QR code format' };
+  if (!session.confirmed) {
+    throw new Error('RS rotation confirmation required: new RS checksum not verified');
   }
-
-  try {
-    const secret = parseRecoveryQR(qrData);
-    return {
-      isValid: true,
-      secretLength: secret.length,
-    };
-  } catch (error) {
-    return {
-      isValid: false,
-      error: error instanceof Error ? error.message : 'Failed to parse QR data',
-    };
-  }
-}
-
-// ============================================================================
-// Recovery Import Status Tracking
-// ============================================================================
-
-/**
- * Gets the recovery import status for this device.
- *
- * @returns Import status or null if never imported
- */
-export function getRecoveryImportStatus(): RecoveryImportStatus | null {
-  if (typeof localStorage === 'undefined') {
-    return null;
-  }
-
-  const data = localStorage.getItem(IMPORT_STORAGE_KEY_PREFIX);
-  if (!data) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(data) as RecoveryImportStatus;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Checks if this device was set up via recovery.
- *
- * @returns true if device was recovered, false otherwise
- */
-export function isRecoveredDevice(): boolean {
-  const status = getRecoveryImportStatus();
-  return status?.recoveredDevice ?? false;
-}
-
-/**
- * Marks this device as recovered.
- * Call this after successful recovery import and passkey registration.
- */
-export function markDeviceAsRecovered(): void {
-  const currentStatus = getRecoveryImportStatus();
-  const now = Date.now();
-
-  const newStatus: RecoveryImportStatus = {
-    recoveredDevice: true,
-    recoveredAt: now,
-    attemptCount: (currentStatus?.attemptCount ?? 0),
-    lastAttemptAt: currentStatus?.lastAttemptAt,
-  };
-
-  saveImportStatus(newStatus);
-}
-
-/**
- * Records a recovery attempt (for audit).
- *
- * @internal
- */
-function recordRecoveryAttempt(): void {
-  const currentStatus = getRecoveryImportStatus();
-  const now = Date.now();
-
-  const newStatus: RecoveryImportStatus = {
-    recoveredDevice: currentStatus?.recoveredDevice ?? false,
-    recoveredAt: currentStatus?.recoveredAt,
-    attemptCount: (currentStatus?.attemptCount ?? 0) + 1,
-    lastAttemptAt: now,
-  };
-
-  saveImportStatus(newStatus);
-}
-
-/**
- * Clears recovery import status.
- * Use this when resetting the app or during testing.
- */
-export function clearRecoveryImportStatus(): void {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(IMPORT_STORAGE_KEY_PREFIX);
-  }
-}
-
-/**
- * Saves import status to localStorage.
- *
- * @internal
- */
-function saveImportStatus(status: RecoveryImportStatus): void {
-  if (typeof localStorage === 'undefined') {
-    return;
-  }
-
-  localStorage.setItem(IMPORT_STORAGE_KEY_PREFIX, JSON.stringify(status));
-}
-
-// ============================================================================
-// Internal Helpers
-// ============================================================================
-
-/**
- * Generates a unique session ID.
- *
- * @internal
- */
-function generateSessionId(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-/**
- * Updates export status in localStorage.
- *
- * @internal
- */
-function updateExportStatus(
-  userId: string,
-  updates: Partial<RecoveryExportStatus>
-): void {
-  const currentStatus = getRecoveryExportStatus(userId);
-  const newStatus: RecoveryExportStatus = {
-    userId,
-    exported: currentStatus?.exported ?? false,
-    exportedAt: currentStatus?.exportedAt,
-    viewCount: currentStatus?.viewCount ?? 0,
-    lastViewedAt: currentStatus?.lastViewedAt,
-    ...updates,
-  };
-  saveExportStatus(newStatus);
-}
-
-/**
- * Saves export status to localStorage.
- *
- * @internal
- */
-function saveExportStatus(status: RecoveryExportStatus): void {
-  if (typeof localStorage === 'undefined') {
-    return;
-  }
-
-  const key = `${STORAGE_KEY_PREFIX}:${status.userId}`;
-  localStorage.setItem(key, JSON.stringify(status));
 }

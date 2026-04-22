@@ -1,572 +1,306 @@
-// Envelope encryption module for TrichoApp
-// Implements per-document and per-photo encryption using HKDF-derived keys
-// Reference: spec.md - Envelope Encryption Pattern
-
-import { hkdf } from '@noble/hashes/hkdf';
-import { sha256 } from '@noble/hashes/sha256';
-import {
-  KEY_LENGTH,
-  IV_LENGTH,
-  SALT_LENGTH,
-  type DataEncryptionKey,
-} from './keys';
-
 /**
- * HKDF info strings for envelope encryption
- * These ensure keys derived for different purposes are cryptographically independent
+ * Envelope encryption utilities
+ *
+ * This module provides low-level encryption primitives for envelope encryption
+ * using Web Crypto API with AES-256-GCM. These utilities are used by the payload
+ * module for RxDB document encryption.
+ *
+ * Security considerations:
+ * - Uses AES-256-GCM for authenticated encryption
+ * - Random 12-byte IV generated for each encryption
+ * - IV must never be reused with the same key
+ * - Tag length is 128 bits (built into AES-GCM)
  */
-export const ENVELOPE_HKDF_INFO = {
-  DOCUMENT: 'tricho:envelope:doc:v1',
-  PHOTO: 'tricho:envelope:photo:v1',
+
+/** Version string for domain separation */
+export const ENVELOPE_VERSION = 'v1';
+
+/** AES-GCM configuration */
+export const AES_GCM_CONFIG = {
+  /** Algorithm name */
+  name: 'AES-GCM',
+  /** Key length in bits */
+  keyLength: 256,
+  /** IV length in bytes (96 bits per NIST recommendation) */
+  ivLength: 12,
+  /** Tag length in bits */
+  tagLength: 128,
+  /** Algorithm identifier string */
+  algId: 'AES-256-GCM',
 } as const;
 
 /**
- * Authentication tag length for AES-GCM
- * 16 bytes (128 bits) is the maximum and recommended size
+ * Result of an envelope encryption operation
  */
-export const AUTH_TAG_LENGTH = 16;
-
-/**
- * Photo variants supported by the encryption system
- * Each variant gets its own derived key for cryptographic separation
- */
-export type PhotoVariant = 'original' | 'thumbnail' | 'preview';
-
-/**
- * Encrypted envelope structure
- * Contains all data needed to decrypt the payload
- */
-export interface EncryptedEnvelope {
-  /** 12-byte initialization vector (unique per encryption) */
-  iv: Uint8Array;
-  /** AES-GCM ciphertext with authentication tag appended */
-  ciphertext: Uint8Array;
-  /** Key derivation salt (enables re-derivation of per-item key) */
-  salt: Uint8Array;
+export interface EnvelopeEncryptResult {
+  /** Ciphertext (Base64url encoded) */
+  ct: string;
+  /** Initialization vector (Base64url encoded) */
+  iv: string;
 }
 
 /**
- * Encrypted document with type safety for the decrypted payload
+ * Base64url alphabet
+ * URL-safe variant: uses - and _ instead of + and /
  */
-export interface EncryptedDocument<T = unknown> {
-  envelope: EncryptedEnvelope;
-  /** Type hint for decryption (not encrypted, used for deserialization) */
-  _type?: string;
-}
+const BASE64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 /**
- * Encrypted photo blob structure
- */
-export interface EncryptedPhoto {
-  envelope: EncryptedEnvelope;
-  /** Photo variant (original, thumbnail, preview) */
-  variant: PhotoVariant;
-  /** MIME type of the original photo */
-  mimeType: string;
-  /** Original file size before encryption (for validation) */
-  originalSize: number;
-}
-
-/**
- * Derives a per-document encryption key from the DEK using HKDF.
- * Each document gets a unique key derived from:
- * - The master DEK as input key material
- * - A random salt (stored with the encrypted document)
- * - The document ID as context info
+ * Encodes bytes to Base64url string (no padding)
  *
- * This provides cryptographic separation between documents - compromising
- * one document's key doesn't reveal other documents' keys.
- *
- * @param dek - The Data Encryption Key (32 bytes)
- * @param documentId - Unique identifier for the document
- * @param salt - Random salt for this document (32 bytes)
- * @returns Promise resolving to a CryptoKey for AES-GCM
- * @throws Error if inputs are invalid
+ * @param bytes - Uint8Array to encode
+ * @returns Base64url encoded string without padding
  */
-export async function deriveDocumentKey(
-  dek: DataEncryptionKey,
-  documentId: string,
-  salt: Uint8Array
-): Promise<CryptoKey> {
-  validateDek(dek);
-  validateSalt(salt);
-
-  if (!documentId || typeof documentId !== 'string') {
-    throw new Error('Invalid document ID: must be a non-empty string');
+export function encodeBase64url(bytes: Uint8Array): string {
+  if (bytes.length === 0) {
+    return '';
   }
 
-  // Combine base info with document ID for domain separation
-  const info = `${ENVELOPE_HKDF_INFO.DOCUMENT}:${documentId}`;
+  let result = '';
+  let buffer = 0;
+  let bitsLeft = 0;
 
-  // Derive 32 bytes for AES-256
-  const keyBytes = hkdf(sha256, dek, salt, info, KEY_LENGTH);
+  for (const byte of bytes) {
+    buffer = (buffer << 8) | byte;
+    bitsLeft += 8;
 
-  // Import as CryptoKey for AES-GCM operations
-  return crypto.subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'AES-GCM', length: 256 },
-    false, // not extractable
-    ['encrypt', 'decrypt']
-  );
+    while (bitsLeft >= 6) {
+      bitsLeft -= 6;
+      result += BASE64URL_ALPHABET[(buffer >> bitsLeft) & 0x3f];
+    }
+  }
+
+  // Handle remaining bits (pad to 6 bits)
+  if (bitsLeft > 0) {
+    result += BASE64URL_ALPHABET[(buffer << (6 - bitsLeft)) & 0x3f];
+  }
+
+  return result;
 }
 
 /**
- * Derives a per-photo encryption key from the DEK using HKDF.
- * Similar to document keys but includes variant for cryptographic separation
- * between different versions of the same photo.
+ * Decodes Base64url string to bytes
  *
- * @param dek - The Data Encryption Key (32 bytes)
- * @param photoId - Unique identifier for the photo
- * @param variant - Photo variant (original, thumbnail, preview)
- * @param salt - Random salt for this photo (32 bytes)
- * @returns Promise resolving to a CryptoKey for AES-GCM
- * @throws Error if inputs are invalid
+ * @param encoded - Base64url encoded string (with or without padding)
+ * @returns Decoded Uint8Array
+ * @throws Error if input contains invalid characters
  */
-export async function derivePhotoKey(
-  dek: DataEncryptionKey,
-  photoId: string,
-  variant: PhotoVariant,
-  salt: Uint8Array
-): Promise<CryptoKey> {
-  validateDek(dek);
-  validateSalt(salt);
-
-  if (!photoId || typeof photoId !== 'string') {
-    throw new Error('Invalid photo ID: must be a non-empty string');
+export function decodeBase64url(encoded: string): Uint8Array {
+  if (encoded.length === 0) {
+    return new Uint8Array(0);
   }
 
-  const validVariants: PhotoVariant[] = ['original', 'thumbnail', 'preview'];
-  if (!validVariants.includes(variant)) {
-    throw new Error(`Invalid variant: must be one of ${validVariants.join(', ')}`);
+  // Remove padding if present
+  const normalized = encoded.replace(/=+$/, '');
+
+  const result: number[] = [];
+  let buffer = 0;
+  let bitsLeft = 0;
+
+  for (const char of normalized) {
+    const value = BASE64URL_ALPHABET.indexOf(char);
+    if (value === -1) {
+      throw new Error(`Invalid Base64url character: ${char}`);
+    }
+
+    buffer = (buffer << 6) | value;
+    bitsLeft += 6;
+
+    if (bitsLeft >= 8) {
+      bitsLeft -= 8;
+      result.push((buffer >> bitsLeft) & 0xff);
+    }
   }
 
-  // Include variant in info for cryptographic separation between versions
-  const info = `${ENVELOPE_HKDF_INFO.PHOTO}:${photoId}:${variant}`;
-
-  // Derive 32 bytes for AES-256
-  const keyBytes = hkdf(sha256, dek, salt, info, KEY_LENGTH);
-
-  // Import as CryptoKey for AES-GCM operations
-  return crypto.subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'AES-GCM', length: 256 },
-    false, // not extractable
-    ['encrypt', 'decrypt']
-  );
+  return new Uint8Array(result);
 }
 
 /**
- * Generates a random salt for envelope encryption.
- * Each encrypted item should have its own unique salt.
+ * Generates a random initialization vector for AES-GCM
  *
- * @returns 32 bytes of cryptographically random data
- * @throws Error if Web Crypto API is not available
+ * Uses crypto.getRandomValues for cryptographically secure randomness.
+ *
+ * @returns 12-byte random IV as Uint8Array
  */
-export function generateEnvelopeSalt(): Uint8Array {
-  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
-    throw new Error('Web Crypto API not available');
-  }
-
-  const salt = new Uint8Array(SALT_LENGTH);
-  crypto.getRandomValues(salt);
-  return salt;
+export function generateIv(): Uint8Array {
+  const iv = new Uint8Array(AES_GCM_CONFIG.ivLength);
+  crypto.getRandomValues(iv);
+  return iv;
 }
 
 /**
- * Encrypts a JSON document payload using envelope encryption.
- * The document is serialized to JSON, encrypted with a derived key,
- * and wrapped in an envelope containing all decryption metadata.
+ * Encrypts data using AES-GCM with the provided key
  *
- * @param dek - The Data Encryption Key
- * @param documentId - Unique document identifier
- * @param payload - The document payload to encrypt (will be JSON serialized)
- * @returns Promise resolving to EncryptedDocument
+ * @param key - CryptoKey for AES-GCM encryption (must have 'encrypt' usage)
+ * @param plaintext - Data to encrypt as Uint8Array
+ * @param additionalData - Optional AAD (Additional Authenticated Data)
+ * @returns Promise resolving to EnvelopeEncryptResult with Base64url-encoded ct and iv
  * @throws Error if encryption fails
  */
-export async function encryptDocument<T>(
-  dek: DataEncryptionKey,
-  documentId: string,
-  payload: T
-): Promise<EncryptedDocument<T>> {
-  // Generate fresh salt for this document
-  const salt = generateEnvelopeSalt();
-
-  // Derive per-document key
-  const key = await deriveDocumentKey(dek, documentId, salt);
-
-  // Serialize payload to JSON, then encode as UTF-8 bytes
-  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
-
-  // Encrypt the payload
-  const envelope = await encryptPayload(key, plaintext, salt);
-
-  return { envelope };
-}
-
-/**
- * Decrypts an encrypted document and deserializes the JSON payload.
- *
- * @param dek - The Data Encryption Key
- * @param documentId - Unique document identifier (must match encryption)
- * @param encryptedDoc - The encrypted document envelope
- * @returns Promise resolving to the decrypted and parsed payload
- * @throws Error if decryption or parsing fails
- */
-export async function decryptDocument<T>(
-  dek: DataEncryptionKey,
-  documentId: string,
-  encryptedDoc: EncryptedDocument<T>
-): Promise<T> {
-  // Re-derive the per-document key using stored salt
-  const key = await deriveDocumentKey(dek, documentId, encryptedDoc.envelope.salt);
-
-  // Decrypt the payload
-  const plaintext = await decryptPayload(key, encryptedDoc.envelope);
-
-  // Parse JSON from decrypted bytes
-  const json = new TextDecoder().decode(plaintext);
-  return JSON.parse(json) as T;
-}
-
-/**
- * Encrypts a photo blob using envelope encryption.
- * Photos are encrypted as raw bytes without JSON serialization.
- *
- * @param dek - The Data Encryption Key
- * @param photoId - Unique photo identifier
- * @param variant - Photo variant (original, thumbnail, preview)
- * @param photoData - The photo blob as ArrayBuffer or Uint8Array
- * @param mimeType - MIME type of the photo (e.g., 'image/jpeg')
- * @returns Promise resolving to EncryptedPhoto
- * @throws Error if encryption fails
- */
-export async function encryptPhoto(
-  dek: DataEncryptionKey,
-  photoId: string,
-  variant: PhotoVariant,
-  photoData: ArrayBuffer | Uint8Array,
-  mimeType: string
-): Promise<EncryptedPhoto> {
-  // Generate fresh salt for this photo
-  const salt = generateEnvelopeSalt();
-
-  // Derive per-photo key (includes variant for separation)
-  const key = await derivePhotoKey(dek, photoId, variant, salt);
-
-  // Ensure we have Uint8Array
-  const plaintext =
-    photoData instanceof Uint8Array
-      ? photoData
-      : new Uint8Array(photoData);
-
-  // Store original size for validation during decryption
-  const originalSize = plaintext.length;
-
-  // Encrypt the photo data
-  const envelope = await encryptPayload(key, plaintext, salt);
-
-  return {
-    envelope,
-    variant,
-    mimeType,
-    originalSize,
-  };
-}
-
-/**
- * Decrypts an encrypted photo blob.
- *
- * @param dek - The Data Encryption Key
- * @param photoId - Unique photo identifier (must match encryption)
- * @param encryptedPhoto - The encrypted photo envelope
- * @returns Promise resolving to the decrypted photo as Uint8Array
- * @throws Error if decryption fails or size validation fails
- */
-export async function decryptPhoto(
-  dek: DataEncryptionKey,
-  photoId: string,
-  encryptedPhoto: EncryptedPhoto
-): Promise<Uint8Array> {
-  // Re-derive the per-photo key using stored salt and variant
-  const key = await derivePhotoKey(
-    dek,
-    photoId,
-    encryptedPhoto.variant,
-    encryptedPhoto.envelope.salt
-  );
-
-  // Decrypt the photo data
-  const plaintext = await decryptPayload(key, encryptedPhoto.envelope);
-
-  // Validate size matches original (integrity check)
-  if (plaintext.length !== encryptedPhoto.originalSize) {
-    throw new Error(
-      'Decrypted photo size mismatch: data may be corrupted'
-    );
-  }
-
-  return plaintext;
-}
-
-/**
- * Low-level encryption function using AES-GCM.
- * Generates a fresh IV and encrypts the plaintext.
- *
- * @param key - CryptoKey for AES-GCM encryption
- * @param plaintext - Data to encrypt
- * @param salt - Salt used for key derivation (stored in envelope)
- * @returns Promise resolving to EncryptedEnvelope
- */
-async function encryptPayload(
+export async function envelopeEncrypt(
   key: CryptoKey,
   plaintext: Uint8Array,
-  salt: Uint8Array
-): Promise<EncryptedEnvelope> {
-  if (typeof crypto === 'undefined' || !crypto.subtle) {
-    throw new Error('Web Crypto API not available');
+  additionalData?: Uint8Array
+): Promise<EnvelopeEncryptResult> {
+  // Generate random IV
+  const iv = generateIv();
+
+  // Build algorithm parameters
+  const algorithm: AesGcmParams = {
+    name: AES_GCM_CONFIG.name,
+    iv: iv as BufferSource,
+    tagLength: AES_GCM_CONFIG.tagLength,
+  };
+
+  // Add AAD if provided
+  if (additionalData) {
+    algorithm.additionalData = additionalData as BufferSource;
   }
 
-  // Generate fresh IV for each encryption
-  // Critical: IV must NEVER be reused with the same key
-  const iv = new Uint8Array(IV_LENGTH);
-  crypto.getRandomValues(iv);
-
-  // Encrypt with AES-GCM
-  // The returned ciphertext includes the authentication tag
-  const ciphertextBuffer = await crypto.subtle.encrypt(
-    {
-      name: 'AES-GCM',
-      iv,
-      tagLength: AUTH_TAG_LENGTH * 8, // in bits
-    },
-    key,
-    plaintext
-  );
+  // Perform encryption
+  const ciphertextBuffer = await crypto.subtle.encrypt(algorithm, key, plaintext as BufferSource);
+  const ciphertext = new Uint8Array(ciphertextBuffer);
 
   return {
-    iv,
-    ciphertext: new Uint8Array(ciphertextBuffer),
-    salt,
+    ct: encodeBase64url(ciphertext),
+    iv: encodeBase64url(iv),
   };
 }
 
 /**
- * Low-level decryption function using AES-GCM.
- * Verifies the authentication tag and decrypts the ciphertext.
+ * Decrypts data using AES-GCM with the provided key
  *
- * @param key - CryptoKey for AES-GCM decryption
- * @param envelope - The encrypted envelope containing IV and ciphertext
- * @returns Promise resolving to decrypted plaintext
- * @throws Error if authentication fails or decryption fails
+ * @param key - CryptoKey for AES-GCM decryption (must have 'decrypt' usage)
+ * @param ciphertextBase64url - Ciphertext as Base64url string
+ * @param ivBase64url - IV as Base64url string
+ * @param additionalData - Optional AAD (must match what was used during encryption)
+ * @returns Promise resolving to decrypted data as Uint8Array
+ * @throws Error if decryption fails (wrong key, tampered data, wrong AAD)
  */
-async function decryptPayload(
+export async function envelopeDecrypt(
   key: CryptoKey,
-  envelope: EncryptedEnvelope
+  ciphertextBase64url: string,
+  ivBase64url: string,
+  additionalData?: Uint8Array
 ): Promise<Uint8Array> {
-  if (typeof crypto === 'undefined' || !crypto.subtle) {
-    throw new Error('Web Crypto API not available');
+  // Decode Base64url inputs
+  const ciphertext = decodeBase64url(ciphertextBase64url);
+  const iv = decodeBase64url(ivBase64url);
+
+  // Validate IV length
+  if (iv.length !== AES_GCM_CONFIG.ivLength) {
+    throw new Error(`Invalid IV length: expected ${AES_GCM_CONFIG.ivLength}, got ${iv.length}`);
   }
 
-  validateEnvelope(envelope);
-
-  try {
-    // Decrypt with AES-GCM
-    // This automatically verifies the authentication tag
-    const plaintextBuffer = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: envelope.iv,
-        tagLength: AUTH_TAG_LENGTH * 8, // in bits
-      },
-      key,
-      envelope.ciphertext
-    );
-
-    return new Uint8Array(plaintextBuffer);
-  } catch (error) {
-    // AES-GCM decryption failures indicate tampering or wrong key
-    // Don't expose underlying error to avoid information leakage
-    throw new Error(
-      'Decryption failed: authentication failed (wrong key or tampered data)'
-    );
-  }
-}
-
-/**
- * Serializes an EncryptedEnvelope to bytes for storage.
- * Format: [salt (32 bytes)] [iv (12 bytes)] [ciphertext (variable)]
- *
- * @param envelope - The envelope to serialize
- * @returns Serialized bytes
- */
-export function serializeEnvelope(envelope: EncryptedEnvelope): Uint8Array {
-  validateEnvelope(envelope);
-
-  const totalLength =
-    SALT_LENGTH + IV_LENGTH + envelope.ciphertext.length;
-  const result = new Uint8Array(totalLength);
-
-  let offset = 0;
-  result.set(envelope.salt, offset);
-  offset += SALT_LENGTH;
-
-  result.set(envelope.iv, offset);
-  offset += IV_LENGTH;
-
-  result.set(envelope.ciphertext, offset);
-
-  return result;
-}
-
-/**
- * Deserializes bytes back to an EncryptedEnvelope.
- *
- * @param data - Serialized envelope bytes
- * @returns EncryptedEnvelope structure
- * @throws Error if data is too short or invalid
- */
-export function deserializeEnvelope(data: Uint8Array): EncryptedEnvelope {
-  // Minimum size: 32 bytes salt + 12 bytes IV + 1 byte data + 16 bytes auth tag
-  const minSize = SALT_LENGTH + IV_LENGTH + 1 + AUTH_TAG_LENGTH;
-
-  if (!(data instanceof Uint8Array) || data.length < minSize) {
-    throw new Error(
-      `Invalid envelope data: expected at least ${minSize} bytes, got ${data?.length ?? 0}`
-    );
-  }
-
-  let offset = 0;
-
-  const salt = data.slice(offset, offset + SALT_LENGTH);
-  offset += SALT_LENGTH;
-
-  const iv = data.slice(offset, offset + IV_LENGTH);
-  offset += IV_LENGTH;
-
-  const ciphertext = data.slice(offset);
-
-  return { salt, iv, ciphertext };
-}
-
-/**
- * Serializes an EncryptedPhoto for storage.
- * Includes metadata alongside the encrypted envelope.
- *
- * @param photo - The encrypted photo to serialize
- * @returns Serialized bytes with metadata header
- */
-export function serializeEncryptedPhoto(photo: EncryptedPhoto): Uint8Array {
-  // Create metadata header as JSON
-  const metadata = JSON.stringify({
-    variant: photo.variant,
-    mimeType: photo.mimeType,
-    originalSize: photo.originalSize,
-  });
-  const metadataBytes = new TextEncoder().encode(metadata);
-
-  // Serialize envelope
-  const envelopeBytes = serializeEnvelope(photo.envelope);
-
-  // Format: [metadata length (4 bytes)] [metadata] [envelope]
-  const totalLength = 4 + metadataBytes.length + envelopeBytes.length;
-  const result = new Uint8Array(totalLength);
-
-  // Write metadata length as 32-bit big-endian
-  const view = new DataView(result.buffer);
-  view.setUint32(0, metadataBytes.length, false);
-
-  // Write metadata
-  result.set(metadataBytes, 4);
-
-  // Write envelope
-  result.set(envelopeBytes, 4 + metadataBytes.length);
-
-  return result;
-}
-
-/**
- * Deserializes bytes back to an EncryptedPhoto.
- *
- * @param data - Serialized encrypted photo bytes
- * @returns EncryptedPhoto structure
- * @throws Error if data is invalid
- */
-export function deserializeEncryptedPhoto(data: Uint8Array): EncryptedPhoto {
-  if (!(data instanceof Uint8Array) || data.length < 5) {
-    throw new Error('Invalid encrypted photo data: too short');
-  }
-
-  // Read metadata length
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const metadataLength = view.getUint32(0, false);
-
-  if (data.length < 4 + metadataLength) {
-    throw new Error('Invalid encrypted photo data: metadata truncated');
-  }
-
-  // Parse metadata
-  const metadataBytes = data.slice(4, 4 + metadataLength);
-  const metadataJson = new TextDecoder().decode(metadataBytes);
-  const metadata = JSON.parse(metadataJson) as {
-    variant: PhotoVariant;
-    mimeType: string;
-    originalSize: number;
+  // Build algorithm parameters
+  const algorithm: AesGcmParams = {
+    name: AES_GCM_CONFIG.name,
+    iv: iv as BufferSource,
+    tagLength: AES_GCM_CONFIG.tagLength,
   };
 
-  // Deserialize envelope
-  const envelopeBytes = data.slice(4 + metadataLength);
-  const envelope = deserializeEnvelope(envelopeBytes);
-
-  return {
-    envelope,
-    variant: metadata.variant,
-    mimeType: metadata.mimeType,
-    originalSize: metadata.originalSize,
-  };
-}
-
-// ============================================================================
-// Validation Helpers
-// ============================================================================
-
-/**
- * Validates that a DEK is valid
- */
-function validateDek(dek: DataEncryptionKey): void {
-  if (!(dek instanceof Uint8Array) || dek.length !== KEY_LENGTH) {
-    throw new Error(`Invalid DEK: must be a ${KEY_LENGTH}-byte Uint8Array`);
+  // Add AAD if provided
+  if (additionalData) {
+    algorithm.additionalData = additionalData as BufferSource;
   }
+
+  // Perform decryption
+  const plaintextBuffer = await crypto.subtle.decrypt(algorithm, key, ciphertext as BufferSource);
+  return new Uint8Array(plaintextBuffer);
 }
 
 /**
- * Validates that a salt is valid
+ * Encodes a string as UTF-8 bytes
+ *
+ * @param str - String to encode
+ * @returns UTF-8 encoded Uint8Array
  */
-function validateSalt(salt: Uint8Array): void {
-  if (!(salt instanceof Uint8Array) || salt.length !== SALT_LENGTH) {
-    throw new Error(`Invalid salt: must be a ${SALT_LENGTH}-byte Uint8Array`);
-  }
+export function encodeUtf8(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
 }
 
 /**
- * Validates an encrypted envelope structure
+ * Decodes UTF-8 bytes to a string
+ *
+ * @param bytes - UTF-8 encoded Uint8Array
+ * @returns Decoded string
  */
-function validateEnvelope(envelope: EncryptedEnvelope): void {
-  if (!envelope || typeof envelope !== 'object') {
-    throw new Error('Invalid envelope: must be an object');
+export function decodeUtf8(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Imports a raw key for AES-GCM operations
+ *
+ * @param rawKey - Raw key bytes (must be 32 bytes for AES-256)
+ * @param extractable - Whether the key can be exported (default: false for security)
+ * @param usages - Key usages (default: encrypt and decrypt)
+ * @returns Promise resolving to CryptoKey
+ * @throws Error if key length is invalid
+ */
+export async function importAesGcmKey(
+  rawKey: Uint8Array,
+  extractable: boolean = false,
+  usages: KeyUsage[] = ['encrypt', 'decrypt']
+): Promise<CryptoKey> {
+  if (rawKey.length !== AES_GCM_CONFIG.keyLength / 8) {
+    throw new Error(
+      `Invalid key length: expected ${AES_GCM_CONFIG.keyLength / 8} bytes, got ${rawKey.length}`
+    );
   }
 
-  if (!(envelope.iv instanceof Uint8Array) || envelope.iv.length !== IV_LENGTH) {
-    throw new Error(`Invalid envelope IV: must be a ${IV_LENGTH}-byte Uint8Array`);
+  return crypto.subtle.importKey(
+    'raw',
+    rawKey as BufferSource,
+    { name: AES_GCM_CONFIG.name, length: AES_GCM_CONFIG.keyLength },
+    extractable,
+    usages
+  );
+}
+
+/**
+ * Generates a random AES-256 key for testing purposes
+ *
+ * @param extractable - Whether the key can be exported (default: true for testing)
+ * @returns Promise resolving to CryptoKey
+ */
+export async function generateAesGcmKey(extractable: boolean = true): Promise<CryptoKey> {
+  return crypto.subtle.generateKey(
+    { name: AES_GCM_CONFIG.name, length: AES_GCM_CONFIG.keyLength },
+    extractable,
+    ['encrypt', 'decrypt']
+  );
+}
+
+/**
+ * Exports a CryptoKey to raw bytes
+ *
+ * @param key - CryptoKey to export (must be extractable)
+ * @returns Promise resolving to raw key bytes as Uint8Array
+ * @throws Error if key is not extractable
+ */
+export async function exportAesGcmKey(key: CryptoKey): Promise<Uint8Array> {
+  const rawBuffer = await crypto.subtle.exportKey('raw', key);
+  return new Uint8Array(rawBuffer);
+}
+
+/**
+ * Securely compares two byte arrays in constant time
+ *
+ * This prevents timing attacks when comparing sensitive data like MACs.
+ *
+ * @param a - First byte array
+ * @param b - Second byte array
+ * @returns true if arrays are equal, false otherwise
+ */
+export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) {
+    return false;
   }
 
-  if (!(envelope.salt instanceof Uint8Array) || envelope.salt.length !== SALT_LENGTH) {
-    throw new Error(`Invalid envelope salt: must be a ${SALT_LENGTH}-byte Uint8Array`);
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i];
   }
-
-  // Minimum ciphertext: 1 byte data + 16 bytes auth tag
-  if (!(envelope.ciphertext instanceof Uint8Array) || envelope.ciphertext.length < AUTH_TAG_LENGTH + 1) {
-    throw new Error('Invalid envelope ciphertext: too short');
-  }
+  return result === 0;
 }
