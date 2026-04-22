@@ -1,0 +1,36 @@
+schema: spec-driven
+
+context: |
+  TrichoApp — offline-first, end-to-end encrypted salon CRM PWA.
+  Stack: Astro + React 19 + TypeScript on the client; PouchDB
+  (IndexedDB) local storage; CouchDB 3 server with couch_peruser;
+  tricho-auth Node service (Google/Apple OIDC + RS256 JWT + rotated
+  refresh tokens); Traefik + Caddy edge.
+
+  Invariants the server MUST preserve:
+    - Server sees ciphertext + OAuth identity only; never plaintext
+      data, never the DEK, never the Recovery Secret.
+    - AAD binds every payload to {vaultId, docId}.
+    - Recovery Secret is the last offline-recovery fallback.
+
+  Authoritative current-state doc: docs/ARCHITECTURE_CHANGES.md.
+
+rules:
+  proposal:
+    - State impact on zero-knowledge invariants explicitly — any
+      change that causes plaintext to reach the server is a red flag
+      and must be called out.
+    - Name the capabilities touched and include rollback steps.
+  specs:
+    - Use SHALL/MUST for hard requirements; SHOULD only for cosmetic
+      or UX latitude.
+    - Use Given/When/Then scenarios; include a failure scenario for
+      anything security-sensitive (wrong DEK, tampered AAD, expired
+      refresh, device over limit, etc.).
+    - Reference source paths (src/… or infrastructure/…) — not line
+      numbers; line numbers rot.
+  design:
+    - When touching key material or transport, include a short
+      threat-model delta: what the adversary could do before vs. after.
+  tasks:
+    - Prefer tasks under 2 hours each; split anything larger.
