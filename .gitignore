@@ -14,10 +14,15 @@ pnpm-debug.log*
 
 
 # environment variables
-.env
-.env.production
+#   .env                 — committed; non-sensitive defaults for `docker compose`
+#   .env.local           — developer-local overrides (NOT committed)
+#   .env.production      — legacy, kept ignored
 .env.local
+.env.production
 infrastructure/.env
+
+# Runtime-decrypted secrets (SOPS → tmpfs-ish staging for compose)
+.secrets-runtime/
 
 # Infrastructure secrets
 infrastructure/traefik/acme.json

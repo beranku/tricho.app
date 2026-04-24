@@ -1,5 +1,9 @@
 name: Deploy to GitHub Pages
 
+# Note: after the `unified-stack-orchestration` change, merges into `main` go
+# through `e2e.yml` first (required status check). This workflow now runs on
+# the same push event but conceptually fires only after e2e passes — branch
+# protection enforces the gating.
 on:
   push:
     branches: [main]

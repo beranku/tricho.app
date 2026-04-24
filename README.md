@@ -246,20 +246,63 @@ export default defineConfig({
 
 Používá `astro/tsconfigs/strict` pro přísnou typovou kontrolu.
 
-## Vývoj
+## Running the stack
+
+The whole stack — CouchDB, `tricho-auth`, Traefik, the PWA — lives behind one root `compose.yml` and one `Makefile`. Three profiles select which subset runs:
+
+| Profile | Use case | Hostname |
+|---|---|---|
+| `dev` | Local development with live reload (section 2+ wires the in-container PWA) | `tricho.localhost` |
+| `prod` | Production-equivalent local smoke test (Let's Encrypt + Caddy + built `dist/`) | `${APP_HOST}` |
+| `ci` | GitHub Actions / E2E (self-signed TLS + mock OIDC provider) | `tricho.test` |
+
+### Common commands
 
 ```bash
-# Instalace závislostí
+make help          # list every target
+make dev           # bring up the dev profile
+make prod-local    # bring up the prod profile (requires APP_HOST, ACME_EMAIL)
+make ci            # bring up the ci profile (for running Playwright locally)
+make down          # stop everything and wipe runtime secrets
+make logs          # tail logs
+make e2e           # run the Playwright suite (wired in section 7)
+```
+
+### Tooling
+
+The stack runs on stock Docker + Docker Compose. For the encrypted-secrets workflow:
+
+| Tool | Install (macOS) | Install (Linux) |
+|---|---|---|
+| Docker Compose v2 | Docker Desktop | [docs.docker.com/compose](https://docs.docker.com/compose/install/) |
+| SOPS | `brew install sops` | [github.com/getsops/sops/releases](https://github.com/getsops/sops/releases) |
+| age | `brew install age` | Ships with recent distros or from releases |
+| jq | `brew install jq` | `apt install jq` |
+| openssl | preinstalled | preinstalled |
+
+### Environment files
+
+Configuration is layered, lowest to highest precedence:
+
+1. `.env` — **committed**, non-sensitive defaults (ports, hostnames). Read by `docker compose` natively.
+2. `secrets/<profile>.sops.yaml` — **committed, SOPS-encrypted** with age recipients. Decrypted by `make _render-secrets` into `.secrets-runtime/` and consumed as Docker Compose `secrets:` (mounted at `/run/secrets/*`). Wired in section 5.
+3. `.env.local` — **gitignored**, your personal host overrides. Loaded after `.env` so it wins on conflict. Copy from `.env.example` if you need one.
+
+Secrets never go into `.env*` files. Long-lived material (OAuth client secrets, JWT private key, CouchDB admin password) moves to the SOPS flow.
+
+### Legacy entrypoints
+
+The old `infrastructure/couchdb/docker-compose.yml` and `infrastructure/traefik/docker-compose.yml` still work as a fallback during rollout of the `unified-stack-orchestration` change. They will be deleted / redirected in section 9.
+
+### Quick browser-only dev (no backend)
+
+If you're only editing static PWA content and don't care about the backend:
+
+```bash
 npm install
-
-# Dev server (http://localhost:4321)
-npm run dev
-
-# Build pro produkci
-npm run build
-
-# Preview buildu
-npm run preview
+npm run dev              # Astro dev server on http://localhost:4321 (no CouchDB, no auth)
+npm run build            # produces dist/
+npm run preview          # serves dist/
 ```
 
 ## Deployment

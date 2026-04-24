@@ -74,7 +74,9 @@ services:
     restart: unless-stopped
     volumes:
       - ${PWA_DIST_DIR:-../../dist}:/srv:ro
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddyfile moved to infrastructure/pwa/ as part of the
+      # unified-stack-orchestration change (section 2.2).
+      - ../pwa/Caddyfile:/etc/caddy/Caddyfile:ro
     networks:
       - tricho-net
     labels:

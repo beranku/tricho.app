@@ -3,9 +3,39 @@
 
 import fs from 'node:fs';
 import http from 'node:http';
+import { createPublicKey } from 'node:crypto';
 import { Meta } from './meta.mjs';
 import { JwtSigner, generateKeypair } from './jwt.mjs';
 import { createRouter } from './routes.mjs';
+
+// For every env var listed here, prefer the literal env value if set;
+// otherwise, if `<name>_FILE` points at a readable file, load its contents
+// into the env so downstream code can keep reading process.env.<name>
+// without caring about how the value was provisioned. Trim trailing
+// whitespace (Docker secret files often ship a trailing newline).
+function hydrateFromSecretFiles(names) {
+  for (const name of names) {
+    if (process.env[name]) continue;
+    const path = process.env[`${name}_FILE`];
+    if (!path) continue;
+    try {
+      const contents = fs.readFileSync(path, 'utf8');
+      const trimmed = contents.replace(/\s+$/, '');
+      if (trimmed) process.env[name] = trimmed;
+    } catch {
+      // Missing / unreadable file → leave env unset; downstream code
+      // either defaults or no-ops the feature (e.g., Google OAuth stays
+      // disabled when its client secret isn't provisioned).
+    }
+  }
+}
+
+hydrateFromSecretFiles([
+  'COUCHDB_ADMIN_PASSWORD',
+  'TRICHO_AUTH_COOKIE_SECRET',
+  'GOOGLE_CLIENT_SECRET',
+  'APPLE_CLIENT_SECRET',
+]);
 
 const COUCHDB_URL = process.env.COUCHDB_URL ?? 'http://couchdb:5984';
 const ADMIN_USER = process.env.COUCHDB_ADMIN_USER ?? 'admin';
@@ -16,6 +46,7 @@ const JWT_PRIVATE_KEY_PATH = process.env.TRICHO_AUTH_JWT_PRIVATE_KEY_PATH;
 const JWT_PUBLIC_KEY_PATH = process.env.TRICHO_AUTH_JWT_PUBLIC_KEY_PATH;
 const JWT_KID = process.env.TRICHO_AUTH_JWT_KID ?? `tricho-${new Date().getUTCFullYear()}`;
 const DEV_KEY_DIR = process.env.TRICHO_AUTH_DEV_KEY_DIR;
+const SHARED_JWT_DIR = process.env.TRICHO_AUTH_SHARED_JWT_DIR ?? '/shared/jwt';
 
 const meta = new Meta({
   couchdbUrl: COUCHDB_URL,
@@ -25,32 +56,77 @@ const meta = new Meta({
 });
 
 /**
- * Returns { privatePem, publicPem }. Prefers explicit paths; falls back to a
- * persisted dev key in DEV_KEY_DIR; last resort generates in-memory (logged).
+ * Returns { privatePem, publicPem, source }. Resolution order:
+ *   1. TRICHO_AUTH_JWT_PRIVATE_KEY_PATH file (Docker secret in prod/ci).
+ *      Public key is derived from the private key — no separate public mount.
+ *   2. DEV_KEY_DIR/jwt-private.pem (persisted across container restarts in
+ *      dev mode when no secret is mounted).
+ *   3. Freshly generated keypair, persisted to DEV_KEY_DIR for next boot.
+ *
+ * The legacy TRICHO_AUTH_JWT_PUBLIC_KEY_PATH is still honored for backward
+ * compatibility, but is no longer required.
  */
 function loadOrCreateKeys() {
-  if (JWT_PRIVATE_KEY_PATH && JWT_PUBLIC_KEY_PATH) {
-    return {
-      privatePem: fs.readFileSync(JWT_PRIVATE_KEY_PATH, 'utf8'),
-      publicPem: fs.readFileSync(JWT_PUBLIC_KEY_PATH, 'utf8'),
-    };
+  const mountedPrivate = readNonEmpty(JWT_PRIVATE_KEY_PATH);
+  if (mountedPrivate) {
+    const publicPem =
+      readNonEmpty(JWT_PUBLIC_KEY_PATH) ?? derivePublicPem(mountedPrivate);
+    return { privatePem: mountedPrivate, publicPem, source: 'mounted' };
   }
   const dir = DEV_KEY_DIR ?? '/tmp/tricho-auth-keys';
   fs.mkdirSync(dir, { recursive: true });
   const priv = `${dir}/jwt-private.pem`;
   const pub = `${dir}/jwt-public.pem`;
-  if (fs.existsSync(priv) && fs.existsSync(pub)) {
-    return { privatePem: fs.readFileSync(priv, 'utf8'), publicPem: fs.readFileSync(pub, 'utf8') };
+  const existingPriv = readNonEmpty(priv);
+  const existingPub = readNonEmpty(pub);
+  if (existingPriv && existingPub) {
+    return { privatePem: existingPriv, publicPem: existingPub, source: 'dev-dir' };
   }
   const { privatePem, publicPem } = generateKeypair();
   fs.writeFileSync(priv, privatePem, { mode: 0o600 });
   fs.writeFileSync(pub, publicPem);
   console.log(`[tricho-auth] generated dev JWT keypair → ${dir}`);
-  console.log(`[tricho-auth] add the public key to CouchDB local.ini:\n${publicPem}`);
-  return { privatePem, publicPem };
+  return { privatePem, publicPem, source: 'generated' };
 }
 
-const { privatePem, publicPem } = loadOrCreateKeys();
+function readNonEmpty(path) {
+  if (!path) return null;
+  try {
+    const contents = fs.readFileSync(path, 'utf8');
+    return contents.includes('BEGIN') ? contents : null;
+  } catch {
+    return null;
+  }
+}
+
+function derivePublicPem(privatePem) {
+  return createPublicKey(privatePem)
+    .export({ format: 'pem', type: 'spki' })
+    .toString();
+}
+
+/**
+ * Atomically publish the current public key into the shared volume that
+ * CouchDB's entrypoint shim reads. Write-to-temp + rename keeps partial
+ * writes invisible to the consumer. Missing directory (non-compose run) is
+ * a soft warning — prod always has this mount.
+ */
+function publishPublicKey(publicPem) {
+  try {
+    fs.mkdirSync(SHARED_JWT_DIR, { recursive: true });
+    const dest = `${SHARED_JWT_DIR}/jwt-public.pem`;
+    const tmp = `${dest}.tmp.${process.pid}`;
+    fs.writeFileSync(tmp, publicPem, { mode: 0o644 });
+    fs.renameSync(tmp, dest);
+    console.log(`[tricho-auth] published public key → ${dest}`);
+  } catch (err) {
+    console.warn(`[tricho-auth] could not publish public key to ${SHARED_JWT_DIR}: ${err.message}`);
+  }
+}
+
+const { privatePem, publicPem, source: keySource } = loadOrCreateKeys();
+console.log(`[tricho-auth] using ${keySource} JWT key (kid=${JWT_KID})`);
+publishPublicKey(publicPem);
 const signer = new JwtSigner({ privatePem, publicPem, kid: JWT_KID });
 
 async function bootstrap() {

@@ -1,0 +1,13 @@
+# File-provider TLS config loaded only by the CI profile Traefik.
+# Binds the self-signed tricho.test cert to the `websecure` entrypoint.
+tls:
+  certificates:
+    - certFile: /ci-certs/tricho.test.crt
+      keyFile: /ci-certs/tricho.test.key
+      stores:
+        - default
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /ci-certs/tricho.test.crt
+        keyFile: /ci-certs/tricho.test.key

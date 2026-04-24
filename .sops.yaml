@@ -1,0 +1,41 @@
+# SOPS creation rules — maps each encrypted file under secrets/ to the age
+# recipients allowed to decrypt it.
+#
+# To add yourself as a recipient:
+#   1. Generate an age keypair:     age-keygen -o ~/.config/sops/age/keys.txt
+#   2. Copy the public line ("# public key: ...") into the recipient list of
+#      every profile you need access to.
+#   3. Re-encrypt:                  make secrets-rotate-age
+#
+# To remove yourself:
+#   1. Delete your public line from the rules below.
+#   2. Someone with active access runs `make secrets-rotate-age`.
+#   3. Rotate any secret you knew (CouchDB admin password, OAuth client
+#      secrets, JWT private key) per the procedure in secrets/README.md.
+
+creation_rules:
+  - path_regex: secrets/dev\.sops\.yaml$
+    key_groups:
+      - age:
+          # Dev recipients — add every developer's age pubkey here.
+          # Example:
+          #   - age1xyz...           # alice (laptop)
+          #   - age1abc...           # bob (laptop)
+
+  - path_regex: secrets/ci\.sops\.yaml$
+    key_groups:
+      - age:
+          # CI age pubkey (matches SOPS_AGE_KEY in GitHub Actions secrets)
+          # plus devs who need to edit CI secrets.
+          # Example:
+          #   - age1ci...            # CI runner
+          #   - age1xyz...           # alice (for editing ci.sops.yaml)
+
+  - path_regex: secrets/prod\.sops\.yaml$
+    key_groups:
+      - age:
+          # Production recipients — kept narrow. Break-glass key stored in
+          # a password manager.
+          # Example:
+          #   - age1prod...          # production host
+          #   - age1breakglass...    # password-manager-stored recovery

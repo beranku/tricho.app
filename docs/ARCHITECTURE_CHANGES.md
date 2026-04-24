@@ -92,19 +92,18 @@ The only doc that deviates is `vault-state` — it holds the already-wrapped DEK
 
 ## Running
 
-```sh
-cd infrastructure/couchdb
-COUCHDB_PASSWORD=something-strong docker compose up -d
-curl -sf http://localhost:5984/_up      # → 200
-curl -sf http://localhost:4545/health   # → { ok: true }
+The full stack — CouchDB, tricho-auth, Traefik, PWA — boots via a single root `compose.yml` + `Makefile`. See the root `README.md` → "Running the stack" for the authoritative walkthrough. The key entry points:
 
-cd ../..
-npm run dev
+```sh
+make dev         # local development behind Traefik on http://tricho.localhost
+make prod-local  # production-equivalent local run (Let's Encrypt + Caddy)
+make ci          # self-signed TLS + mock OIDC, for running Playwright
+make e2e         # boot ci profile + run the E2E suite
 ```
 
-Client env:
-- `VITE_COUCHDB_URL=http://localhost:5984`
-- `VITE_AUTH_PROXY_URL=http://localhost:4545`
+Secrets live SOPS-encrypted under `secrets/<profile>.sops.yaml`; see `secrets/README.md` for the age-based workflow. CouchDB's JWT public key is handed over automatically via a shared Docker volume — no more manual paste into `local.ini`.
+
+The pre-Makefile two-file compose flow (`infrastructure/couchdb/docker-compose.yml` + `infrastructure/traefik/docker-compose.yml`) stays functional during rollout but is deprecated; READMEs there redirect here.
 
 ## Known follow-ups
 

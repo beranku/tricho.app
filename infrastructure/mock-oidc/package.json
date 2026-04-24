@@ -1,0 +1,13 @@
+{
+  "name": "mock-oidc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "jose": "^5.9.0"
+  }
+}

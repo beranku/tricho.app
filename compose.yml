@@ -1,0 +1,465 @@
+# Root compose file for TrichoApp.
+#
+# One source of truth for the runtime topology. Profiles select which subset
+# runs. Invoke via the Makefile (`make dev` / `make prod-local` / `make ci`);
+# direct `docker compose` usage is supported but not the primary entry point.
+#
+# Profiles:
+#   dev      Local development. CouchDB + tricho-auth + PWA dev + HTTP Traefik.
+#   prod     Production. Traefik (Let's Encrypt) + Caddy-served built PWA.
+#   ci       GitHub Actions / E2E. Self-signed Traefik + mock OIDC (section 6).
+#
+# The three-Traefik pattern (traefik-dev / traefik-ci / traefik-prod) keeps
+# per-profile TLS config self-contained. Only one ever runs at a time, so they
+# share container_name: tricho_traefik and bind ports 80/443 on the host.
+
+name: tricho
+
+networks:
+  tricho-net:
+    name: tricho-net
+
+volumes:
+  couchdb-data:
+  traefik-letsencrypt:
+  # Shared JWT key handoff: tricho-auth writes jwt-public.pem here; CouchDB's
+  # entrypoint shim reads it and splices it into [jwt_keys] before boot.
+  tricho-jwt-shared:
+
+# File-mounted Docker secrets. `make _render-secrets` decrypts SOPS files
+# into .secrets-runtime/<name> just before `docker compose up`. Missing
+# secrets (e.g. google_client_secret on a dev laptop without Google set up)
+# are rendered as empty files so compose still mounts something and services
+# can no-op gracefully.
+secrets:
+  couchdb_password:
+    file: .secrets-runtime/couchdb_password
+  cookie_secret:
+    file: .secrets-runtime/cookie_secret
+  google_client_secret:
+    file: .secrets-runtime/google_client_secret
+  apple_client_secret:
+    file: .secrets-runtime/apple_client_secret
+  jwt_private_pem:
+    file: .secrets-runtime/jwt_private_pem
+    # tricho-auth's loadOrCreateKeys() ignores an empty file and falls back
+    # to the dev key dir (generated on first run), so a missing/empty JWT
+    # secret is a valid dev mode.
+
+# ── Shared base for all three Traefik variants ───────────────────────────────
+x-traefik-base: &traefik-base
+  image: traefik:v3
+  container_name: tricho_traefik
+  restart: unless-stopped
+  networks:
+    - tricho-net
+
+services:
+  # ── CouchDB + auth-proxy — baseline, all profiles ──────────────────────────
+  couchdb:
+    image: couchdb:3
+    container_name: tricho_couchdb
+    restart: unless-stopped
+    # Entrypoint shim splices tricho-auth's JWT public key into local.ini
+    # before CouchDB boots. `--` keeps compatibility with the upstream image's
+    # tini invocation (the shim exec's /docker-entrypoint.sh itself).
+    entrypoint: ["/opt/couchdb/tricho-entrypoint.sh"]
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      # Official couchdb image reads the password from this file path.
+      COUCHDB_PASSWORD_FILE: /run/secrets/couchdb_password
+    secrets:
+      - couchdb_password
+    # Bind only on loopback even in dev so nothing outside the host scans it.
+    # Prod/CI use the `couchdb-internal` sibling with no host-port binding.
+    ports:
+      - "127.0.0.1:${COUCHDB_PORT:-5984}:5984"
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      - ./infrastructure/couchdb/local.ini:/opt/couchdb/etc/local.d/tricho.ini:ro
+      - ./infrastructure/couchdb/entrypoint.sh:/opt/couchdb/tricho-entrypoint.sh:ro
+      - tricho-jwt-shared:/shared/jwt:ro
+    networks:
+      - tricho-net
+    # tricho-auth must start first so it can publish the JWT public key into
+    # the shared volume. Our entrypoint shim also waits 30s for the file, so
+    # exact order doesn't matter much — but this pins it.
+    depends_on:
+      tricho-auth:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5984/_up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles: [dev]
+
+  # Same image + config as `couchdb` but without host-port publishing.
+  # Used by prod + ci so external scanners can't reach 5984 on the host.
+  # Keeps the network alias `couchdb` so other services' DNS still works.
+  couchdb-internal:
+    image: couchdb:3
+    container_name: tricho_couchdb
+    restart: unless-stopped
+    entrypoint: ["/opt/couchdb/tricho-entrypoint.sh"]
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      # Official couchdb image reads the password from this file path.
+      COUCHDB_PASSWORD_FILE: /run/secrets/couchdb_password
+    secrets:
+      - couchdb_password
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      - ./infrastructure/couchdb/local.ini:/opt/couchdb/etc/local.d/tricho.ini:ro
+      - ./infrastructure/couchdb/entrypoint.sh:/opt/couchdb/tricho-entrypoint.sh:ro
+      - tricho-jwt-shared:/shared/jwt:ro
+    networks:
+      tricho-net:
+        aliases: [couchdb]
+    depends_on:
+      tricho-auth-internal:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5984/_up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles: [prod, ci]
+
+  tricho-auth:
+    build:
+      context: ./infrastructure/couchdb/tricho-auth
+    container_name: tricho_auth
+    restart: unless-stopped
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_ADMIN_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_ADMIN_PASSWORD_FILE: /run/secrets/couchdb_password
+      TRICHO_AUTH_COOKIE_SECRET_FILE: /run/secrets/cookie_secret
+      GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      APPLE_CLIENT_SECRET_FILE: /run/secrets/apple_client_secret
+      TRICHO_AUTH_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_pem
+      TRICHO_META_DB: ${TRICHO_META_DB:-tricho_meta}
+      PORT: "4545"
+      APP_ORIGIN: ${APP_ORIGIN:-https://${APP_HOST:-tricho.localhost}}
+      TRICHO_AUTH_SHARED_JWT_DIR: /shared/jwt
+      TRICHO_AUTH_DEV_KEY_DIR: /var/lib/tricho-auth
+      # OAuth provider config — non-sensitive bits come from env; the
+      # CLIENT_SECRET values come from the file-mounted Docker secrets.
+      # In CI the Makefile overrides GOOGLE_* to point at mock-oidc.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_ISSUER_URL: ${GOOGLE_ISSUER_URL:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_REDIRECT_URI: ${APPLE_REDIRECT_URI:-}
+    ports:
+      - "127.0.0.1:${AUTH_PROXY_PORT:-4545}:4545"
+    volumes:
+      - tricho-jwt-shared:/shared/jwt:rw
+    secrets:
+      - couchdb_password
+      - cookie_secret
+      - google_client_secret
+      - apple_client_secret
+      - jwt_private_pem
+    networks:
+      - tricho-net
+    # No depends_on on couchdb: tricho-auth must start first to publish the
+    # JWT public key that couchdb's entrypoint shim waits for. The bootstrap
+    # retry loop in server.mjs handles CouchDB arriving later.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -qO- http://localhost:4545/health >/dev/null 2>&1 || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    profiles: [dev]
+
+  tricho-auth-internal:
+    build:
+      context: ./infrastructure/couchdb/tricho-auth
+    container_name: tricho_auth
+    restart: unless-stopped
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_ADMIN_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_ADMIN_PASSWORD_FILE: /run/secrets/couchdb_password
+      TRICHO_AUTH_COOKIE_SECRET_FILE: /run/secrets/cookie_secret
+      GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      APPLE_CLIENT_SECRET_FILE: /run/secrets/apple_client_secret
+      TRICHO_AUTH_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_pem
+      TRICHO_META_DB: ${TRICHO_META_DB:-tricho_meta}
+      PORT: "4545"
+      APP_ORIGIN: ${APP_ORIGIN:-https://${APP_HOST:-tricho.localhost}}
+      TRICHO_AUTH_SHARED_JWT_DIR: /shared/jwt
+      TRICHO_AUTH_DEV_KEY_DIR: /var/lib/tricho-auth
+      # OAuth provider config — non-sensitive bits come from env; the
+      # CLIENT_SECRET values come from the file-mounted Docker secrets.
+      # In CI the Makefile overrides GOOGLE_* to point at mock-oidc.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_ISSUER_URL: ${GOOGLE_ISSUER_URL:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_REDIRECT_URI: ${APPLE_REDIRECT_URI:-}
+    volumes:
+      - tricho-jwt-shared:/shared/jwt:rw
+    secrets:
+      - couchdb_password
+      - cookie_secret
+      - google_client_secret
+      - apple_client_secret
+      - jwt_private_pem
+    networks:
+      tricho-net:
+        aliases: [tricho-auth]
+    # No depends_on on couchdb-internal (see dev sibling comment).
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -qO- http://localhost:4545/health >/dev/null 2>&1 || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    profiles: [prod, ci]
+
+  # ── Traefik — dev profile (HTTP only, Vite HMR through) ────────────────────
+  traefik-dev:
+    <<: *traefik-base
+    command:
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=tricho-net
+      - --providers.file.watch=true
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
+    labels:
+      traefik.enable: "true"
+      # CouchDB + replicator paths
+      traefik.http.routers.couch.rule: |-
+        Host(`${APP_HOST:-tricho.localhost}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
+      traefik.http.routers.couch.entrypoints: web
+      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.middlewares: tricho-security@file
+      traefik.http.services.couch.loadbalancer.server.port: "5984"
+      # tricho-auth
+      traefik.http.routers.auth.rule: Host(`${APP_HOST:-tricho.localhost}`) && PathPrefix(`/auth`)
+      traefik.http.routers.auth.entrypoints: web
+      traefik.http.routers.auth.service: auth@docker
+      traefik.http.routers.auth.middlewares: tricho-security@file
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
+      # PWA dev — catch-all with lowest priority, websocket upgrade handled
+      # automatically by Traefik for Upgrade: websocket requests.
+      traefik.http.routers.pwa.rule: Host(`${APP_HOST:-tricho.localhost}`)
+      traefik.http.routers.pwa.priority: "1"
+      traefik.http.routers.pwa.entrypoints: web
+      traefik.http.routers.pwa.service: pwa@docker
+      traefik.http.routers.pwa.middlewares: tricho-security@file
+      traefik.http.services.pwa.loadbalancer.server.port: "4321"
+    depends_on:
+      tricho-auth:
+        condition: service_healthy
+      pwa-dev:
+        condition: service_healthy
+    profiles: [dev]
+
+  # ── Traefik — ci profile (self-signed cert for tricho.test) ────────────────
+  traefik-ci:
+    <<: *traefik-base
+    command:
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=tricho-net
+      - --providers.file.watch=true
+      - --providers.file.directory=/etc/traefik/dynamic-ci
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infrastructure/traefik/dynamic-ci:/etc/traefik/dynamic-ci:ro
+      - ./infrastructure/traefik/ci-certs:/ci-certs:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.couch.rule: |-
+        Host(`tricho.test`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
+      traefik.http.routers.couch.entrypoints: websecure
+      traefik.http.routers.couch.tls: "true"
+      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.middlewares: tricho-security@file
+      traefik.http.services.couch.loadbalancer.server.port: "5984"
+      traefik.http.routers.auth.rule: Host(`tricho.test`) && PathPrefix(`/auth`)
+      traefik.http.routers.auth.entrypoints: websecure
+      traefik.http.routers.auth.tls: "true"
+      traefik.http.routers.auth.service: auth@docker
+      traefik.http.routers.auth.middlewares: tricho-security@file
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
+      # PWA served by Caddy — labels on that service handle its router.
+    depends_on:
+      tricho-auth-internal:
+        condition: service_healthy
+    profiles: [ci]
+
+  # ── Traefik — prod profile (Let's Encrypt) ─────────────────────────────────
+  traefik:
+    <<: *traefik-base
+    command:
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=tricho-net
+      - --providers.file.watch=true
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${TRAEFIK_ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+      - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.couch.rule: |-
+        Host(`${APP_HOST}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
+      traefik.http.routers.couch.entrypoints: websecure
+      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.tls.certresolver: le
+      traefik.http.routers.couch.middlewares: tricho-security@file
+      traefik.http.services.couch.loadbalancer.server.port: "5984"
+      traefik.http.routers.auth.rule: Host(`${APP_HOST}`) && PathPrefix(`/auth`)
+      traefik.http.routers.auth.entrypoints: websecure
+      traefik.http.routers.auth.service: auth@docker
+      traefik.http.routers.auth.tls.certresolver: le
+      traefik.http.routers.auth.middlewares: tricho-security@file
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
+    depends_on:
+      tricho-auth-internal:
+        condition: service_healthy
+    profiles: [prod]
+
+  # ── PWA dev — Astro/Vite dev server behind Traefik (dev profile) ──────
+  pwa-dev:
+    build:
+      context: .
+      dockerfile: infrastructure/pwa/Dockerfile
+      target: dev
+    container_name: tricho_pwa_dev
+    restart: unless-stopped
+    environment:
+      # Astro reads these and wires Vite's HMR host/port so the websocket
+      # travels through Traefik.
+      PUBLIC_PWA_HOST: ${APP_HOST:-tricho.localhost}
+      PUBLIC_PWA_PORT: ${PUBLIC_PWA_PORT:-80}
+      PUBLIC_PWA_PROTOCOL: ${PUBLIC_PWA_PROTOCOL:-http}
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./astro.config.mjs:/app/astro.config.mjs:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+    networks:
+      tricho-net:
+        aliases: [pwa-dev, pwa]
+    expose:
+      - "4321"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4321/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    labels:
+      # Traefik-dev routes to us via the `pwa@docker` service name.
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+    profiles: [dev]
+
+  # ── Static PWA — prod + ci (Caddy serves dist baked into the image) ───
+  pwa:
+    build:
+      context: .
+      dockerfile: infrastructure/pwa/Dockerfile
+      target: prod
+    container_name: tricho_pwa
+    restart: unless-stopped
+    networks:
+      - tricho-net
+    expose:
+      - "80"
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.routers.pwa.rule: Host(`${APP_HOST:-tricho.test}`)
+      traefik.http.routers.pwa.priority: "1"
+      traefik.http.routers.pwa.entrypoints: websecure
+      traefik.http.routers.pwa.tls: "true"
+      traefik.http.routers.pwa.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-le}
+      traefik.http.routers.pwa.middlewares: tricho-security@file
+      traefik.http.services.pwa.loadbalancer.server.port: "80"
+    profiles: [prod, ci]
+
+  # ── Mock OIDC provider — ci profile only ──────────────────────────────
+  # Emits RS256-signed id_tokens the real providers/google.mjs flow will
+  # treat as coming from Google. Test code POSTs /mock/identity to select
+  # which sub/email the next authorize round-trip uses.
+  mock-oidc:
+    build:
+      context: ./infrastructure/mock-oidc
+    container_name: tricho_mock_oidc
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      MOCK_OIDC_ISSUER: http://mock-oidc:8080
+      MOCK_OIDC_PUBLIC_BASE: https://tricho.test/mock-oidc
+      MOCK_OIDC_INTERNAL_BASE: http://mock-oidc:8080
+    networks:
+      - tricho-net
+    expose:
+      - "8080"
+    labels:
+      # Traefik exposes /mock-oidc/* publicly so the browser can follow the
+      # authorize redirect. Internal token exchange skips Traefik entirely.
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.routers.mock-oidc.rule: Host(`tricho.test`) && PathPrefix(`/mock-oidc`)
+      traefik.http.routers.mock-oidc.entrypoints: websecure
+      traefik.http.routers.mock-oidc.tls: "true"
+      traefik.http.routers.mock-oidc.middlewares: mock-oidc-strip@docker
+      traefik.http.middlewares.mock-oidc-strip.stripprefix.prefixes: /mock-oidc
+      traefik.http.services.mock-oidc.loadbalancer.server.port: "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    profiles: [ci]

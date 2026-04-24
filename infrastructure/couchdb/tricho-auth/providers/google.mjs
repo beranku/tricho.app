@@ -9,7 +9,7 @@ let cachedClient = null;
 
 async function getClient(config) {
   if (cachedClient) return cachedClient;
-  const issuer = await Issuer.discover('https://accounts.google.com');
+  const issuer = await Issuer.discover(config.issuerUrl);
   cachedClient = new issuer.Client({
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -70,5 +70,7 @@ export function googleConfig(env) {
     clientId: env.GOOGLE_CLIENT_ID,
     clientSecret: env.GOOGLE_CLIENT_SECRET,
     redirectUri: env.GOOGLE_REDIRECT_URI,
+    // CI runs swap this for the mock-oidc container's base URL.
+    issuerUrl: env.GOOGLE_ISSUER_URL ?? 'https://accounts.google.com',
   };
 }
