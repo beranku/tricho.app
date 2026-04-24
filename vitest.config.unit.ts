@@ -12,6 +12,13 @@ export default mergeConfig(
       include: ['src/**/*.test.ts'],
       exclude: ['src/**/*.component.test.tsx'],
       coverage: {
+        include: [
+          'src/auth/**/*.ts',
+          'src/crypto/**/*.ts',
+          'src/db/**/*.ts',
+          'src/sync/**/*.ts',
+        ],
+        exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/db/types.ts'],
         reportsDirectory: 'coverage/unit',
       },
     },

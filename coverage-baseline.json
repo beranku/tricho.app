@@ -1,0 +1,24 @@
+{
+  "unit": {
+    "lines": 88.68,
+    "branches": 88.17,
+    "functions": 87.57,
+    "statements": 88.68
+  },
+  "component": {
+    "lines": 27.93,
+    "branches": 75.64,
+    "functions": 37.03,
+    "statements": 27.93
+  },
+  "backend": {
+    "lines": 49.34,
+    "branches": 66.16,
+    "functions": 51.51,
+    "statements": 49.34
+  },
+  "_meta": {
+    "capturedAt": "2026-04-24T21:05:36.953Z",
+    "tool": "capture-baseline.mjs"
+  }
+}

@@ -28,6 +28,9 @@ infrastructure/.env
 playwright-report/
 test-results/
 
+# Coverage output (per-tier summaries — committed baseline is coverage-baseline.json)
+coverage/
+
 # Infrastructure secrets
 infrastructure/traefik/acme.json
 

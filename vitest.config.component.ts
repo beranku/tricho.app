@@ -13,6 +13,7 @@ export default mergeConfig(
       passWithNoTests: true,
       coverage: {
         include: ['src/components/**/*.tsx'],
+        exclude: ['src/components/**/*.component.test.tsx'],
         reportsDirectory: 'coverage/component',
       },
     },
