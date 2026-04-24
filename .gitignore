@@ -24,6 +24,10 @@ infrastructure/.env
 # Runtime-decrypted secrets (SOPS → tmpfs-ish staging for compose)
 .secrets-runtime/
 
+# Playwright run artifacts
+playwright-report/
+test-results/
+
 # Infrastructure secrets
 infrastructure/traefik/acme.json
 

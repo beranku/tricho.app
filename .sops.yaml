@@ -17,19 +17,15 @@ creation_rules:
   - path_regex: secrets/dev\.sops\.yaml$
     key_groups:
       - age:
-          # Dev recipients — add every developer's age pubkey here.
-          # Example:
-          #   - age1xyz...           # alice (laptop)
-          #   - age1abc...           # bob (laptop)
+          - age122p0m0nhdlz0ehagm8npdp4lhafzlezpm9xxsuvm0j0prx0cypqq0k32g7  # honza (laptop)
 
   - path_regex: secrets/ci\.sops\.yaml$
     key_groups:
       - age:
-          # CI age pubkey (matches SOPS_AGE_KEY in GitHub Actions secrets)
-          # plus devs who need to edit CI secrets.
-          # Example:
-          #   - age1ci...            # CI runner
-          #   - age1xyz...           # alice (for editing ci.sops.yaml)
+          # Dev is (temporarily) also a CI recipient so initial bootstrap
+          # can author ci.sops.yaml. A dedicated CI-only keypair lives in
+          # the SOPS_AGE_KEY GitHub Actions secret once configured.
+          - age122p0m0nhdlz0ehagm8npdp4lhafzlezpm9xxsuvm0j0prx0cypqq0k32g7  # honza (laptop)
 
   - path_regex: secrets/prod\.sops\.yaml$
     key_groups:

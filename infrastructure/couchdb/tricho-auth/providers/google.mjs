@@ -41,7 +41,9 @@ export async function startAuthorize(config) {
 
 export async function handleCallback(config, { query, state, nonce, codeVerifier }) {
   const client = await getClient(config);
-  const params = client.callbackParams({ url: '/?' + new URLSearchParams(query).toString() });
+  // `callbackParams` accepts a URL string or IncomingMessage — pass the
+  // reconstructed query string directly.
+  const params = client.callbackParams('/?' + new URLSearchParams(query).toString());
   const tokenSet = await client.callback(config.redirectUri, params, {
     state,
     nonce,

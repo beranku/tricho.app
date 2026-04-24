@@ -25,6 +25,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // tricho.test is an RFC 6761 reserved TLD that never resolves — map it
+    // to the local host via Chromium's DNS-override flag. CI adds the same
+    // mapping via /etc/hosts; this keeps local `npx playwright test` viable
+    // without system changes.
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP tricho.test 127.0.0.1'],
+    },
   },
   projects: [
     {

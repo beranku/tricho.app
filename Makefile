@@ -42,6 +42,8 @@ prod-local: _check-prereqs _guard-profile _render-secrets ## Run the prod topolo
 
 .PHONY: ci
 ci: _check-prereqs _guard-profile _render-secrets ## Bring up the CI profile (self-signed TLS + mock OIDC)
+	APP_HOST=tricho.test \
+	APP_ORIGIN=https://tricho.test \
 	GOOGLE_ISSUER_URL=http://mock-oidc:8080 \
 	GOOGLE_CLIENT_ID=mock-client \
 	GOOGLE_REDIRECT_URI=https://tricho.test/auth/google/callback \
@@ -70,7 +72,10 @@ e2e: _check-prereqs ## Run Playwright end-to-end suite against the ci profile st
 	echo "e2e project: $$project"; \
 	trap "COMPOSE_PROJECT_NAME=$$project $(COMPOSE) $(ENV_FILE_ARGS) -f $(COMPOSE_FILE) --profile ci down -v >/dev/null 2>&1 || true; rm -rf $(SECRETS_DIR)" EXIT INT TERM; \
 	$(MAKE) _render-secrets PROFILE=ci; \
-	COMPOSE_PROJECT_NAME=$$project GOOGLE_ISSUER_URL=http://mock-oidc:8080 \
+	COMPOSE_PROJECT_NAME=$$project \
+	  APP_HOST=tricho.test \
+	  APP_ORIGIN=https://tricho.test \
+	  GOOGLE_ISSUER_URL=http://mock-oidc:8080 \
 	  GOOGLE_CLIENT_ID=mock-client \
 	  GOOGLE_REDIRECT_URI=https://tricho.test/auth/google/callback \
 	  $(COMPOSE) $(ENV_FILE_ARGS) -f $(COMPOSE_FILE) --profile ci up -d --build; \

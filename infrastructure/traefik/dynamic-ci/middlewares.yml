@@ -1,1 +1,32 @@
-../dynamic/middlewares.yml
+# Shared middlewares referenced via @file from the compose labels.
+http:
+  middlewares:
+    tricho-security:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        # CSP is deliberately permissive enough to let the PWA talk to the same
+        # origin for /auth/* and /userdb-*. Tighten further as the app surface
+        # stabilises.
+        # script-src allows 'unsafe-inline' so the OAuth callback HTML from
+        # tricho-auth can do its one-shot `location.replace(#tricho-auth-complete)`
+        # redirect with the inline <script> that stashes tokens in
+        # sessionStorage. PWA pages are fully bundled and don't rely on
+        # inline scripts, so this is effectively scoped to the callback
+        # surface. Harden by moving to nonce/hash once the callback content
+        # stabilises.
+        contentSecurityPolicy: >-
+          default-src 'self';
+          connect-src 'self';
+          img-src 'self' data: blob:;
+          script-src 'self' 'unsafe-inline';
+          style-src 'self' 'unsafe-inline';
+          font-src 'self' data:;
+          frame-ancestors 'none';
+          base-uri 'self';
+          form-action 'self'
