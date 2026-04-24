@@ -7,8 +7,16 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config vitest.config.unit.ts && vitest run --config vitest.config.component.ts",
+    "test:watch": "vitest --config vitest.config.unit.ts",
+    "test:unit": "vitest run --config vitest.config.unit.ts",
+    "test:component": "vitest run --config vitest.config.component.ts",
+    "test:backend": "vitest run --config vitest.config.backend.ts",
+    "test:backend:integration": "vitest run --config vitest.config.integration.ts",
+    "test:e2e": "playwright test",
+    "test:smoke": "bash scripts/smoke/run-all.sh",
+    "test:all": "npm run test:unit && npm run test:component && npm run test:backend && npm run test:backend:integration && npm run test:smoke && npm run test:e2e",
+    "test:coverage": "vitest run --config vitest.config.unit.ts --coverage && vitest run --config vitest.config.component.ts --coverage && vitest run --config vitest.config.backend.ts --coverage",
     "typecheck": "astro check && tsc --noEmit"
   },
   "dependencies": {
@@ -23,13 +31,18 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/pouchdb-adapter-memory": "^6.1.6",
     "@types/pouchdb-browser": "^6.1.5",
     "@types/pouchdb-find": "^7.3.3",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.0.0",
+    "testcontainers": "^11.14.0",
     "vitest": "^3.0.0"
   }
 }
