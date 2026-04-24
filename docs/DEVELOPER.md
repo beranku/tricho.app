@@ -246,11 +246,19 @@ PORT=3000
 | `dev` | `astro dev` | Start development server (port 4321) |
 | `build` | `astro build` | Build production bundle |
 | `preview` | `astro preview` | Preview production build locally |
-| `test` | `vitest run` | Run all tests once |
-| `test:watch` | `vitest` | Run tests in watch mode |
-| `test:coverage` | `vitest --coverage` | Run tests with coverage report |
-| `lint` | `eslint src/` | Lint TypeScript files |
-| `typecheck` | `tsc --noEmit` | Check TypeScript types |
+| `test` | unit + component vitest | Fast loop (< 15 s, no Docker) — pyramid tiers 1-2 |
+| `test:watch` | `vitest` | Watch mode for the unit tier |
+| `test:unit` | unit config | Pure logic (src/auth, src/crypto, src/db, src/sync) |
+| `test:component` | component config | React Testing Library jsdom tests under src/components/ |
+| `test:backend` | backend config | Node-side unit tests for infrastructure/**/test/ |
+| `test:backend:integration` | integration config | testcontainers-backed real CouchDB suites |
+| `test:e2e` | `playwright test` | Browser E2E against the ci compose stack |
+| `test:smoke` | `scripts/smoke/run-all.sh` | Infra sanity: compose config, secrets lint, healthcheck declared |
+| `test:coverage` | all tiers with `--coverage` | Regenerates `coverage/*/coverage-summary.json` for baseline diff |
+| `test:all` | every tier | Full sweep (minutes) |
+| `typecheck` | `astro check && tsc --noEmit` | Check TypeScript types |
+
+See [`docs/TESTING.md`](./TESTING.md) for the pyramid contract, per-tier runtime budgets, the decision tree, and the coverage baseline procedure.
 
 #### Server (`server/package.json`)
 

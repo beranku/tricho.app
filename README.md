@@ -246,6 +246,22 @@ export default defineConfig({
 
 Používá `astro/tsconfigs/strict` pro přísnou typovou kontrolu.
 
+## Testing
+
+TrichoApp uses a six-tier test pyramid — pure unit / component / backend unit / backend integration / E2E / smoke. `npm test` runs the fast unit + component loop (< 15 s, no Docker). See [`docs/TESTING.md`](./docs/TESTING.md) for the pyramid contract, per-tier budgets, the "which tier does my test belong to?" decision tree, and coverage baseline procedure.
+
+Quick commands:
+
+```bash
+npm test                         # fast loop: unit + component
+npm run test:backend             # Node-side unit tests
+npm run test:backend:integration # testcontainers-backed real-CouchDB tests
+npm run test:e2e                 # Playwright (requires `make ci` up)
+npm run test:smoke               # compose + secrets + healthcheck smoke
+npm run test:coverage            # per-tier coverage + HTML report
+npm run test:all                 # everything
+```
+
 ## Running the stack
 
 The whole stack — CouchDB, `tricho-auth`, Traefik, the PWA — lives behind one root `compose.yml` and one `Makefile`. Three profiles select which subset runs:
