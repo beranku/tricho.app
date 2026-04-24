@@ -57,13 +57,18 @@ x-traefik-base: &traefik-base
 services:
   # ── CouchDB + auth-proxy — baseline, all profiles ──────────────────────────
   couchdb:
-    image: couchdb:3
+    build:
+      context: ./infrastructure/couchdb
+      dockerfile: Dockerfile
     container_name: tricho_couchdb
     restart: unless-stopped
     # Entrypoint shim splices tricho-auth's JWT public key into local.ini
     # before CouchDB boots. `--` keeps compatibility with the upstream image's
     # tini invocation (the shim exec's /docker-entrypoint.sh itself).
-    entrypoint: ["/opt/couchdb/tricho-entrypoint.sh"]
+    entrypoint: ["/usr/bin/tini", "--", "/opt/couchdb/tricho-entrypoint.sh"]
+    # When compose overrides entrypoint:, the image's CMD is cleared — make
+    # it explicit so the shim can hand off to couchdb.
+    command: ["/opt/couchdb/bin/couchdb"]
     environment:
       COUCHDB_USER: ${COUCHDB_USER:-admin}
       # Official couchdb image reads the password from this file path.
@@ -76,8 +81,6 @@ services:
       - "127.0.0.1:${COUCHDB_PORT:-5984}:5984"
     volumes:
       - couchdb-data:/opt/couchdb/data
-      - ./infrastructure/couchdb/local.ini:/opt/couchdb/etc/local.d/tricho.ini:ro
-      - ./infrastructure/couchdb/entrypoint.sh:/opt/couchdb/tricho-entrypoint.sh:ro
       - tricho-jwt-shared:/shared/jwt:ro
     networks:
       - tricho-net
@@ -92,16 +95,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.services.couch.loadbalancer.server.port: "5984"
     profiles: [dev]
 
   # Same image + config as `couchdb` but without host-port publishing.
   # Used by prod + ci so external scanners can't reach 5984 on the host.
   # Keeps the network alias `couchdb` so other services' DNS still works.
   couchdb-internal:
-    image: couchdb:3
+    build:
+      context: ./infrastructure/couchdb
+      dockerfile: Dockerfile
     container_name: tricho_couchdb
     restart: unless-stopped
-    entrypoint: ["/opt/couchdb/tricho-entrypoint.sh"]
+    entrypoint: ["/usr/bin/tini", "--", "/opt/couchdb/tricho-entrypoint.sh"]
+    # When compose overrides entrypoint:, the image's CMD is cleared — make
+    # it explicit so the shim can hand off to couchdb.
+    command: ["/opt/couchdb/bin/couchdb"]
     environment:
       COUCHDB_USER: ${COUCHDB_USER:-admin}
       # Official couchdb image reads the password from this file path.
@@ -110,8 +122,6 @@ services:
       - couchdb_password
     volumes:
       - couchdb-data:/opt/couchdb/data
-      - ./infrastructure/couchdb/local.ini:/opt/couchdb/etc/local.d/tricho.ini:ro
-      - ./infrastructure/couchdb/entrypoint.sh:/opt/couchdb/tricho-entrypoint.sh:ro
       - tricho-jwt-shared:/shared/jwt:ro
     networks:
       tricho-net:
@@ -124,6 +134,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.services.couch.loadbalancer.server.port: "5984"
     profiles: [prod, ci]
 
   tricho-auth:
@@ -176,6 +190,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
     profiles: [dev]
 
   tricho-auth-internal:
@@ -225,6 +243,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
     profiles: [prod, ci]
 
   # ── Traefik — dev profile (HTTP only, Vite HMR through) ────────────────────
@@ -247,27 +269,23 @@ services:
       - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
     labels:
       traefik.enable: "true"
-      # CouchDB + replicator paths
+      # Route definitions only — service ports live on their owning backend
+      # container labels, so Traefik doesn't accidentally load-balance via
+      # the Traefik container itself.
       traefik.http.routers.couch.rule: |-
         Host(`${APP_HOST:-tricho.localhost}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
       traefik.http.routers.couch.entrypoints: web
       traefik.http.routers.couch.service: couch@docker
       traefik.http.routers.couch.middlewares: tricho-security@file
-      traefik.http.services.couch.loadbalancer.server.port: "5984"
-      # tricho-auth
       traefik.http.routers.auth.rule: Host(`${APP_HOST:-tricho.localhost}`) && PathPrefix(`/auth`)
       traefik.http.routers.auth.entrypoints: web
       traefik.http.routers.auth.service: auth@docker
       traefik.http.routers.auth.middlewares: tricho-security@file
-      traefik.http.services.auth.loadbalancer.server.port: "4545"
-      # PWA dev — catch-all with lowest priority, websocket upgrade handled
-      # automatically by Traefik for Upgrade: websocket requests.
       traefik.http.routers.pwa.rule: Host(`${APP_HOST:-tricho.localhost}`)
       traefik.http.routers.pwa.priority: "1"
       traefik.http.routers.pwa.entrypoints: web
       traefik.http.routers.pwa.service: pwa@docker
       traefik.http.routers.pwa.middlewares: tricho-security@file
-      traefik.http.services.pwa.loadbalancer.server.port: "4321"
     depends_on:
       tricho-auth:
         condition: service_healthy
@@ -306,13 +324,11 @@ services:
       traefik.http.routers.couch.tls: "true"
       traefik.http.routers.couch.service: couch@docker
       traefik.http.routers.couch.middlewares: tricho-security@file
-      traefik.http.services.couch.loadbalancer.server.port: "5984"
       traefik.http.routers.auth.rule: Host(`tricho.test`) && PathPrefix(`/auth`)
       traefik.http.routers.auth.entrypoints: websecure
       traefik.http.routers.auth.tls: "true"
       traefik.http.routers.auth.service: auth@docker
       traefik.http.routers.auth.middlewares: tricho-security@file
-      traefik.http.services.auth.loadbalancer.server.port: "4545"
       # PWA served by Caddy — labels on that service handle its router.
     depends_on:
       tricho-auth-internal:
@@ -354,13 +370,11 @@ services:
       traefik.http.routers.couch.service: couch@docker
       traefik.http.routers.couch.tls.certresolver: le
       traefik.http.routers.couch.middlewares: tricho-security@file
-      traefik.http.services.couch.loadbalancer.server.port: "5984"
       traefik.http.routers.auth.rule: Host(`${APP_HOST}`) && PathPrefix(`/auth`)
       traefik.http.routers.auth.entrypoints: websecure
       traefik.http.routers.auth.service: auth@docker
       traefik.http.routers.auth.tls.certresolver: le
       traefik.http.routers.auth.middlewares: tricho-security@file
-      traefik.http.services.auth.loadbalancer.server.port: "4545"
     depends_on:
       tricho-auth-internal:
         condition: service_healthy
@@ -393,7 +407,11 @@ services:
     expose:
       - "4321"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4321/ >/dev/null 2>&1 || exit 1"]
+      # node:22-alpine has no wget/curl; use node itself.
+      test:
+        - CMD-SHELL
+        - |-
+          node -e "require('http').get('http://localhost:4321/', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 10
@@ -402,6 +420,7 @@ services:
       # Traefik-dev routes to us via the `pwa@docker` service name.
       traefik.enable: "true"
       traefik.docker.network: tricho-net
+      traefik.http.services.pwa.loadbalancer.server.port: "4321"
     profiles: [dev]
 
   # ── Static PWA — prod + ci (Caddy serves dist baked into the image) ───

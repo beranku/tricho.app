@@ -9,6 +9,17 @@
 
 set -eu
 
+# CouchDB's stock image reads `COUCHDB_PASSWORD` from the literal env var only.
+# We want it from a file-mounted Docker secret, so shim it: if the _FILE path
+# is readable and the literal is empty, hydrate the env before the stock
+# entrypoint runs. Password ends up baked into local.d/docker.ini (the same
+# path the image would write it to from the env var), so nothing sensitive
+# leaks into `docker inspect` longer than startup.
+if [ -z "${COUCHDB_PASSWORD:-}" ] && [ -n "${COUCHDB_PASSWORD_FILE:-}" ] && [ -r "$COUCHDB_PASSWORD_FILE" ]; then
+  COUCHDB_PASSWORD="$(cat "$COUCHDB_PASSWORD_FILE")"
+  export COUCHDB_PASSWORD
+fi
+
 pub="${TRICHO_JWT_PUBLIC_KEY_PATH:-/shared/jwt/jwt-public.pem}"
 pub_old="${TRICHO_JWT_OLD_PUBLIC_KEY_PATH:-/shared/jwt/jwt-public-old.pem}"
 jwt_ini="/opt/couchdb/etc/local.d/jwt.ini"
@@ -42,5 +53,6 @@ pem_body() {
 } > "$jwt_ini"
 chmod 644 "$jwt_ini"
 echo "[couchdb-entrypoint] wrote ${jwt_ini} with kid=${kid}"
+echo "[couchdb-entrypoint] handing off to /docker-entrypoint.sh $*"
 
 exec /docker-entrypoint.sh "$@"
