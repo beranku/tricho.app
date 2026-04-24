@@ -49,3 +49,4 @@ infrastructure/traefik/.env
 
 # Tricho-auth generated dev JWT keys
 infrastructure/couchdb/tricho-auth/node_modules/
+tricho-impl-v1.tar.gz

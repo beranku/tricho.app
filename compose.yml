@@ -252,6 +252,9 @@ services:
   # ── Traefik — dev profile (HTTP only, Vite HMR through) ────────────────────
   traefik-dev:
     <<: *traefik-base
+    # no-healthcheck: Traefik returns 404 on any non-routed request, so a
+    # generic HTTP probe is noise. Container supervision + restart policy
+    # on crash is adequate for an edge proxy.
     command:
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
       - --accesslog=true
@@ -296,6 +299,7 @@ services:
   # ── Traefik — ci profile (self-signed cert for tricho.test) ────────────────
   traefik-ci:
     <<: *traefik-base
+    # no-healthcheck: same reasoning as traefik-dev.
     command:
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
       - --accesslog=true
@@ -338,6 +342,7 @@ services:
   # ── Traefik — prod profile (Let's Encrypt) ─────────────────────────────────
   traefik:
     <<: *traefik-base
+    # no-healthcheck: same reasoning as traefik-dev.
     command:
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
       - --accesslog=true
@@ -431,6 +436,9 @@ services:
       target: prod
     container_name: tricho_pwa
     restart: unless-stopped
+    # no-healthcheck: Caddy is a stateless static server. Traefik's router
+    # acts as the effective liveness check — a failing pwa shows as 5xx
+    # upstream in Traefik logs.
     networks:
       - tricho-net
     expose:

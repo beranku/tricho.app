@@ -60,6 +60,14 @@ down: ## Stop every profile and remove runtime secrets
 logs: ## Tail logs of the running stack
 	$(COMPOSE) $(ENV_FILE_ARGS) -f $(COMPOSE_FILE) logs -f --tail=200
 
+.PHONY: test-smoke
+test-smoke: ## Run the infra smoke suite (compose config, secrets lint, healthcheck declaration)
+	@bash scripts/smoke/run-all.sh
+
+.PHONY: test-all
+test-all: test-smoke ## Run every test tier (unit + component + backend unit + integration + smoke + e2e)
+	@npm run test:all
+
 .PHONY: e2e
 e2e: _check-prereqs ## Run Playwright end-to-end suite against the ci profile stack
 	@set -eu; \
