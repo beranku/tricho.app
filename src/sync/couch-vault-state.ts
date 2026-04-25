@@ -13,6 +13,7 @@
 
 import type { VaultDb } from '../db/pouch';
 import type { WrappedKeyData } from '../db/keystore';
+import { userDbUrlFor } from './couch-auth';
 
 export const VAULT_STATE_DOC_ID = 'vault-state';
 
@@ -21,6 +22,13 @@ export interface VaultStateDoc {
   _rev?: string;
   type: 'vault-state';
   updatedAt: number;
+  /**
+   * The shared vault id. Joining devices MUST adopt this so payload `kid`
+   * matches across devices. Older docs without this field cannot be used
+   * for second-device bootstrap; they will be replaced on next sign-in
+   * by the device that owns the vault.
+   */
+  vaultId: string;
   deviceSalt: string;
   wrappedDekRs: WrappedKeyData;
   version: number;
@@ -28,7 +36,7 @@ export interface VaultStateDoc {
 
 export async function uploadVaultState(
   db: VaultDb,
-  payload: { deviceSalt: string; wrappedDekRs: WrappedKeyData; version: number },
+  payload: { vaultId: string; deviceSalt: string; wrappedDekRs: WrappedKeyData; version: number },
 ): Promise<void> {
   // Cast through unknown: the vault-state doc shares the same DB as encrypted
   // docs but has a different shape (no `payload` field — wrappedDekRs is
@@ -41,6 +49,7 @@ export async function uploadVaultState(
     ...(existing?._rev ? { _rev: existing._rev } : {}),
     type: 'vault-state',
     updatedAt: Date.now(),
+    vaultId: payload.vaultId,
     deviceSalt: payload.deviceSalt,
     wrappedDekRs: payload.wrappedDekRs,
     version: payload.version,
@@ -55,4 +64,38 @@ export async function downloadVaultState(db: VaultDb): Promise<VaultStateDoc | n
     if ((err as { status?: number } | null)?.status === 404) return null;
     throw err;
   }
+}
+
+/**
+ * HTTP-only variant of downloadVaultState.
+ *
+ * Used by the sign-in routing decision in AppShell, which runs *before* any
+ * vault is unlocked — so there is no DEK and no PouchDB to talk to. We fetch
+ * the well-known doc straight from the per-user CouchDB with the OAuth JWT.
+ * Returns the parsed doc on 200, null on 404, throws on any other failure.
+ */
+export async function fetchVaultStateOverHttp(
+  username: string,
+  jwt: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<VaultStateDoc | null> {
+  const url = `${userDbUrlFor(username)}/${VAULT_STATE_DOC_ID}`;
+  const res = await fetchImpl(url, {
+    headers: { authorization: `Bearer ${jwt}`, accept: 'application/json' },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`fetchVaultStateOverHttp: HTTP ${res.status} ${res.statusText}`);
+  }
+  const doc = (await res.json()) as VaultStateDoc;
+  if (
+    !doc ||
+    doc._id !== VAULT_STATE_DOC_ID ||
+    !doc.wrappedDekRs ||
+    !doc.deviceSalt ||
+    !doc.vaultId
+  ) {
+    throw new Error('fetchVaultStateOverHttp: response is not a vault-state doc');
+  }
+  return doc;
 }
