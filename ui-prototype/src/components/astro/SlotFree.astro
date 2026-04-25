@@ -1,0 +1,42 @@
+---
+import { formatTime } from '../../lib/format/time';
+import { formatFreeSlot } from '../../lib/format/duration';
+
+/**
+ * Volný slot — gap mezi appointments. Plus vpravo (Caveat) indikuje
+ * "tap to add". Handler onClick je budoucí (placeholder).
+ */
+interface Props {
+  startAt: Date;
+  durationMinutes: number;
+}
+
+const { startAt, durationMinutes } = Astro.props;
+const timeStr = formatTime(startAt);
+const freeStr = formatFreeSlot(durationMinutes);
+---
+
+<button class="slot slot-free-row" type="button" aria-label="Přidat termín">
+  <span class="ty-slot-time dim">{timeStr}</span>
+  <span class="ty-free">{freeStr}</span>
+  <span class="ty-plus">+</span>
+</button>
+
+<style>
+  .slot {
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    align-items: start;
+    padding: 14px 20px;
+    gap: 16px;
+    min-height: 64px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  .slot:active {
+    background: var(--surface-2);
+  }
+</style>

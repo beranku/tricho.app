@@ -81,6 +81,9 @@ export async function openVaultDb(
 
   // Indexes accelerate `queryDecrypted` by type — the server-visible fields are
   // non-sensitive (id/type/updatedAt) and so can be indexed without leaking anything.
+  // Note: appointment.startAt is sensitive and lives only inside `payload`, so
+  // schedule range queries cannot use a `[type, startAt]` index. They scan by
+  // type via this index and filter client-side after decrypt instead.
   await pouch.createIndex({ index: { fields: ['type', 'updatedAt'] } }).catch(() => void 0);
 
   instance = { pouch, vaultId, dek, dbName };

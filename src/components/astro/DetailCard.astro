@@ -1,0 +1,45 @@
+---
+// Outer card on the client-detail page. Slot in <Section>s with .detail-section
+// class, separated by line-soft dividers.
+---
+
+<div class="detail-card">
+  <slot />
+</div>
+
+<style>
+  .detail-card {
+    margin: 0 12px 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    padding: 20px 20px 4px;
+    box-shadow: var(--card-shadow);
+    position: relative;
+    z-index: 2;
+  }
+  .detail-card :global(.detail-section) {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .detail-card :global(.detail-section:last-child) {
+    border-bottom: none;
+  }
+  .detail-card :global(.detail-section:first-child) {
+    padding-top: 2px;
+  }
+  .detail-card :global(.section-head-row) {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .detail-card :global(.section-meta) {
+    font-family: 'Geist', sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+</style>

@@ -1,0 +1,117 @@
+/* ═══════════════════════════════════════════════════════════════════
+   TRICHO.APP — DESIGN TOKENS
+   Zdroj pravdy pro všechny barvy, spacing, radius, stíny.
+   Viz tricho-north-star.md § 3 pro kompletní kontext a pravidla.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ─── Pozadí & papír ─── */
+  --stage: #F3EDE0;
+  --bg: #FDFAF3;
+  --surface: #FFFFFE;
+  --surface-2: #FAF5EC;
+  --line: #EBE4D5;
+  --line-soft: #F2ECE0;
+
+  /* ─── Text ─── */
+  --ink: #1C1917;
+  --ink-espresso: #2A231B;
+  --ink-2: #44403C;
+  --ink-3: #736D64;
+  --ink-4: #9F9990;
+
+  /* ─── Data & stav ─── */
+  --teal: #0E7490;
+  --teal-strong: #134E5E;
+  --teal-tint: rgba(14, 116, 144, 0.06);
+  --teal-border: rgba(14, 116, 144, 0.22);
+
+  /* ─── Hand-drawn & warning ─── */
+  --copper: #B06E52;
+  --copper-mid: #9A5E44;
+  --copper-border: rgba(176, 110, 82, 0.32);
+  --amber: #B97940;
+
+  /* ─── Efekty ─── */
+  --card-shadow:
+    0 1px 2px rgba(69, 48, 28, 0.03),
+    0 4px 12px -4px rgba(69, 48, 28, 0.04);
+  --sheet-shadow: 0 -8px 24px -4px rgba(42, 35, 27, 0.12);
+  --backdrop: rgba(28, 25, 23, 0.32);
+
+  /* ─── Papírová textura ─── */
+  --paper-blend: multiply;
+  --paper-opacity: 0.5;
+  --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.24 0 0 0 0 0.14 0 0 0 0.22 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.5'/></svg>");
+
+  /* ─── Rádius ─── */
+  --radius-chip: 10px;
+  --radius-card: 14px;
+  --radius-panel: 20px;
+  --radius-btn: 12px;
+  --radius-fab: 22px;
+
+  /* ─── Tranzice ─── */
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 0.15s;
+  --t-std: 0.22s;
+  --t-sheet: 0.32s;
+
+  /* ─── Sticky pozice ─── */
+  --sticky-top: 46px;       /* Chrome buttons + sticky day header */
+  --chrome-button-size: 44px;
+  --chrome-padding: 6px 12px 10px;
+  --day-header-padding: 6px 68px 10px; /* 12 + 44 + 12 = 68px na tlačítka */
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK MODE — espresso paper, cream ink, shifted accents
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root[data-theme="dark"] {
+  --stage: #17120E;
+  --bg: #211A15;
+  --surface: #29211B;
+  --surface-2: #32281F;
+  --line: #3E3228;
+  --line-soft: #332921;
+
+  --ink: #F5EDE0;
+  --ink-espresso: #F5EDE0;
+  --ink-2: #D4C8B8;
+  --ink-3: #9D9385;
+  --ink-4: #6F665C;
+
+  --teal: #2494B2;
+  --teal-strong: #5FAFC5;
+  --teal-tint: rgba(36, 148, 178, 0.14);
+  --teal-border: rgba(36, 148, 178, 0.34);
+
+  --copper: #C48867;
+  --copper-mid: #B37959;
+  --copper-border: rgba(196, 136, 103, 0.38);
+  --amber: #D09860;
+
+  --card-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 4px 12px -4px rgba(0, 0, 0, 0.28);
+  --sheet-shadow: 0 -8px 24px -4px rgba(0, 0, 0, 0.4);
+  --backdrop: rgba(0, 0, 0, 0.5);
+
+  --paper-blend: screen;
+  --paper-opacity: 0.45;
+  /* Dark paper grain — slightly lighter noise matrix */
+  --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.82 0 0 0 0 0.74 0 0 0 0 0.62 0 0 0 0.18 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.45'/></svg>");
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0.01s;
+    --t-std: 0.01s;
+    --t-sheet: 0.1s;
+  }
+}

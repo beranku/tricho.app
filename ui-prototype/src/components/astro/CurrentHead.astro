@@ -1,0 +1,49 @@
+---
+import { formatTime, formatRemaining } from '../../lib/format/time';
+
+/**
+ * Header probíhajícího zákroku v detailu klienta (Phone B).
+ * Vlevo čas začátku, vpravo alergen badge + countdown.
+ */
+interface Props {
+  startAt: Date;
+  endAt: Date;
+  /** Název alergenu, pokud je v zákroku obsažen (např. "Amoniak") */
+  allergen?: string;
+}
+
+const { startAt, endAt, allergen } = Astro.props;
+const timeStr = formatTime(startAt);
+const remaining = formatRemaining(endAt);
+---
+
+<div class="current-head">
+  <span class="ty-header-main current-main">{timeStr}</span>
+  {(allergen || remaining) && (
+    <div class="alert-meta">
+      {allergen && <span class="ty-allergen">{allergen}</span>}
+      {remaining && <span class="ty-remaining">{remaining}</span>}
+    </div>
+  )}
+</div>
+
+<style>
+  .current-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 16px;
+  }
+
+  .current-main {
+    font-variation-settings: 'opsz' 32;
+    font-size: 22px;
+  }
+
+  .alert-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+</style>

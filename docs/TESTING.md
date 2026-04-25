@@ -57,9 +57,21 @@ Concrete examples to mirror:
 |---|---|
 | PIN derivation with two salts | `src/auth/local-pin.test.ts` |
 | `OAuthScreen` renders + button wiring | `src/components/OAuthScreen.component.test.tsx` |
+| Czech format helper edge cases | `src/lib/format/format.test.ts` |
+| Free-slot synthesis / `currentStatus` purity | `src/lib/appointment/appointment.test.ts` |
+| Appointment encryption round-trip + AAD splice | `src/lib/appointment/query.test.ts` |
+| `_local/theme` doc round-trip + non-replication | `src/lib/store/theme.test.ts` |
+| Bottom-sheet open/ESC/backdrop | `src/components/islands/BottomSheet.component.test.tsx` |
+| `ThemeToggle` wiring through nanostore | `src/components/islands/ThemeToggle.component.test.tsx` |
+| Hex-literal lint over Astro components | `src/components/astro/__tests__/no-hardcoded-hex.test.ts` |
 | `meta.ensureDatabase()` idempotence | `infrastructure/couchdb/tricho-auth/test/meta.test.mjs` |
 | CouchDB accepts our JWT | `infrastructure/couchdb/tricho-auth/test/integration/jwt-acceptance.integration.test.mjs` |
 | Full OAuth → PouchDB write round-trip | `tests/e2e/oauth-sync-roundtrip.spec.ts` |
+| Cross-device sync with RS bootstrap (two `BrowserContext`s) | `tests/e2e/cross-device-sync.spec.ts` |
+| `JoinVaultScreen` renders + RS submit wiring | `src/components/JoinVaultScreen.component.test.tsx` |
+| Virtual WebAuthn authenticator for headless passkey registration | `tests/e2e/fixtures/webauthn.ts` |
+| CouchDB row inspection via Traefik with admin creds | `tests/e2e/fixtures/admin.ts` |
+| Static prototype-UI golden path (no backend) | `tests/e2e/prototype-ui.spec.ts` (run via `npm run test:e2e:ui`) |
 | "All three compose profiles parse" | `scripts/smoke/compose-config.sh` |
 
 ## The fast loop

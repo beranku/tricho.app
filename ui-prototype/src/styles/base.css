@@ -1,0 +1,128 @@
+/* ═══════════════════════════════════════════════════════════════════
+   TRICHO.APP — BASE RESET & FONTS
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Reset ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--stage);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11' 1;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ─── Universal transitions — theme-related properties ─── */
+* {
+  transition:
+    background-color var(--t-std) ease,
+    color var(--t-std) ease,
+    border-color var(--t-std) ease,
+    opacity var(--t-std) ease;
+}
+
+/* ─── Focus ring (keyboard nav only) ─── */
+*:focus {
+  outline: none;
+}
+*:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FONTS — self-hosted pro offline PWA
+   Soubory v /public/fonts/, viz fonts/README.md
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Fraunces — variable optical size + weight */
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/fonts/Fraunces-VariableFont_SOFT,WONK,opsz,wght.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Geist — variable weight */
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-VariableFont_wght.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Caveat — cursive handwriting */
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/Caveat-VariableFont_wght.woff2') format('woff2-variations');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Patrick Hand — printed handwriting */
+@font-face {
+  font-family: 'Patrick Hand';
+  src: url('/fonts/PatrickHand-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAPER GRAIN OVERLAY — fixed přes celý viewport
+   Použito v AppLayout.astro
+   ═══════════════════════════════════════════════════════════════════ */
+
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--paper-grain);
+  mix-blend-mode: var(--paper-blend);
+  opacity: var(--paper-opacity);
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STAGE (pozadí za telefony — jen pro prototyping / landscape desktop view)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.stage {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: var(--stage);
+}

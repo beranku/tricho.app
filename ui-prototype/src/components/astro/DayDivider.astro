@@ -1,0 +1,61 @@
+---
+import { formatShortDate } from '../../lib/format/date';
+
+/**
+ * Sticky hlavička sekce NE-dnešního dne. Struktura identická s DayHeaderToday
+ * (kicker + datum na středu), ale s flanking horizontálními linkami, které
+ * mizí při stuck stavu.
+ *
+ * Stuck state detekuje PhoneScroll island a přidává .stuck class.
+ */
+interface Props {
+  date: Date;
+  /** Zobrazovaný kicker (Zítra, Středa, Pátek...) */
+  kicker: string;
+}
+
+const { date, kicker } = Astro.props;
+const dateStr = formatShortDate(date);
+---
+
+<div class="dv-a-wrap">
+  <div class="dv-a">
+    <span class="dv-a-line"></span>
+    <span class="ty-kicker">{kicker}</span>
+    <span class="dv-a-line"></span>
+  </div>
+  <div class="ty-header-main dv-a-main">{dateStr}</div>
+</div>
+
+<style>
+  .dv-a-wrap {
+    position: sticky;
+    top: var(--sticky-top);
+    z-index: 10;
+    background: var(--bg);
+    margin: 26px 0 6px;
+    padding: 10px 20px 12px;
+  }
+
+  .dv-a {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .dv-a-line {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+    transition: opacity var(--t-std);
+  }
+
+  .dv-a-wrap.stuck .dv-a-line {
+    opacity: 0;
+  }
+
+  .dv-a-main {
+    text-align: center;
+    margin: 6px 0 0;
+  }
+</style>

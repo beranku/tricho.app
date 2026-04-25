@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="cs" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tricho.App — prototyp v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+  /* ═══════════════ TOKENS ═══════════════ */
+
+  :root {
+    --stage: #F3EDE0;
+    --bg: #FDFAF3;
+    --surface: #FFFFFE;
+    --surface-2: #FAF5EC;
+    --line: #EBE4D5;
+    --line-soft: #F2ECE0;
+    --ink: #1C1917;
+    --ink-espresso: #2A231B;
+    --ink-2: #44403C;
+    --ink-3: #736D64;
+    --ink-4: #9F9990;
+    --teal: #0E7490;
+    --teal-strong: #134E5E;
+    --teal-tint: rgba(14, 116, 144, 0.06);
+    --teal-border: rgba(14, 116, 144, 0.22);
+    --copper: #B06E52;
+    --copper-mid: #9A5E44;
+    --copper-border: rgba(176, 110, 82, 0.32);
+    --amber: #B97940;
+
+    --phone-frame: #F8F2E4;
+    --phone-frame-border: #D9D2C3;
+    --phone-shadow:
+      0 1px 0 rgba(255,255,255,0.8) inset,
+      0 0 0 1px var(--phone-frame-border),
+      0 2px 4px rgba(69, 48, 28, 0.04),
+      0 24px 48px -12px rgba(69, 48, 28, 0.12),
+      0 40px 80px -20px rgba(14, 116, 144, 0.08);
+
+    --card-shadow: 0 1px 2px rgba(69, 48, 28, 0.03), 0 4px 12px -4px rgba(69, 48, 28, 0.04);
+    --sheet-shadow: 0 -8px 24px -4px rgba(42, 35, 27, 0.12);
+    --backdrop: rgba(28, 25, 23, 0.32);
+
+    --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.24 0 0 0 0 0.14 0 0 0 0.22 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.5'/></svg>");
+    --paper-blend: multiply;
+    --paper-opacity: 0.5;
+
+    --stage-gradient-1: rgba(176, 110, 82, 0.1);
+    --stage-gradient-2: rgba(14, 116, 144, 0.08);
+  }
+
+  :root[data-theme="dark"] {
+    --stage: #17120E;
+    --bg: #211A15;
+    --surface: #29211B;
+    --surface-2: #32281F;
+    --line: #3E3228;
+    --line-soft: #332921;
+    --ink: #F5EDE0;
+    --ink-espresso: #F5EDE0;
+    --ink-2: #D4C8B8;
+    --ink-3: #9D9385;
+    --ink-4: #6F665C;
+    --teal: #2494B2;
+    --teal-strong: #5FAFC5;
+    --teal-tint: rgba(36, 148, 178, 0.14);
+    --teal-border: rgba(36, 148, 178, 0.34);
+    --copper: #C48867;
+    --copper-mid: #B37959;
+    --copper-border: rgba(196, 136, 103, 0.38);
+    --amber: #D09860;
+
+    --phone-frame: #100C09;
+    --phone-frame-border: #2A211B;
+    --phone-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 0 0 1px var(--phone-frame-border),
+      0 2px 4px rgba(0, 0, 0, 0.2),
+      0 24px 48px -12px rgba(0, 0, 0, 0.4),
+      0 40px 80px -20px rgba(0, 0, 0, 0.3);
+
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 4px 12px -4px rgba(0, 0, 0, 0.28);
+    --sheet-shadow: 0 -8px 24px -4px rgba(0, 0, 0, 0.4);
+    --backdrop: rgba(0, 0, 0, 0.5);
+
+    --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.96 0 0 0 0 0.9 0 0 0 0 0.78 0 0 0 0.12 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>");
+    --paper-blend: screen;
+    --paper-opacity: 0.45;
+
+    --stage-gradient-1: rgba(212, 147, 113, 0.06);
+    --stage-gradient-2: rgba(90, 184, 212, 0.05);
+  }
+
+  /* ═══════════════ BASE ═══════════════ */
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--stage);
+    color: var(--ink);
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    transition: background 0.35s ease;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 1400px 700px at 15% -5%, var(--stage-gradient-1), transparent 55%),
+      radial-gradient(ellipse 1000px 600px at 100% 110%, var(--stage-gradient-2), transparent 60%);
+    pointer-events: none; z-index: 0;
+    transition: background 0.35s ease;
+  }
+
+  /* ═══════════════ PROTOTYPE HEADER ═══════════════ */
+
+  .proto-header {
+    position: relative;
+    z-index: 2;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 32px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .proto-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .proto-kicker {
+    font-family: 'Geist', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--copper);
+    line-height: 1;
+  }
+  .proto-title {
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 28;
+    font-weight: 550;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px 9px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    cursor: pointer;
+    font-family: 'Geist', sans-serif;
+    font-size: 12px;
+    font-weight: 550;
+    color: var(--ink-2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 1px 2px rgba(42, 35, 27, 0.04);
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+  }
+  .theme-toggle-btn:hover {
+    border-color: var(--copper-border);
+  }
+  .theme-toggle-btn svg {
+    width: 16px; height: 16px;
+    color: var(--copper);
+  }
+  .theme-toggle-btn .sun-icon { display: inline-flex; }
+  .theme-toggle-btn .moon-icon { display: none; }
+  :root[data-theme="dark"] .theme-toggle-btn .sun-icon { display: none; }
+  :root[data-theme="dark"] .theme-toggle-btn .moon-icon { display: inline-flex; }
+
+  /* ═══════════════ STAGE ═══════════════ */
+
+  .stage {
+    position: relative; z-index: 1;
+    min-height: calc(100vh - 80px);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 48px;
+    padding: 40px 32px 56px;
+    flex-wrap: wrap;
+  }
+
+  /* ═══════════════ PHONE ═══════════════ */
+
+  .phone {
+    width: 390px;
+    flex-shrink: 0;
+    background: var(--phone-frame);
+    border-radius: 44px;
+    padding: 8px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--phone-shadow);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .phone-inner {
+    position: relative;
+    background: var(--bg);
+    border-radius: 38px;
+    overflow: hidden;
+    height: 780px;
+    transition: background 0.3s ease;
+  }
+  .phone-inner::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: var(--paper-grain);
+    background-size: 200px 200px;
+    mix-blend-mode: var(--paper-blend);
+    opacity: var(--paper-opacity);
+    pointer-events: none;
+    z-index: 25;
+  }
+  /* ═══════════════ SCROLL STRUCTURE ═══════════════ */
+
+  .phone-scroll {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  .phone-scroll::-webkit-scrollbar {
+    width: 3px;
+  }
+  .phone-scroll::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 3px;
+  }
+  .phone-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-topspacer {
+    height: 46px;
+    flex-shrink: 0;
+  }
+  .scroll-bottomspacer {
+    height: 120px;
+    flex-shrink: 0;
+  }
+
+  /* Day section — containing block for sticky header (chrome or dv-a-wrap).
+     When section scrolls out, its sticky header is released with it. */
+  .day-section {
+    display: block;
+  }
+
+  .island {
+    position: absolute; top: 12px; left: 50%;
+    transform: translateX(-50%);
+    width: 110px; height: 30px;
+    background: #1A1714;
+    border-radius: 999px;
+    z-index: 30;
+  }
+  .status-bar {
+    position: absolute; top: 14px; left: 0; right: 0;
+    padding: 0 28px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 14px; font-weight: 600;
+    color: var(--ink);
+    font-family: 'Geist', sans-serif;
+    z-index: 28;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .status-right { display: flex; align-items: center; gap: 5px; }
+  .status-right svg { color: var(--ink); }
+
+  /* ═══════════════ CHROME ═══════════════ */
+
+  .top-chrome {
+    position: sticky;
+    top: 46px;
+    padding: 6px 12px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    z-index: 15;
+    min-height: 48px;
+    background: var(--bg);
+  }
+  .chrome-glyph {
+    width: 44px; height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+    background: transparent;
+    border: none;
+    flex-shrink: 0;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background 0.15s ease;
+  }
+  .chrome-glyph:active { background: var(--surface-2); }
+  .chrome-title {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    min-width: 0;
+    position: relative;
+  }
+  .chrome-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .chrome-kicker {
+    font-family: 'Geist', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--copper);
+    line-height: 1;
+  }
+  .chrome-kicker.live { color: var(--teal); }
+  .chrome-main {
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 28;
+    font-weight: 500;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .chrome-main.client-name {
+    font-weight: 500;
+    font-variation-settings: 'opsz' 36;
+  }
+  .chrome-caret {
+    color: var(--ink-4);
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    transform: translateY(1px);
+  }
+
+  /* ═══════════════ FAB ═══════════════ */
+
+  .fab {
+    position: absolute;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    right: 18px;
+    width: 58px; height: 58px; border-radius: 19px;
+    background: linear-gradient(160deg, var(--teal) 0%, var(--teal) 50%, var(--teal-strong) 100%);
+    color: #FDFAF3;
+    border: none;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow:
+      0 1px 2px rgba(14, 116, 144, 0.15),
+      0 6px 14px -2px rgba(14, 116, 144, 0.22),
+      0 18px 32px -10px rgba(176, 110, 82, 0.22),
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 -1px 0 rgba(0,0,0,0.1);
+    z-index: 15;
+    cursor: pointer;
+  }
+  :root[data-theme="dark"] .fab {
+    background: linear-gradient(160deg, #2494B2 0%, #2494B2 50%, #1F8099 100%);
+    color: #F5EDE0;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 6px 14px -2px rgba(0, 0, 0, 0.4),
+      0 18px 32px -10px rgba(36, 148, 178, 0.32),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -1px 0 rgba(0,0,0,0.2);
+  }
+
+  /* Secondary FAB: scroll zpět na dnešek. Zobrazí se jen když uživatel
+     odroloval mimo dnešní sekci (do minulosti nebo budoucnosti). */
+  .fab-secondary {
+    position: absolute;
+    bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    left: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--card-shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+    cursor: pointer;
+    z-index: 16;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px) scale(0.9);
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .fab-secondary.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+  .fab-secondary .fab-arrow {
+    transition: transform 0.22s ease;
+  }
+  .fab-secondary.direction-down .fab-arrow {
+    transform: rotate(180deg);
+  }
+
+  /* ═══════════════ CHROME BUTTONS (always-on overlay) ═══════════════ */
+
+  /* Vrstva nad scroll-containerem — tlačítka menu/ellipsis musí být vždy
+     viditelná, nezávisle na tom, která sekce má sticky header. */
+  .chrome-buttons {
+    position: absolute;
+    top: 46px;
+    left: 0;
+    right: 0;
+    min-height: 48px;
+    padding: 6px 12px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    z-index: 16;
+    pointer-events: none;   /* !! center transparentní — tapy projdou */
+  }
+  .chrome-buttons > * {
+    pointer-events: auto;   /* !! jen tlačítka samotná jsou klikatelná */
+  }
+
+  /* ═══════════════ DAY HEADER — TODAY ═══════════════ */
+
+  /* Sticky header pro dnešní sekci. Obsahuje jen kicker+datum (bez tlačítek) —
+     tlačítka jsou v chrome-buttons layer nad ním. Background kryje scrolující
+     obsah za tlačítky. Strukturně identický s dv-a-wrap pro future/past dny. */
+  .day-header-today {
+    position: sticky;
+    top: 46px;
+    min-height: 48px;
+    padding: 6px 68px 10px;    /* !! 68 = 12 pad + 44 button + 12 gap */
+    background: var(--bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 15;
+  }
+  .day-header-today .chrome-title {
+    position: relative;
+    flex: 0 1 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Sluníčko: absolute na levou stranu day-header-today, vyplňuje
+     volný prostor mezi menu tlačítkem a centrovaným stackem. */
+  .weather-sun-left {
+    position: absolute;
+    left: 64px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--copper);
+    opacity: 0.9;
+    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    z-index: 1;
+  }
+
+  /* Kicker-wrap: umožní, aby Dnes zůstalo centrované v chrome-stack, ale
+     15° se na něj přilepila zprava jako absolute anotace — nepodílí se
+     na centrování. */
+  .chrome-kicker-wrap {
+    position: relative;
+    display: inline-block;
+    line-height: 1;
+  }
+  .chrome-kicker-wrap .weather-temp-subtle {
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+
+  /* ═══════════════ PHONE B CONTENT ═══════════════ */
+
+  .phone-b-content {
+    padding-top: 4px;
+    /* Žádný horizontal padding — každá komponenta (current-head, cam-card,
+       detail-card) má vlastní margin/padding. */
+  }
+
+  /* ═══════════════ DAILY SCHEDULE ═══════════════ */
+
+  .day-divider {
+    margin-top: 34px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .day-divider-kicker {
+    font-family: 'Geist', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--copper);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    line-height: 1;
+  }
+  .day-divider-sep {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--ink-4);
+    line-height: 1;
+    margin: 0 -2px;
+  }
+  .day-divider-main {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-variation-settings: 'opsz' 26;
+    font-size: 19px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .slot {
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    align-items: start;
+    padding: 14px 20px;
+    gap: 16px;
+    min-height: 64px;
+  }
+  .slot-active {
+    background: var(--teal-tint);
+    border: 1px solid var(--teal-border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 4px 4px;
+    box-shadow: 0 1px 2px rgba(14, 116, 144, 0.04);
+  }
+  .slot-done { opacity: 0.55; }
+  .slot-done .slot-time { color: var(--ink-4); font-weight: 550; }
+  .slot-done .slot-name { color: var(--ink-3); font-weight: 500; }
+  .slot-done .slot-sub { color: var(--ink-4); }
+  .slot-done-check {
+    color: var(--copper-mid);
+    width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 4px;
+  }
+  .slot-time {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-variation-settings: 'opsz' 18;
+    font-size: 19px;
+    color: var(--ink-2);
+    letter-spacing: -0.005em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    padding-top: 1px;
+  }
+  .slot-active .slot-time { color: var(--teal-strong); }
+  .slot-time.dim { color: var(--ink-4); font-weight: 550; }
+  .slot-name {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-variation-settings: 'opsz' 36;
+    font-size: 19px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .slot-active .slot-name { color: var(--teal-strong); font-weight: 550; }
+  .slot-sub {
+    font-family: 'Geist', sans-serif;
+    font-size: 13px;
+    color: var(--ink-3);
+    margin-top: 5px;
+    font-weight: 400;
+  }
+  .slot-free {
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400;
+    font-size: 18px;
+    color: var(--ink-3);
+    line-height: 1.1;
+    padding-top: 1px;
+  }
+  .slot-plus {
+    font-family: 'Geist', sans-serif;
+    color: var(--ink-4);
+    font-size: 20px;
+    font-weight: 300;
+    width: 22px;
+    text-align: center;
+    line-height: 1;
+    padding-top: 1px;
+  }
+
+  /* ═══════════════ CLIENT DETAIL ═══════════════ */
+
+  .current-head {
+    padding: 0 20px;
+    margin-top: 4px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .current-main {
+    font-family: 'Fraunces', serif;
+    font-weight: 550;
+    font-variation-settings: 'opsz' 28;
+    font-size: 22px;
+    color: var(--teal-strong);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .alert-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 11px;
+    white-space: nowrap;
+  }
+  .alert-allergen {
+    font-family: 'Caveat', cursive;
+    font-weight: 600;
+    font-size: 22px;
+    color: var(--amber);
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .alert-remaining {
+    font-family: 'Geist', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+
+  /* Camera */
+  .cam-card {
+    margin: 0 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+    display: flex; flex-direction: column;
+    box-shadow: var(--card-shadow);
+  }
+  .cam-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 52px 16px 92px;
+    background: linear-gradient(175deg, #2B241C 0%, #1B1510 100%);
+    min-height: 360px;
+    position: relative;
+  }
+  .cam-preview::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.85 0 0 0 0 0.78 0 0 0 0 0.65 0 0 0 0.1 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.55'/></svg>");
+    background-size: 200px 200px;
+    mix-blend-mode: screen;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .cam-corner {
+    position: absolute; top: 14px;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(20, 15, 12, 0.55);
+    border: 1px solid rgba(253, 250, 243, 0.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(253, 250, 243, 0.92);
+    z-index: 2;
+  }
+  .cam-corner.left { left: 14px; }
+  .cam-corner.right { right: 14px; }
+  .cam-corner svg {
+    color: rgba(253, 250, 243, 0.92);
+  }
+  .cam-viewport-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    z-index: 1;
+  }
+  .cam-viewport-hint svg {
+    color: rgba(253, 250, 243, 0.55);
+    opacity: 1;
+  }
+  .cam-hint-text {
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400;
+    font-size: 17px;
+    color: rgba(253, 250, 243, 0.7);
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+  .cam-capture {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 62px; height: 62px;
+    border-radius: 50%;
+    background: transparent;
+    border: 3px solid rgba(253, 250, 243, 0.96);
+    cursor: pointer;
+    padding: 0;
+    z-index: 4;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.2),
+      0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+  .cam-capture::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: rgba(253, 250, 243, 0.96);
+    transition: transform 0.1s ease;
+  }
+  .cam-capture:active::after {
+    transform: scale(0.88);
+  }
+  .cam-label-wrap {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    z-index: 3;
+  }
+  .cam-label-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 5px;
+    border-radius: 6px;
+    background: rgba(253, 250, 243, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: none;
+    cursor: pointer;
+    line-height: 1.15;
+    min-height: 30px;
+  }
+  .cam-label-current {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 15px;
+    font-weight: 400;
+    color: #2A231B;
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+  .cam-label-caret {
+    color: var(--copper);
+    display: inline-flex;
+    align-items: center;
+    transition: transform 0.2s ease;
+  }
+  .cam-label-wrap.open .cam-label-caret {
+    transform: rotate(180deg);
+  }
+  .cam-label-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    background: rgba(253, 250, 243, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 10px;
+    padding: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.08);
+    display: none;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 92px;
+  }
+  .cam-label-wrap.open .cam-label-menu {
+    display: flex;
+  }
+  .cam-label-option {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-family: 'Patrick Hand', cursive;
+    font-size: 15px;
+    font-weight: 400;
+    color: #2A231B;
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+  .cam-label-option:hover,
+  .cam-label-option:active {
+    background: rgba(176, 110, 82, 0.14);
+  }
+  .cam-label-option.active {
+    color: var(--copper-mid);
+  }
+
+  /* Thumbnails */
+  .thumbs {
+    padding: 0 12px;
+    display: flex; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .thumb {
+    width: 76px; height: 76px; border-radius: 13px;
+    display: flex; align-items: flex-end;
+    padding: 6px 8px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(69, 48, 28, 0.1);
+  }
+  .thumb-pred { background: linear-gradient(135deg, #A56B42, #7A4A2C 60%, #57341D); }
+  .thumb-detail { background: linear-gradient(135deg, #4A5B72, #34425A 60%, #1F2A3E); }
+  .thumb-detail-2 { background: linear-gradient(135deg, #3F4E68, #2B3850 60%, #1A2438); }
+  .thumb-label {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0.015em;
+    color: #2A231B;
+    background: rgba(253, 250, 243, 0.94);
+    padding: 2px 9px 3px;
+    border-radius: 6px;
+    line-height: 1.15;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* Detail card */
+  .detail-card {
+    margin: 0 12px 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 20px 20px 4px;
+    box-shadow: var(--card-shadow);
+  }
+  .detail-section {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .detail-section:last-child { border-bottom: none; }
+  .detail-section:first-child { padding-top: 2px; }
+  .section-head-row {
+    display: flex; justify-content: space-between;
+    align-items: baseline; margin-bottom: 14px;
+  }
+  .section-label {
+    font-family: 'Geist', sans-serif;
+    font-size: 11px; color: var(--ink-3);
+    letter-spacing: 0.14em;
+    font-weight: 550; text-transform: uppercase;
+  }
+  .section-meta {
+    font-family: 'Geist', sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* Chips */
+  .chips-row {
+    display: flex; flex-wrap: wrap;
+    gap: 10px 8px;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px 8px 10px;
+    border-radius: 999px;
+    font-family: 'Geist', sans-serif;
+    font-size: 14.5px; font-weight: 400;
+    letter-spacing: -0.005em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .chip-check-empty {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 1.5px solid var(--ink-4);
+    flex-shrink: 0;
+  }
+  .chip-checked { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); }
+  .chip-check-filled {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 1.5px solid var(--ink-4);
+    background: transparent;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--copper-mid);
+  }
+  .chip-check-filled svg { display: block; }
+  .chip-add {
+    border: 1px dashed var(--copper-border);
+    background: transparent;
+    color: var(--copper-mid);
+  }
+  .chip-add-plus {
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--copper-mid);
+  }
+
+  /* Note */
+  .note-label {
+    font-family: 'Geist', sans-serif;
+    font-size: 11px; color: var(--ink-3);
+    margin-bottom: 8px;
+    font-weight: 550;
+    text-transform: uppercase; letter-spacing: 0.14em;
+  }
+  .note-text {
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400; font-size: 18px;
+    color: var(--ink-2);
+    line-height: 1.4;
+    letter-spacing: 0.005em;
+  }
+
+  /* Next term */
+  .next-term {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 0 6px;
+  }
+  .next-term-label {
+    font-family: 'Geist', sans-serif;
+    font-size: 11px; color: var(--ink-3);
+    font-weight: 550;
+    text-transform: uppercase; letter-spacing: 0.14em;
+  }
+  .next-term-value {
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400; font-size: 18px;
+    color: var(--ink-3);
+    display: flex; align-items: center; gap: 10px;
+    line-height: 1;
+  }
+  .next-term-arrow { color: var(--copper); display: flex; align-items: center; }
+
+  /* History */
+  .hist-head {
+    padding: 0 20px;
+    margin-top: 24px; margin-bottom: 12px;
+    display: flex; justify-content: space-between;
+    align-items: flex-end; gap: 12px;
+  }
+  .hist-date-stack {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .hist-date-kicker {
+    font-family: 'Geist', sans-serif;
+    font-size: 10px; font-weight: 600;
+    color: var(--copper);
+    text-transform: uppercase; letter-spacing: 0.16em;
+    line-height: 1;
+  }
+  .hist-date-main {
+    font-family: 'Fraunces', serif;
+    font-weight: 550; font-variation-settings: 'opsz' 22;
+    font-size: 21px; color: var(--ink);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .hist-date-main .time { color: var(--ink-2); font-weight: 500; }
+  .hist-date-main .sep { color: var(--ink-4); font-weight: 400; margin: 0 4px; }
+  .hist-meta {
+    font-family: 'Geist', sans-serif;
+    font-size: 12px; color: var(--ink-3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: baseline;
+    gap: 5px;
+  }
+  .hist-meta .price {
+    font-family: 'Geist', sans-serif;
+    font-weight: 500; font-size: 13px;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* ═══════════════ BOTTOM SHEET ═══════════════ */
+
+  .sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--backdrop);
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+    border-radius: 38px;
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+  }
+  .sheet-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--bg);
+    border-top-left-radius: 26px;
+    border-top-right-radius: 26px;
+    padding: 8px 0 calc(20px + env(safe-area-inset-bottom, 0px));
+    z-index: 50;
+    transform: translateY(100%);
+    transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: var(--sheet-shadow);
+    max-height: 82%;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--line-soft);
+  }
+  .sheet.open {
+    transform: translateY(0);
+  }
+  .sheet::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: var(--paper-grain);
+    background-size: 200px 200px;
+    mix-blend-mode: var(--paper-blend);
+    opacity: var(--paper-opacity);
+    pointer-events: none;
+    border-top-left-radius: 26px;
+    border-top-right-radius: 26px;
+  }
+
+  .sheet-handle {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--ink-4);
+    margin: 8px auto 10px;
+    flex-shrink: 0;
+    opacity: 0.45;
+    cursor: grab;
+  }
+
+  .sheet-sync {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 22px 14px;
+    font-family: 'Geist', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink-3);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 2;
+  }
+  .sheet-sync-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-tint);
+  }
+
+  .sheet-search {
+    margin: 0 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    color: var(--ink-3);
+    font-family: 'Geist', sans-serif;
+    font-size: 15px;
+    font-weight: 400;
+    position: relative;
+    z-index: 2;
+    cursor: text;
+  }
+  .sheet-search svg {
+    color: var(--ink-3);
+    flex-shrink: 0;
+  }
+
+  .sheet-nav {
+    padding: 0 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    z-index: 2;
+  }
+  .sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 14px;
+    border-radius: 12px;
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 22;
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    text-align: left;
+    width: 100%;
+    transition: background 0.15s ease;
+  }
+  .sheet-item:hover,
+  .sheet-item:active {
+    background: var(--surface-2);
+  }
+  .sheet-item-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-3);
+    flex-shrink: 0;
+  }
+  .sheet-item-meta {
+    margin-left: auto;
+    font-family: 'Geist', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  .sheet-sep {
+    height: 1px;
+    background: var(--line-soft);
+    margin: 8px 22px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .sheet-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 22px 6px;
+    position: relative;
+    z-index: 2;
+  }
+  .sheet-toggle-label {
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 22;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink-2);
+    letter-spacing: -0.015em;
+  }
+
+  .theme-switch {
+    width: 50px;
+    height: 30px;
+    border-radius: 999px;
+    background: var(--line);
+    position: relative;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.25s ease;
+  }
+  .theme-switch[aria-pressed="true"] {
+    background: var(--teal);
+  }
+  .switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.08);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .theme-switch[aria-pressed="true"] .switch-thumb {
+    transform: translateX(20px);
+  }
+
+  /* Weather anotace — styling */
+  .weather-temp-subtle {
+    font-family: 'Geist', sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--ink-4);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .weather-sun-big {
+    color: var(--copper);
+    flex-shrink: 0;
+    opacity: 0.85;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Day-divider Varianta A — horizontální linky */
+  .dv-a-wrap {
+    position: sticky;
+    top: 46px;
+    z-index: 10;
+    background: var(--bg);
+    margin: 26px 0 6px;
+    padding: 10px 20px 12px;
+  }
+  .dv-a {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .dv-a-line {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+    transition: opacity 0.22s ease;
+  }
+  .dv-a-wrap.stuck .dv-a-line {
+    opacity: 0;
+  }
+  .dv-a-kicker {
+    font-family: 'Geist', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--copper);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .dv-a-main {
+    text-align: center;
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 28;
+    font-weight: 500;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    margin: 6px 0 0;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══════════════ RESPONSIVE ═══════════════ */
+
+  @media (max-width: 900px) {
+    .stage { padding: 24px 12px; gap: 28px; }
+    .proto-header { padding: 24px 16px 0; }
+  }
+  @media (max-width: 460px) {
+    .stage { padding: 16px 8px; }
+    .phone { width: 100%; max-width: 390px; padding: 6px; }
+    .proto-header {
+      padding: 20px 16px 0;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .theme-toggle-btn { align-self: flex-end; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ PROTOTYPE HEADER ═══════════════ -->
+
+<header class="proto-header">
+  <div class="proto-brand">
+    <span class="proto-kicker">Prototyp · v2</span>
+    <span class="proto-title">Tricho.App</span>
+  </div>
+  <button class="theme-toggle-btn" onclick="toggleTheme()" aria-label="Přepnout motiv">
+    <span class="sun-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 3 V 5 M 12 19 V 21 M 3 12 H 5 M 19 12 H 21 M 5.6 5.6 L 7 7 M 17 17 L 18.4 18.4 M 5.6 18.4 L 7 17 M 17 7 L 18.4 5.6"/>
+      </svg>
+    </span>
+    <span class="moon-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 14.5 A 8 8 0 1 1 9.5 4 A 6.5 6.5 0 0 0 20 14.5 Z"/>
+      </svg>
+    </span>
+    <span class="toggle-label">
+      <span class="sun-icon">Světlý režim</span>
+      <span class="moon-icon">Tmavý režim</span>
+    </span>
+  </button>
+</header>
+
+<div class="stage">
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- ─────── PHONE A — DAILY SCHEDULE + SHEET ─────── -->
+  <!-- ══════════════════════════════════════════════════ -->
+
+  <div class="phone">
+    <div class="phone-inner">
+      <div class="island"></div>
+      <div class="status-bar">
+        <span>10:35</span>
+        <div class="status-right">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="6" width="3" height="5" rx="0.5"/><rect x="4.5" y="4" width="3" height="7" rx="0.5"/><rect x="9" y="2" width="3" height="9" rx="0.5"/><rect x="13.5" y="0" width="3" height="11" rx="0.5"/></svg>
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><path d="M8 10.5 C 4 7, 1 5, 1 3 C 1 1.5, 2.5 1, 4 2 C 5.5 3, 7 4, 8 5.5 C 9 4, 10.5 3, 12 2 C 13.5 1, 15 1.5, 15 3 C 15 5, 12 7, 8 10.5 Z" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="1" width="21" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2.5" y="3" width="17" height="6" rx="1" fill="currentColor"/><rect x="22.5" y="4" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <!-- Always-on chrome buttons (nezávislé na scrollu) -->
+      <div class="chrome-buttons">
+        <button class="chrome-glyph" onclick="openSheet('sheet-a')" aria-label="Otevřít menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="8" x2="20" y2="8"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="16" x2="20" y2="16"/>
+          </svg>
+        </button>
+        <button class="chrome-glyph" aria-label="Další možnosti">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        </button>
+      </div>
+
+      <div class="phone-scroll">
+      <div class="scroll-topspacer"></div>
+
+      <!-- PAST: Středa 21. dubna (dokončené návštěvy) -->
+      <section class="day-section">
+        <div class="dv-a-wrap">
+          <div class="dv-a">
+            <span class="dv-a-line"></span>
+            <span class="dv-a-kicker">Středa</span>
+            <span class="dv-a-line"></span>
+          </div>
+          <div class="dv-a-main">21. dubna</div>
+        </div>
+
+        <div class="slot slot-done">
+          <span class="slot-time">10:00</span>
+          <div>
+            <div class="slot-name">Eliška Horáková</div>
+            <div class="slot-sub">Barvení, Střih</div>
+          </div>
+          <span class="slot-done-check">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                    stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+
+        <div class="slot slot-done">
+          <span class="slot-time">13:30</span>
+          <div>
+            <div class="slot-name">Marek Svoboda</div>
+            <div class="slot-sub">Diagnostika</div>
+          </div>
+          <span class="slot-done-check">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                    stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+
+        <div class="slot slot-done">
+          <span class="slot-time">16:00</span>
+          <div>
+            <div class="slot-name">Hana Černá</div>
+            <div class="slot-sub">Konzultace</div>
+          </div>
+          <span class="slot-done-check">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                    stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </section>
+
+      <!-- TODAY: dnešek (Čtvrtek 22. dubna) -->
+      <section class="day-section" data-today="true">
+        <div class="day-header-today">
+          <span class="weather-sun-left">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 8.5 9 Q 7.8 12.2 9.8 14.4 Q 12 15.8 14.3 14.4 Q 16 12 14.6 9.5 Q 12.5 8 10 8.4 Q 8.9 8.7 8.5 9 Z"/>
+              <path d="M 12 3 L 12 5.2"/>
+              <path d="M 12 18.8 L 12 21"/>
+              <path d="M 3 12 L 5.2 12"/>
+              <path d="M 18.8 12 L 21 12"/>
+              <path d="M 5.4 5.4 L 7 7"/>
+              <path d="M 17 17 L 18.6 18.6"/>
+              <path d="M 5.4 18.6 L 7 17"/>
+              <path d="M 17 7 L 18.6 5.4"/>
+            </svg>
+          </span>
+          <div class="chrome-title">
+            <div class="chrome-stack">
+              <span class="chrome-kicker-wrap">
+                <span class="chrome-kicker live">Dnes</span>
+                <span class="weather-temp-subtle">15°</span>
+              </span>
+              <span class="chrome-main">
+                22.&nbsp;dubna
+                <span class="chrome-caret">
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M5 7 L1 3 L9 3 Z"/></svg>
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+      <div class="slot slot-done">
+            <span class="slot-time">09:10</span>
+            <div>
+              <div class="slot-name">Jana Nováková</div>
+              <div class="slot-sub">Konzultace, Diagnostika</div>
+            </div>
+            <span class="slot-done-check">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                      stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+
+          <div class="slot slot-active">
+            <span class="slot-time">10:30</span>
+            <div>
+              <div class="slot-name">Klára Dvořáková</div>
+              <div class="slot-sub">Diagnostika</div>
+            </div>
+            <span></span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">11:00</span>
+            <span class="slot-free">volno 3 h</span>
+            <span class="slot-plus">+</span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time">14:00</span>
+            <div>
+              <div class="slot-name">Tereza Malá</div>
+              <div class="slot-sub">Střih</div>
+            </div>
+            <span></span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">14:45</span>
+            <span class="slot-free">volno 1 h 45 min</span>
+            <span class="slot-plus">+</span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time">16:30</span>
+            <div>
+              <div class="slot-name">Adam Kříž</div>
+              <div class="slot-sub">Trichologický zákrok</div>
+            </div>
+            <span></span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">17:30</span>
+            <span class="slot-free">volno 30 min</span>
+            <span class="slot-plus">+</span>
+          </div>
+
+      </section>
+
+      <section class="day-section">
+          <!-- ZÍTRA -->
+          <div class="dv-a-wrap">
+            <div class="dv-a">
+              <span class="dv-a-line"></span>
+              <span class="dv-a-kicker">Zítra</span>
+              <span class="dv-a-line"></span>
+            </div>
+            <div class="dv-a-main">23. dubna</div>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">09:00</span>
+            <span class="slot-free">volno 1 h</span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time">10:00</span>
+            <div>
+              <div class="slot-name">Markéta Holá</div>
+              <div class="slot-sub">Diagnostika</div>
+            </div>
+            <span></span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">11:00</span>
+            <span class="slot-free">volno 3 h</span>
+            <span class="slot-plus">+</span>
+          </div>
+
+      </section>
+
+      <section class="day-section">
+          <!-- PÁTEK -->
+          <div class="dv-a-wrap">
+            <div class="dv-a">
+              <span class="dv-a-line"></span>
+              <span class="dv-a-kicker">Pátek</span>
+              <span class="dv-a-line"></span>
+            </div>
+            <div class="dv-a-main">24. dubna</div>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time">09:00</span>
+            <div>
+              <div class="slot-name">Petra Černá</div>
+              <div class="slot-sub">Konzultace, Diagnostika</div>
+            </div>
+            <span></span>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">10:30</span>
+            <span class="slot-free">volno 2 h</span>
+            <span class="slot-plus">+</span>
+          </div>
+
+      </section>
+
+      <section class="day-section">
+          <!-- SOBOTA -->
+          <div class="dv-a-wrap">
+            <div class="dv-a">
+              <span class="dv-a-line"></span>
+              <span class="dv-a-kicker">Sobota</span>
+              <span class="dv-a-line"></span>
+            </div>
+            <div class="dv-a-main">25. dubna</div>
+          </div>
+
+          <div class="slot">
+            <span class="slot-time dim">09:00</span>
+            <span class="slot-free" style="color: var(--ink-4)">celý den volno</span>
+          </div>
+      </section>
+
+      <div class="scroll-bottomspacer"></div>
+      </div><!-- /phone-scroll -->
+
+      <button class="fab" aria-label="Nová událost">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9 H20.5"/><path d="M8 3 V6"/><path d="M16 3 V6"/><path d="M12 12 V17"/><path d="M9.5 14.5 H14.5"/></svg>
+      </button>
+
+      <!-- Secondary FAB: zpět na dnešek (zobrazí se JS-em) -->
+      <button class="fab-secondary" id="fab-scroll-today-a" onclick="scrollToToday(this)" aria-label="Zpět na dnešek">
+        <svg class="fab-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19 L12 5"/>
+          <path d="M6 11 L12 5 L18 11"/>
+        </svg>
+      </button>
+
+      <!-- ───── BOTTOM SHEET ───── -->
+      <div class="sheet-backdrop open" id="sheet-a-backdrop" onclick="closeSheet('sheet-a')"></div>
+      <div class="sheet open" id="sheet-a" role="dialog" aria-modal="true" aria-label="Menu">
+        <div class="sheet-handle" onclick="closeSheet('sheet-a')"></div>
+
+        <div class="sheet-sync">
+          <span class="sheet-sync-dot"></span>
+          <span>Synchronizováno · před 2 min</span>
+        </div>
+
+        <div class="sheet-search">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="M16 16 L21 21" stroke-linecap="round"/>
+          </svg>
+          <span>Hledat klienta, poznámku, datum…</span>
+        </div>
+
+        <div class="sheet-nav">
+          <button class="sheet-item" onclick="closeSheet('sheet-a')">
+            <span class="sheet-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="9" r="3.4"/>
+                <path d="M5 20 C 5 16, 8 14, 12 14 C 16 14, 19 16, 19 20"/>
+              </svg>
+            </span>
+            Klienti
+            <span class="sheet-item-meta">142</span>
+          </button>
+
+          <button class="sheet-item" onclick="closeSheet('sheet-a')">
+            <span class="sheet-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 12 A 8 8 0 1 0 6 6.3"/>
+                <path d="M3 3 V 7 H 7"/>
+                <path d="M12 7.5 V 12 L 15 14"/>
+              </svg>
+            </span>
+            Historie
+          </button>
+
+          <button class="sheet-item" onclick="closeSheet('sheet-a')">
+            <span class="sheet-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19 V 13"/>
+                <path d="M10 19 V 8"/>
+                <path d="M16 19 V 15"/>
+                <path d="M22 19 V 11"/>
+                <path d="M3 20 L 22 20"/>
+              </svg>
+            </span>
+            Statistiky
+          </button>
+
+          <button class="sheet-item" onclick="closeSheet('sheet-a')">
+            <span class="sheet-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7.5 L 12 4 L 21 7.5 L 21 9 L 3 9 Z"/>
+                <path d="M5 9 V 19 H 19 V 9"/>
+                <path d="M9.5 13 H 14.5"/>
+              </svg>
+            </span>
+            Archiv
+          </button>
+        </div>
+
+        <div class="sheet-sep"></div>
+
+        <div class="sheet-nav">
+          <button class="sheet-item" onclick="closeSheet('sheet-a')">
+            <span class="sheet-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </span>
+            Nastavení
+          </button>
+        </div>
+
+        <div class="sheet-toggle-row">
+          <span class="sheet-toggle-label">Tmavý režim</span>
+          <button class="theme-switch" role="switch" aria-pressed="false" aria-label="Přepnout tmavý režim" onclick="toggleTheme()">
+            <span class="switch-thumb"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- ─────── PHONE B — CLIENT DETAIL (beze změny) ─── -->
+  <!-- ══════════════════════════════════════════════════ -->
+
+  <div class="phone">
+    <div class="phone-inner">
+      <div class="island"></div>
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="status-right">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="6" width="3" height="5" rx="0.5"/><rect x="4.5" y="4" width="3" height="7" rx="0.5"/><rect x="9" y="2" width="3" height="9" rx="0.5"/><rect x="13.5" y="0" width="3" height="11" rx="0.5"/></svg>
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><path d="M8 10.5 C 4 7, 1 5, 1 3 C 1 1.5, 2.5 1, 4 2 C 5.5 3, 7 4, 8 5.5 C 9 4, 10.5 3, 12 2 C 13.5 1, 15 1.5, 15 3 C 15 5, 12 7, 8 10.5 Z" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="1" width="21" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2.5" y="3" width="17" height="6" rx="1" fill="currentColor"/><rect x="22.5" y="4" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <div class="phone-scroll">
+      <div class="scroll-topspacer"></div>
+      <div class="top-chrome">
+        <button class="chrome-glyph" aria-label="Zpět">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 L9 12 L15 6"/></svg>
+        </button>
+        <div class="chrome-title">
+          <div class="chrome-stack">
+            <span class="chrome-main client-name">Jana&nbsp;Nováková</span>
+          </div>
+        </div>
+        <button class="chrome-glyph" aria-label="Další možnosti">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        </button>
+      </div>
+
+      <div class="phone-b-content">
+
+        <div class="current-head">
+          <span class="current-main">09:10</span>
+          <div class="alert-meta">
+            <span class="alert-allergen">Amoniak</span>
+            <span class="alert-remaining">zbývá 45 min</span>
+          </div>
+        </div>
+
+        <div class="cam-card">
+          <div class="cam-preview">
+            <div class="cam-corner left" aria-label="Blesk">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 3 L 7 13.5 L 12 13.5 L 10 21 L 17 10 L 12 10 L 14 3 Z"/>
+              </svg>
+            </div>
+            <div class="cam-corner right" aria-label="Detail / zoom">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <circle cx="10.5" cy="10.5" r="6"/>
+                <path d="M 15 15 L 20 20"/>
+                <path d="M 7.5 10.5 H 13.5 M 10.5 7.5 V 13.5"/>
+              </svg>
+            </div>
+            <div class="cam-viewport-hint">
+              <svg width="76" height="76" viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+                <path d="M 8 18 V 8 H 18"/>
+                <path d="M 54 8 H 64 V 18"/>
+                <path d="M 64 54 V 64 H 54"/>
+                <path d="M 18 64 H 8 V 54"/>
+                <circle cx="36" cy="36" r="12" stroke-dasharray="2 3" opacity="0.55"/>
+              </svg>
+              <span class="cam-hint-text">Namiřte na pokožku</span>
+            </div>
+            <div class="cam-label-wrap">
+              <button class="cam-label-chip" onclick="toggleCamLabel(event)" aria-label="Změnit popisek snímku" aria-haspopup="true">
+                <span class="cam-label-current">před</span>
+                <span class="cam-label-caret">
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M5 7 L1 3 L9 3 Z"/></svg>
+                </span>
+              </button>
+              <div class="cam-label-menu" role="menu">
+                <button class="cam-label-option active" onclick="selectCamLabel(event, 'před')" role="menuitem">před</button>
+                <button class="cam-label-option" onclick="selectCamLabel(event, 'temeno')" role="menuitem">temeno</button>
+                <button class="cam-label-option" onclick="selectCamLabel(event, 'šíje')" role="menuitem">šíje</button>
+                <button class="cam-label-option" onclick="selectCamLabel(event, 'po')" role="menuitem">po</button>
+              </div>
+            </div>
+            <button class="cam-capture" aria-label="Vyfotit"></button>
+          </div>
+        </div>
+
+        <div class="thumbs">
+          <div class="thumb thumb-pred"><span class="thumb-label">před</span></div>
+          <div class="thumb thumb-detail"><span class="thumb-label">temeno</span></div>
+          <div class="thumb thumb-detail-2"><span class="thumb-label">šíje</span></div>
+        </div>
+
+        <div class="detail-card">
+          <div class="detail-section">
+            <div class="section-head-row">
+              <span class="section-label">Služby</span>
+              <span class="section-meta">2/3</span>
+            </div>
+            <div class="chips-row">
+              <span class="chip">
+                <span class="chip-check-empty"></span>
+                Diagnostika
+              </span>
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Konzultace
+              </span>
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Mytí &amp; masáž
+              </span>
+              <span class="chip chip-add">
+                <span class="chip-add-plus">
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 2.5 Q6.9 7 7 11.5 M 2.5 7 Q7 6.9 11.5 7"
+                          stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/>
+                  </svg>
+                </span>
+                Přidat
+              </span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-head-row">
+              <span class="section-label">Produkty</span>
+              <span class="section-meta">450 Kč</span>
+            </div>
+            <div class="chips-row">
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Šampon A · 450 Kč
+              </span>
+              <span class="chip chip-add">
+                <span class="chip-add-plus">
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 2.5 Q6.9 7 7 11.5 M 2.5 7 Q7 6.9 11.5 7"
+                          stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/>
+                  </svg>
+                </span>
+                Přidat
+              </span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="note-label">Poznámka</div>
+            <div class="note-text">Znovu přijde na kontrolu po 4 týdnech.</div>
+          </div>
+
+          <div class="detail-section">
+            <div class="next-term" style="padding-top: 2px; padding-bottom: 2px;">
+              <span class="next-term-label">Další termín</span>
+              <span class="next-term-value">
+                Nenaplánováno
+                <span class="next-term-arrow">
+                  <svg width="18" height="12" viewBox="0 0 18 12" fill="none">
+                    <path d="M1 6 Q6 3 14 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                    <path d="M10.5 2.5 Q13 4.5 14.5 6 Q13 7.5 10.5 9.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hist-head">
+          <div class="hist-date-stack">
+            <div class="hist-date-kicker">Středa</div>
+            <div class="hist-date-main">25. března<span class="sep">·</span><span class="time">10:00</span></div>
+          </div>
+          <div class="hist-meta">1 h · <span class="price">1 850 Kč</span></div>
+        </div>
+
+        <div class="detail-card">
+          <div class="detail-section">
+            <div class="section-head-row">
+              <span class="section-label">Služby</span>
+              <span class="section-meta">2/2</span>
+            </div>
+            <div class="chips-row">
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Konzultace
+              </span>
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Diagnostika
+              </span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-head-row">
+              <span class="section-label">Produkty</span>
+              <span class="section-meta">450 Kč</span>
+            </div>
+            <div class="chips-row">
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Šampon A · 450 Kč
+              </span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="note-label">Poznámka</div>
+            <div class="note-text">První konzultace</div>
+          </div>
+        </div>
+
+        <div class="hist-head">
+          <div class="hist-date-stack">
+            <div class="hist-date-kicker">Pondělí</div>
+            <div class="hist-date-main">16. února<span class="sep">·</span><span class="time">10:00</span></div>
+          </div>
+          <div class="hist-meta">1 h · <span class="price">1 850 Kč</span></div>
+        </div>
+
+        <div class="thumbs" style="margin-bottom: 12px;">
+          <div class="thumb thumb-pred"><span class="thumb-label">před</span></div>
+          <div class="thumb thumb-detail"><span class="thumb-label">pěšinka</span></div>
+          <div class="thumb thumb-detail-2"><span class="thumb-label">spánek</span></div>
+        </div>
+
+        <div class="detail-card" style="margin-bottom: 60px;">
+          <div class="detail-section">
+            <div class="section-head-row">
+              <span class="section-label">Služby</span>
+              <span class="section-meta">2/2</span>
+            </div>
+            <div class="chips-row">
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Konzultace
+              </span>
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Diagnostika
+              </span>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-head-row">
+              <span class="section-label">Produkty</span>
+              <span class="section-meta">450 Kč</span>
+            </div>
+            <div class="chips-row">
+              <span class="chip chip-checked">
+                <span class="chip-check-filled">
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+                          stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                Šampon A · 450 Kč
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="scroll-bottomspacer"></div>
+      </div><!-- /phone-scroll -->
+
+      <button class="fab" aria-label="Nová událost">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9 H20.5"/><path d="M8 3 V6"/><path d="M16 3 V6"/><path d="M12 12 V17"/><path d="M9.5 14.5 H14.5"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const root = document.documentElement;
+    const current = root.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    document.querySelectorAll('[role="switch"]').forEach(s => {
+      s.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+    });
+  }
+
+  function toggleCamLabel(e) {
+    e.stopPropagation();
+    const chip = e.currentTarget;
+    const wrap = chip.closest('.cam-label-wrap');
+    const wasOpen = wrap.classList.contains('open');
+    document.querySelectorAll('.cam-label-wrap.open').forEach(w => w.classList.remove('open'));
+    if (!wasOpen) wrap.classList.add('open');
+  }
+
+  function selectCamLabel(e, value) {
+    e.stopPropagation();
+    const option = e.currentTarget;
+    const wrap = option.closest('.cam-label-wrap');
+    wrap.querySelector('.cam-label-current').textContent = value;
+    wrap.querySelectorAll('.cam-label-option').forEach(o => o.classList.remove('active'));
+    option.classList.add('active');
+    wrap.classList.remove('open');
+  }
+
+  // Close cam label dropdown on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.cam-label-wrap')) {
+      document.querySelectorAll('.cam-label-wrap.open').forEach(w => w.classList.remove('open'));
+    }
+  });
+
+  function openSheet(id) {
+    document.getElementById(id).classList.add('open');
+    document.getElementById(id + '-backdrop').classList.add('open');
+  }
+
+  function closeSheet(id) {
+    document.getElementById(id).classList.remove('open');
+    document.getElementById(id + '-backdrop').classList.remove('open');
+  }
+
+  // Sticky day-divider detection — adds .stuck class when pinned at sticky position
+  function setupStickyDayDividers() {
+    const stickyTop = 46; // matches CSS top: 46px for dv-a-wrap
+    document.querySelectorAll('.phone-scroll').forEach(scroll => {
+      const wraps = scroll.querySelectorAll('.dv-a-wrap');
+      if (!wraps.length) return;
+
+      const update = () => {
+        const scrollRect = scroll.getBoundingClientRect();
+        wraps.forEach(wrap => {
+          const rect = wrap.getBoundingClientRect();
+          const topOffset = rect.top - scrollRect.top;
+          const isStuck = topOffset <= stickyTop + 1;
+          wrap.classList.toggle('stuck', isStuck);
+        });
+      };
+
+      scroll.addEventListener('scroll', update, { passive: true });
+      update();
+    });
+  }
+
+  // Scroll-to-today button: visible, když uživatel odroluje mimo dnešní sekci.
+  // Směr šipky = směr k dnešku (nahoru pokud je user v budoucnosti, dolů pokud v minulosti).
+  function setupScrollToTodayButton(scrollEl, todaySection, btn) {
+    if (!scrollEl || !todaySection || !btn) return;
+    const stickyTop = 46;
+    const headerHeight = 48;
+
+    const update = () => {
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const todayRect = todaySection.getBoundingClientRect();
+      const todayTopOffset = todayRect.top - scrollRect.top;
+      const todayBottomOffset = todayRect.bottom - scrollRect.top;
+
+      if (todayTopOffset > stickyTop) {
+        // Dnešek ještě nedošel na sticky pozici — user je v minulosti → šipka dolů
+        btn.classList.add('visible');
+        btn.classList.add('direction-down');
+        btn.classList.remove('direction-up');
+      } else if (todayBottomOffset <= stickyTop + headerHeight) {
+        // Dnešek projel celý — user je v budoucnosti → šipka nahoru
+        btn.classList.add('visible');
+        btn.classList.add('direction-up');
+        btn.classList.remove('direction-down');
+      } else {
+        // User je uvnitř dnešní sekce
+        btn.classList.remove('visible');
+      }
+    };
+
+    scrollEl.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+
+  // Scroll zpět na dnešek — přesune scroll tak, aby dnešní sekce začala na sticky pozici
+  function scrollToToday(btn) {
+    const scrollEl = btn.closest('.phone-inner').querySelector('.phone-scroll');
+    const todaySection = scrollEl.querySelector('[data-today="true"]');
+    if (!scrollEl || !todaySection) return;
+
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const todayRect = todaySection.getBoundingClientRect();
+    const targetDelta = todayRect.top - scrollRect.top - 46;
+
+    scrollEl.scrollBy({ top: targetDelta, behavior: 'smooth' });
+  }
+
+  // Sync initial switch state with current theme
+  document.addEventListener('DOMContentLoaded', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.querySelectorAll('[role="switch"]').forEach(s => {
+      s.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    });
+    setupStickyDayDividers();
+
+    // Scroll-to-today pro Phone A (sekce s data-today)
+    const phoneATodaySection = document.querySelector('[data-today="true"]');
+    const phoneAScroll = phoneATodaySection && phoneATodaySection.closest('.phone-scroll');
+    const phoneAFabScroll = document.getElementById('fab-scroll-today-a');
+    setupScrollToTodayButton(phoneAScroll, phoneATodaySection, phoneAFabScroll);
+
+    // Initial scroll: dnešek je výchozí pozice (nad ním je minulost)
+    if (phoneAScroll && phoneATodaySection) {
+      requestAnimationFrame(() => {
+        const scrollRect = phoneAScroll.getBoundingClientRect();
+        const todayRect = phoneATodaySection.getBoundingClientRect();
+        const targetDelta = todayRect.top - scrollRect.top - 46;
+        phoneAScroll.scrollBy({ top: targetDelta, behavior: 'auto' });
+      });
+    }
+  });
+
+  // Escape closes sheet
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.sheet.open').forEach(sheet => {
+        closeSheet(sheet.id);
+      });
+    }
+  });
+</script>
+
+</body>
+</html>

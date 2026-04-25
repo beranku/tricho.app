@@ -1,0 +1,23 @@
+---
+// iOS dynamic island — pure decoration on desktop preview, hidden on real
+// devices via media query (the OS draws it for us).
+---
+
+<div class="island" aria-hidden="true"></div>
+
+<style>
+  .island {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 30px;
+    background: #1A1714;
+    border-radius: 999px;
+    z-index: var(--z-island);
+  }
+  @media (max-width: 480px) {
+    .island { display: none; }
+  }
+</style>

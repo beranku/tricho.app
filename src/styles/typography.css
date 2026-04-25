@@ -1,0 +1,57 @@
+/* Typography utilities — role-based, never decorative.
+ * See north-star §4 for the rules.
+ *   Fraunces — narrative (names, dates, slot times)
+ *   Geist    — functional UI (chips, kickers, sub-text, numerics)
+ *   Caveat   — short hand-written annotations (allergen badge)
+ *   Patrick Hand — prose annotations (free-slot label, camera hint, notes)
+ */
+
+.font-fraunces {
+  font-family: 'Fraunces', 'Iowan Old Style', 'Charter', 'Georgia', serif;
+  font-variation-settings: 'opsz' 28;
+  letter-spacing: -0.02em;
+}
+
+.font-geist {
+  font-family: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.005em;
+}
+
+.font-caveat {
+  font-family: 'Caveat', 'Comic Sans MS', cursive;
+  letter-spacing: 0;
+}
+
+.font-patrick {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  letter-spacing: 0.005em;
+}
+
+/* Tabular numerics — required everywhere we line up digits. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kicker — the all-caps copper label above narrative text. */
+.kicker {
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--copper);
+  line-height: 1;
+}
+.kicker.live {
+  color: var(--teal);
+}
+
+/* Section labels (Geist, ink-3, uppercase, 14em letter spacing). */
+.section-label {
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 550;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}

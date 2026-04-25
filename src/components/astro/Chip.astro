@@ -1,0 +1,79 @@
+---
+import CheckHandDrawn from './icons/CheckHandDrawn.astro';
+type Variant = 'default' | 'checked' | 'empty' | 'add' | 'allergen';
+
+interface Props {
+  variant?: Variant;
+  label: string;
+}
+const { variant = 'default', label } = Astro.props;
+---
+
+<span class:list={['chip', `chip--${variant}`, variant === 'allergen' ? 'font-caveat' : 'font-geist']} role={variant === 'add' ? 'button' : undefined}>
+  {variant === 'checked' && (
+    <span class="chip-check chip-check-filled" aria-hidden="true"><CheckHandDrawn size={12} /></span>
+  )}
+  {variant === 'empty' && (
+    <span class="chip-check chip-check-empty" aria-hidden="true"></span>
+  )}
+  {variant === 'add' && (
+    <span class="chip-add-plus" aria-hidden="true">+</span>
+  )}
+  <span class="chip-label">{label}</span>
+</span>
+
+<style>
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px 8px 10px;
+    border-radius: 999px;
+    font-size: 14.5px;
+    font-weight: 400;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .chip--add {
+    border: 1px dashed var(--copper-border);
+    background: transparent;
+    color: var(--copper-mid);
+    cursor: pointer;
+    padding: 8px 16px 8px 10px;
+  }
+  .chip-add-plus {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--copper-mid);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .chip-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink-4);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chip-check-filled {
+    color: var(--copper-mid);
+  }
+  .chip--allergen {
+    color: var(--amber);
+    background: transparent;
+    border: 1px solid rgba(185, 121, 64, 0.32);
+    font-size: 17px;
+    font-weight: 600;
+    padding: 6px 14px;
+  }
+  .chip-label {
+    line-height: 1.2;
+  }
+</style>

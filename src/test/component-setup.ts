@@ -76,11 +76,50 @@ beforeEach(() => {
     } as unknown;
   }
 
-  // ── HTMLCanvasElement.toBlob — jsdom has no canvas backend ───────
-  if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.toBlob) {
+  // ── HTMLCanvasElement.toBlob + getContext — jsdom has no canvas backend.
+  // jsdom DOES define toBlob but it throws "not implemented", so unconditional overwrite.
+  // Blobs returned by the polyfill must expose arrayBuffer() because production
+  // code reads canvas captures with `await blob.arrayBuffer()`.
+  if (typeof HTMLCanvasElement !== 'undefined') {
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback): void {
-      queueMicrotask(() => cb(new Blob([new Uint8Array(8)], { type: 'image/png' })));
+      const bytes = new Uint8Array(8);
+      const blob = new Blob([bytes], { type: 'image/jpeg' }) as Blob & { arrayBuffer: () => Promise<ArrayBuffer> };
+      // jsdom Blob lacks arrayBuffer in older versions; polyfill it.
+      if (typeof blob.arrayBuffer !== 'function') {
+        blob.arrayBuffer = () => Promise.resolve(bytes.buffer.slice(0));
+      }
+      queueMicrotask(() => cb(blob));
     };
+  }
+  // Same patch on Blob.prototype globally so any Blob created in tests works.
+  if (typeof Blob !== 'undefined' && !(Blob.prototype as { arrayBuffer?: unknown }).arrayBuffer) {
+    (Blob.prototype as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer = function () {
+      return Promise.resolve(new Uint8Array(8).buffer);
+    };
+  }
+  if (typeof HTMLCanvasElement !== 'undefined') {
+    const proto = HTMLCanvasElement.prototype as unknown as {
+      getContext: (type: string) => unknown;
+    };
+    proto.getContext = function (): unknown {
+      return {
+        drawImage: vi.fn(),
+        getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
+        putImageData: vi.fn(),
+        fillRect: vi.fn(),
+        clearRect: vi.fn(),
+      };
+    };
+  }
+
+  // ── HTMLMediaElement.play — jsdom doesn't implement video playback
+  if (typeof HTMLMediaElement !== 'undefined') {
+    const proto = HTMLMediaElement.prototype as unknown as {
+      play: () => Promise<void>;
+      pause: () => void;
+    };
+    proto.play = vi.fn(() => Promise.resolve());
+    proto.pause = vi.fn();
   }
 });
 

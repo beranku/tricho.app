@@ -1,0 +1,59 @@
+---
+// Phone B's current-head row — service label + allergen + countdown for the
+// active appointment. Only renders if `serviceLabel` is provided.
+interface Props {
+  serviceLabel?: string;       // "Diagnostika"
+  allergen?: string;           // "Amoniak"
+  remainingLabel?: string;     // "zbývá 45 min"
+}
+const { serviceLabel, allergen, remainingLabel } = Astro.props;
+---
+
+{serviceLabel && (
+  <div class="current-head">
+    <div class="current-main font-fraunces tabular-nums">{serviceLabel}</div>
+    <div class="alert-meta">
+      {allergen && <span class="alert-allergen font-caveat">{allergen}</span>}
+      {remainingLabel && <span class="alert-remaining font-geist tabular-nums">{remainingLabel}</span>}
+    </div>
+  </div>
+)}
+
+<style>
+  .current-head {
+    padding: 0 20px;
+    margin-top: 4px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .current-main {
+    font-weight: 550;
+    font-variation-settings: 'opsz' 28;
+    font-size: 22px;
+    color: var(--teal-strong);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .alert-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 11px;
+    white-space: nowrap;
+  }
+  .alert-allergen {
+    font-weight: 600;
+    font-size: 22px;
+    color: var(--amber);
+    line-height: 1;
+  }
+  .alert-remaining {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+</style>

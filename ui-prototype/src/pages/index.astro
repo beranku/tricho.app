@@ -1,0 +1,314 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+
+// Atomic components
+import PhoneFrame from '../components/astro/PhoneFrame.astro';
+import StatusBar from '../components/astro/StatusBar.astro';
+import Island from '../components/astro/Island.astro';
+import ChromeButtons from '../components/astro/ChromeButtons.astro';
+import ChromeGlyph from '../components/astro/ChromeGlyph.astro';
+import Hamburger from '../components/astro/icons/Hamburger.astro';
+import Ellipsis from '../components/astro/icons/Ellipsis.astro';
+import CalendarPlus from '../components/astro/icons/CalendarPlus.astro';
+
+import DaySection from '../components/astro/DaySection.astro';
+import DayHeaderToday from '../components/astro/DayHeaderToday.astro';
+import DayDivider from '../components/astro/DayDivider.astro';
+
+import Slot from '../components/astro/Slot.astro';
+import SlotDone from '../components/astro/SlotDone.astro';
+import SlotActive from '../components/astro/SlotActive.astro';
+import SlotFree from '../components/astro/SlotFree.astro';
+
+// Islands (hydratované v browseru)
+import { PhoneScroll } from '../components/islands/PhoneScroll';
+import { FabSecondary } from '../components/islands/FabSecondary';
+import { BottomSheet } from '../components/islands/BottomSheet';
+import { ThemeToggle } from '../components/islands/ThemeToggle';
+
+import { formatDayKicker } from '../lib/format/date';
+
+/**
+ * Phone A — Daily schedule view.
+ * Ukázka kompozice komponent. V produkci budou sloty dotaženy z Dexie DB
+ * (next cycle).
+ */
+
+// Mock data — replace with DB query in production
+const today = new Date();
+today.setHours(10, 35, 0, 0);
+
+const yesterday = new Date(today);
+yesterday.setDate(today.getDate() - 1);
+
+const tomorrow = new Date(today);
+tomorrow.setDate(today.getDate() + 1);
+
+const dayAfter = new Date(today);
+dayAfter.setDate(today.getDate() + 2);
+
+function at(base: Date, h: number, m: number): Date {
+  const d = new Date(base);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+---
+
+<AppLayout title="Dnes — Tricho" stage>
+  <PhoneFrame framed>
+    <StatusBar />
+    <Island />
+
+    <!-- Always-on chrome buttons nad scroll vrstvou -->
+    <ChromeButtons>
+      <ChromeGlyph
+        ariaLabel="Otevřít menu"
+        id="menu-trigger-a"
+        slot="left"
+      >
+        <Hamburger />
+      </ChromeGlyph>
+      <ChromeGlyph ariaLabel="Další možnosti" slot="right">
+        <Ellipsis />
+      </ChromeGlyph>
+    </ChromeButtons>
+
+    <!-- React Island: scroll container s stuck + scroll-to-today -->
+    <PhoneScroll client:load hasToday={true}>
+      <div class="scroll-topspacer"></div>
+
+      <!-- PAST: Včera -->
+      <DaySection>
+        <DayDivider date={yesterday} kicker={formatDayKicker(yesterday, today)} />
+        <SlotDone startAt={at(yesterday, 10, 0)} clientName="Eliška Horáková" services={["Barvení", "Střih"]} />
+        <SlotDone startAt={at(yesterday, 13, 30)} clientName="Marek Svoboda" services={["Diagnostika"]} />
+        <SlotDone startAt={at(yesterday, 16, 0)} clientName="Hana Černá" services={["Konzultace"]} />
+      </DaySection>
+
+      <!-- TODAY -->
+      <DaySection isToday>
+        <DayHeaderToday date={today} temperatureC={15} />
+        <SlotDone startAt={at(today, 9, 10)} clientName="Jana Nováková" services={["Konzultace", "Diagnostika"]} href="/clients/jana-novakova" />
+        <SlotActive startAt={at(today, 10, 30)} clientName="Klára Dvořáková" services={["Diagnostika"]} />
+        <SlotFree startAt={at(today, 11, 0)} durationMinutes={180} />
+        <Slot startAt={at(today, 14, 0)} clientName="Tereza Malá" services={["Střih"]} />
+        <SlotFree startAt={at(today, 14, 45)} durationMinutes={105} />
+        <Slot startAt={at(today, 16, 30)} clientName="Adam Kříž" services={["Trichologický zákrok"]} />
+        <SlotFree startAt={at(today, 17, 30)} durationMinutes={30} />
+      </DaySection>
+
+      <!-- FUTURE: Zítra -->
+      <DaySection>
+        <DayDivider date={tomorrow} kicker={formatDayKicker(tomorrow, today)} />
+        <Slot startAt={at(tomorrow, 9, 30)} clientName="Lucie Veselá" services={["Konzultace"]} />
+        <SlotFree startAt={at(tomorrow, 10, 30)} durationMinutes={90} />
+        <Slot startAt={at(tomorrow, 12, 0)} clientName="Petr Kříž" services={["Diagnostika"]} />
+      </DaySection>
+
+      <!-- FUTURE: den po zítřku -->
+      <DaySection>
+        <DayDivider date={dayAfter} kicker={formatDayKicker(dayAfter, today)} />
+        <SlotFree startAt={at(dayAfter, 9, 0)} durationMinutes={480} />
+      </DaySection>
+
+      <div class="scroll-bottomspacer"></div>
+    </PhoneScroll>
+
+    <!-- Primary FAB -->
+    <button class="fab" aria-label="Nová událost">
+      <CalendarPlus />
+    </button>
+
+    <!-- Secondary FAB (scroll-to-today) -->
+    <FabSecondary client:load />
+
+    <!-- Bottom sheet: menu -->
+    <BottomSheet client:load id="menu-a" label="Menu">
+      <div class="sheet-sync">
+        <span class="sheet-sync-dot"></span>
+        <span>Synchronizováno · před 2 min</span>
+      </div>
+
+      <div class="sheet-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20 L16 16"/></svg>
+        <span>Vyhledat klienta…</span>
+      </div>
+
+      <nav class="sheet-nav">
+        <a class="sheet-nav-item ty-nav-item" href="/clients">
+          <span>Klienti</span>
+          <span class="sheet-nav-badge">142</span>
+        </a>
+        <a class="sheet-nav-item ty-nav-item" href="#"><span>Historie</span></a>
+        <a class="sheet-nav-item ty-nav-item" href="#"><span>Statistiky</span></a>
+        <a class="sheet-nav-item ty-nav-item" href="#"><span>Archiv</span></a>
+        <a class="sheet-nav-item ty-nav-item" href="#"><span>Nastavení</span></a>
+      </nav>
+
+      <div class="sheet-theme">
+        <span class="sheet-theme-label">Tmavý režim</span>
+        <ThemeToggle client:load />
+      </div>
+    </BottomSheet>
+
+    <!-- Small inline script: napojit menu tlačítko na otevření sheetu -->
+    <script>
+      import { openSheet } from '../lib/store/sheet';
+      document.getElementById('menu-trigger-a')?.addEventListener('click', () => openSheet('menu-a'));
+    </script>
+  </PhoneFrame>
+</AppLayout>
+
+<style>
+  /* ═══════════════ SCROLL STRUCTURE ═══════════════ */
+  :global(.phone-scroll) {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  :global(.phone-scroll::-webkit-scrollbar) {
+    width: 3px;
+  }
+  :global(.phone-scroll::-webkit-scrollbar-thumb) {
+    background: var(--line);
+    border-radius: 3px;
+  }
+
+  .scroll-topspacer {
+    height: var(--sticky-top);
+    flex-shrink: 0;
+  }
+  .scroll-bottomspacer {
+    height: 120px;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════ FAB primary ═══════════════ */
+  .fab {
+    position: absolute;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    right: 18px;
+    width: 58px; height: 58px;
+    border-radius: 19px;
+    background: linear-gradient(160deg, var(--teal) 0%, var(--teal) 50%, var(--teal-strong) 100%);
+    color: #FDFAF3;
+    border: none;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow:
+      0 1px 2px rgba(14, 116, 144, 0.15),
+      0 6px 14px -2px rgba(14, 116, 144, 0.22),
+      0 18px 32px -10px rgba(176, 110, 82, 0.22),
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 -1px 0 rgba(0,0,0,0.1);
+    z-index: 15;
+    cursor: pointer;
+    transition: transform var(--t-std);
+  }
+  .fab:active {
+    transform: scale(0.96);
+  }
+
+  /* ═══════════════ FAB secondary styles ═══════════════ */
+  :global(.fab-secondary) {
+    position: absolute;
+    bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    left: 20px;
+    width: 44px; height: 44px;
+    border-radius: 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--card-shadow);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-2);
+    cursor: pointer;
+    z-index: 16;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px) scale(0.9);
+    transition:
+      opacity var(--t-std),
+      transform var(--t-std) var(--ease-std);
+    padding: 0;
+  }
+  :global(.fab-secondary.visible) {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+  :global(.fab-secondary .fab-arrow) {
+    transition: transform var(--t-std);
+  }
+  :global(.fab-secondary.direction-down .fab-arrow) {
+    transform: rotate(180deg);
+  }
+
+  /* ═══════════════ Sheet internal content ═══════════════ */
+  :global(.sheet-sync) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 14px;
+    font-family: 'Geist', sans-serif;
+    font-size: 12px;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  :global(.sheet-sync-dot) {
+    width: 7px; height: 7px;
+    background: var(--teal);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.15);
+  }
+
+  :global(.sheet-search) {
+    margin: 14px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border-radius: 12px;
+    color: var(--ink-3);
+    font-family: 'Geist', sans-serif;
+    font-size: 14px;
+  }
+
+  :global(.sheet-nav) {
+    padding: 4px 0;
+  }
+  :global(.sheet-nav-item) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 4px;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  :global(.sheet-nav-item:last-child) {
+    border-bottom: none;
+  }
+  :global(.sheet-nav-badge) {
+    font-family: 'Geist', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-4);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :global(.sheet-theme) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 4px 4px;
+  }
+  :global(.sheet-theme-label) {
+    font-family: 'Geist', sans-serif;
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+</style>

@@ -1,0 +1,37 @@
+---
+/**
+ * Always-on chrome buttons overlay — menu + ellipsis nad scroll vrstvou.
+ * Absolute top: 46px, z-index 16, pointer-events: none na kontejneru
+ * (jen tlačítka samotná jsou klikatelná).
+ *
+ * Použije se jen pro Phone A (daily schedule) — Phone B má buttons
+ * uvnitř top-chrome (jediná sekce, netřeba extrakce).
+ *
+ * Obsah se předává přes dva pojmenované sloty — `left` a `right`.
+ */
+---
+
+<div class="chrome-buttons">
+  <slot name="left" />
+  <slot name="right" />
+</div>
+
+<style>
+  .chrome-buttons {
+    position: absolute;
+    top: var(--sticky-top);
+    left: 0;
+    right: 0;
+    min-height: 48px;
+    padding: var(--chrome-padding);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    z-index: 16;
+    pointer-events: none; /* center je transparentní */
+  }
+  .chrome-buttons :global(> *) {
+    pointer-events: auto; /* jen tlačítka klikatelná */
+  }
+</style>

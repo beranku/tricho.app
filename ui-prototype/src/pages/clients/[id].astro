@@ -1,0 +1,264 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+
+import PhoneFrame from '../../components/astro/PhoneFrame.astro';
+import StatusBar from '../../components/astro/StatusBar.astro';
+import Island from '../../components/astro/Island.astro';
+import ChromeGlyph from '../../components/astro/ChromeGlyph.astro';
+import BackArrow from '../../components/astro/icons/BackArrow.astro';
+import Ellipsis from '../../components/astro/icons/Ellipsis.astro';
+import CalendarPlus from '../../components/astro/icons/CalendarPlus.astro';
+import CurrentHead from '../../components/astro/CurrentHead.astro';
+import DetailCard from '../../components/astro/DetailCard.astro';
+import Chip from '../../components/astro/Chip.astro';
+
+import { PhoneScroll } from '../../components/islands/PhoneScroll';
+import { CameraCard } from '../../components/islands/CameraCard';
+
+import { formatTime } from '../../lib/format/time';
+import { formatShortDate } from '../../lib/format/date';
+
+/**
+ * Phone B — Client detail.
+ * V produkci dostane Astro.params.id a načte klienta z Dexie DB.
+ * Pro V1 demo hardcoded mock data.
+ */
+export function getStaticPaths() {
+  return [{ params: { id: 'jana-novakova' } }];
+}
+
+const { id: _id } = Astro.params;
+
+// Mock data
+const now = new Date();
+const startAt = new Date(now);
+startAt.setHours(9, 10, 0, 0);
+
+const endAt = new Date(now);
+endAt.setHours(now.getHours() + (now.getMinutes() < 25 ? 0 : 1), now.getMinutes() + 45, 0, 0);
+
+const historyDates = [
+  new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000),
+  new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000),
+  new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+];
+---
+
+<AppLayout title="Jana Nováková — Tricho" stage>
+  <PhoneFrame framed>
+    <StatusBar />
+    <Island />
+
+    <!-- Phone B: starý top-chrome pattern (jediná sekce, buttons uvnitř) -->
+    <div class="top-chrome">
+      <ChromeGlyph ariaLabel="Zpět" href="/">
+        <BackArrow />
+      </ChromeGlyph>
+      <div class="chrome-title">
+        <div class="chrome-stack">
+          <span class="ty-header-main client-name">Jana&nbsp;Nováková</span>
+        </div>
+      </div>
+      <ChromeGlyph ariaLabel="Další možnosti">
+        <Ellipsis />
+      </ChromeGlyph>
+    </div>
+
+    <PhoneScroll client:load>
+      <div class="scroll-topspacer"></div>
+
+      <div class="phone-b-content">
+        <CurrentHead startAt={startAt} endAt={endAt} allergen="Amoniak" />
+
+        <CameraCard client:load defaultLabel="temeno-detail" />
+
+        <DetailCard label="Dnešní fotografie">
+          <div class="thumb-row">
+            <div class="thumb"></div>
+            <div class="thumb"></div>
+            <button type="button" class="thumb thumb-add" aria-label="Přidat fotografii">+</button>
+          </div>
+        </DetailCard>
+
+        <DetailCard label="Aplikované služby">
+          <div class="chip-row">
+            <Chip>Diagnostika</Chip>
+            <Chip>Konzultace</Chip>
+          </div>
+        </DetailCard>
+
+        <DetailCard label="Produkty">
+          <div class="chip-row">
+            <Chip variant="product" price="450 Kč">Revita šampon</Chip>
+            <Chip variant="product" price="320 Kč">Vlasové sérum</Chip>
+          </div>
+        </DetailCard>
+
+        <DetailCard label="Alergeny">
+          <div class="chip-row">
+            <span class="ty-allergen">Amoniak</span>
+            <span class="ty-allergen">PPD</span>
+          </div>
+        </DetailCard>
+
+        <DetailCard label="Historie návštěv">
+          <ul class="history-list">
+            {historyDates.map((d) => (
+              <li class="history-item">
+                <span class="ty-slot-time history-date">{formatShortDate(d)}</span>
+                <span class="ty-slot-sub history-desc">Diagnostika · Konzultace</span>
+                <span class="ty-slot-time dim history-time">{formatTime(d)}</span>
+              </li>
+            ))}
+          </ul>
+        </DetailCard>
+      </div>
+
+      <div class="scroll-bottomspacer"></div>
+    </PhoneScroll>
+
+    <button class="fab" aria-label="Nová událost">
+      <CalendarPlus />
+    </button>
+  </PhoneFrame>
+</AppLayout>
+
+<style>
+  /* Scroll */
+  :global(.phone-scroll) {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-topspacer {
+    height: 48px;
+    flex-shrink: 0;
+  }
+  .scroll-bottomspacer {
+    height: 120px;
+    flex-shrink: 0;
+  }
+
+  /* Top chrome (Phone B pattern — buttons uvnitř sticky) */
+  .top-chrome {
+    position: absolute;
+    top: var(--sticky-top);
+    left: 0; right: 0;
+    padding: var(--chrome-padding);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    z-index: 15;
+    min-height: 48px;
+    background: var(--bg);
+  }
+  .chrome-title {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 0;
+  }
+  .chrome-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    line-height: 1;
+  }
+
+  .phone-b-content {
+    padding-top: 4px;
+  }
+
+  /* Thumbnails */
+  .thumb-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+  }
+  .thumb {
+    width: 76px;
+    height: 76px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    flex-shrink: 0;
+  }
+  .thumb-add {
+    border: 1.5px dashed var(--copper-border);
+    color: var(--copper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Caveat', cursive;
+    font-size: 28px;
+    font-weight: 600;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  /* Chip row */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* History */
+  .history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .history-item {
+    display: grid;
+    grid-template-columns: 78px 1fr auto;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .history-item:last-child {
+    border-bottom: none;
+  }
+  .history-date {
+    color: var(--ink-2);
+  }
+  .history-desc {
+    color: var(--ink-3);
+    margin-top: 0;
+  }
+  .history-time {
+    font-size: 13px;
+  }
+
+  /* FAB */
+  .fab {
+    position: absolute;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    right: 18px;
+    width: 58px;
+    height: 58px;
+    border-radius: 19px;
+    background: linear-gradient(160deg, var(--teal) 0%, var(--teal) 50%, var(--teal-strong) 100%);
+    color: #FDFAF3;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      0 1px 2px rgba(14, 116, 144, 0.15),
+      0 6px 14px -2px rgba(14, 116, 144, 0.22),
+      0 18px 32px -10px rgba(176, 110, 82, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    z-index: 15;
+    cursor: pointer;
+    transition: transform var(--t-std);
+  }
+  .fab:active {
+    transform: scale(0.96);
+  }
+</style>

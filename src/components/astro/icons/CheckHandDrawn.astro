@@ -1,0 +1,10 @@
+---
+// Sanctioned hand-drawn glyph #2 — see north-star §5.2.
+interface Props { size?: number; }
+const { size = 14 } = Astro.props;
+---
+<svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+  <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8"
+        stroke="currentColor" stroke-width="1.8" fill="none"
+        stroke-linecap="round" stroke-linejoin="round" />
+</svg>

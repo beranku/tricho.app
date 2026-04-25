@@ -1,0 +1,118 @@
+---
+import SunHandDrawn from './icons/SunHandDrawn.astro';
+import Caret from './icons/Caret.astro';
+import { formatShortDate } from '../../lib/format/date';
+
+/**
+ * Sticky hlavička dnešní sekce. Struktura identická s DayDivider,
+ * ale bez flanking linek — a se sluníčkem vlevo + teplotou vpravo od "Dnes".
+ *
+ * Je SIBLING s chrome-buttons overlay (který je nad ní v z-index),
+ * takže padding má rezervovaný prostor pro tlačítka (68px z obou stran).
+ */
+interface Props {
+  date: Date;
+  /** Teplota ve °C (bez symbolu) */
+  temperatureC?: number;
+  /** Přidat caret k datu (symbolicky naznačuje date picker) */
+  withCaret?: boolean;
+}
+
+const { date, temperatureC, withCaret = true } = Astro.props;
+const dateStr = formatShortDate(date);
+---
+
+<div class="day-header-today">
+  <span class="weather-sun-left">
+    <SunHandDrawn size={26} />
+  </span>
+
+  <div class="chrome-title">
+    <div class="chrome-stack">
+      <span class="chrome-kicker-wrap">
+        <span class="ty-kicker live">Dnes</span>
+        {temperatureC !== undefined && (
+          <span class="ty-temp">{temperatureC}°</span>
+        )}
+      </span>
+      <span class="ty-header-main chrome-main">
+        {dateStr}
+        {withCaret && (
+          <span class="chrome-caret">
+            <Caret size={9} />
+          </span>
+        )}
+      </span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .day-header-today {
+    position: sticky;
+    top: var(--sticky-top);
+    min-height: 48px;
+    padding: var(--day-header-padding);
+    background: var(--bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 15;
+  }
+
+  .weather-sun-left {
+    position: absolute;
+    left: 64px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--copper);
+    opacity: 0.9;
+    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .chrome-title {
+    position: relative;
+    flex: 0 1 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .chrome-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
+  }
+
+  .chrome-kicker-wrap {
+    position: relative;
+    display: inline-block;
+    line-height: 1;
+  }
+  .chrome-kicker-wrap .ty-temp {
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+  }
+
+  .chrome-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .chrome-caret {
+    margin-left: 4px;
+    color: var(--ink-4);
+    display: inline-flex;
+    align-items: center;
+  }
+</style>

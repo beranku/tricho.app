@@ -1,0 +1,52 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+---
+
+<AppLayout title="Offline — Tricho" stage>
+  <div class="offline-box">
+    <h1 class="offline-title">Teď jsi offline.</h1>
+    <p class="offline-body">
+      Žádný strach — Tricho se ti stará o záznamy lokálně. Jakmile se síť vrátí,
+      všechno se samo synchronizuje.
+    </p>
+    <a class="offline-back" href="/">Zpět na dnešek</a>
+  </div>
+</AppLayout>
+
+<style>
+  .offline-box {
+    max-width: 340px;
+    padding: 40px 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: var(--card-shadow);
+    text-align: center;
+  }
+  .offline-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 24px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+  .offline-body {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 16px;
+    color: var(--ink-3);
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+  .offline-back {
+    display: inline-block;
+    padding: 10px 20px;
+    background: var(--teal);
+    color: #FDFAF3;
+    border-radius: 12px;
+    text-decoration: none;
+    font-family: 'Geist', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+  }
+</style>

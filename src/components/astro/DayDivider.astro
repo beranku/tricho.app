@@ -1,0 +1,57 @@
+---
+// Sticky divider for non-today sections. Same vertical rhythm as
+// DayHeaderToday so the push-stack swap is seamless.
+interface Props {
+  kicker: string;  // "Zítra", "Pátek", "Včera", ...
+  date: string;    // "23. dubna"
+}
+const { kicker, date } = Astro.props;
+---
+
+<div class="dv-a-wrap">
+  <div class="dv-a">
+    <span class="dv-a-line"></span>
+    <span class="dv-a-kicker kicker">{kicker}</span>
+    <span class="dv-a-line"></span>
+  </div>
+  <div class="dv-a-main font-fraunces tabular-nums">{date}</div>
+</div>
+
+<style>
+  .dv-a-wrap {
+    position: sticky;
+    top: 46px;
+    padding: 10px 20px 12px;
+    background: var(--bg);
+    z-index: var(--z-dv-a);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-height: 48px;
+  }
+  .dv-a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--copper);
+  }
+  .dv-a-line {
+    flex: 0 0 32px;
+    height: 1px;
+    background: var(--copper-border);
+    opacity: 0.6;
+  }
+  .dv-a-kicker {
+    font-size: 10px;
+    line-height: 1;
+  }
+  .dv-a-main {
+    font-weight: 500;
+    font-variation-settings: 'opsz' 28;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+</style>

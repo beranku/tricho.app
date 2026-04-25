@@ -1,0 +1,26 @@
+---
+/**
+ * Containing block pro jeden den (past / today / future). Uvnitř je
+ * sticky header (DayHeaderToday nebo DayDivider) a seznam slotů.
+ *
+ * Sticky positioning je omezeno na containing block, což zajišťuje
+ * push-stack chování: když sekce scrolluje pryč, její sticky header jde s ní.
+ * Viz tricho-north-star.md § 6.2.
+ */
+interface Props {
+  /** Pokud je true, je to sekce dnešku — PhoneScroll island ji najde přes atribut */
+  isToday?: boolean;
+}
+
+const { isToday = false } = Astro.props;
+---
+
+<section class="day-section" data-today={isToday ? 'true' : undefined}>
+  <slot />
+</section>
+
+<style>
+  .day-section {
+    display: block;
+  }
+</style>

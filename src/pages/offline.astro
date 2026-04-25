@@ -1,0 +1,57 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="TrichoApp — offline">
+  <main class="offline">
+    <div class="offline-card">
+      <h1 class="font-fraunces">Bez připojení</h1>
+      <p class="font-patrick">
+        Tricho funguje i bez internetu. Otevřete plán, prohlížejte klienty,
+        focejte zákroky — synchronizace se rozjede, jakmile budete zase online.
+      </p>
+      <a href="/" class="back-link font-geist">← Zpět na plán</a>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .offline {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .offline-card {
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    padding: 32px;
+    box-shadow: var(--card-shadow);
+    text-align: center;
+  }
+  .offline-card h1 {
+    font-weight: 550;
+    font-size: 28px;
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+  .offline-card p {
+    color: var(--ink-2);
+    font-size: 18px;
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+  .back-link {
+    color: var(--copper);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+  }
+  .back-link:hover {
+    color: var(--copper-mid);
+  }
+</style>

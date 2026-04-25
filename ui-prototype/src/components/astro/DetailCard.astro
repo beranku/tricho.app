@@ -1,0 +1,27 @@
+---
+/**
+ * Karta s nadpisem (kicker) a slot pro obsah (chipy, thumbnaily, atd.).
+ * Používá se v detailu klienta pro skupiny informací.
+ */
+interface Props {
+  /** Kicker label (UPPERCASE) */
+  label: string;
+}
+
+const { label } = Astro.props;
+---
+
+<div class="detail-card">
+  <div class="ty-detail-label detail-label">{label}</div>
+  <slot />
+</div>
+
+<style>
+  .detail-card {
+    padding: 16px 20px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .detail-label {
+    margin-bottom: 12px;
+  }
+</style>

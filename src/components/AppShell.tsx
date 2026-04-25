@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LoginScreen } from './LoginScreen';
 import { SettingsScreen } from './SettingsScreen';
-import { SyncStatus } from './SyncStatus';
-import { CustomerCRM } from './CustomerCRM';
-import { PhotoCapture } from './PhotoCapture';
 import { OAuthScreen } from './OAuthScreen';
 import { DeviceLimitScreen } from './DeviceLimitScreen';
+import { JoinVaultScreen } from './JoinVaultScreen';
+import { ChromeButtons } from './islands/ChromeButtons';
+import { BottomSheet } from './islands/BottomSheet';
+import { MenuSheet, FabAddSheet } from './islands/MenuSheet';
+import { DailySchedule } from './islands/DailySchedule';
+import { ClientDetail } from './islands/ClientDetail';
+import { openSheet, closeSheet } from '../lib/store/sheet';
+import { bootstrapTheme } from '../lib/store/theme';
 import {
   createVaultState,
   generateVaultId,
@@ -28,10 +33,16 @@ import {
   importAesGcmKey,
 } from '../crypto/envelope';
 import { registerPasskey, getPrfOutput, isWebAuthnAvailable } from '../auth/webauthn';
-import { openVaultDb, closeVaultDb, type VaultDb } from '../db/pouch';
+import { openVaultDb, closeVaultDb, putEncrypted, getDecrypted, queryDecrypted, getVaultDb, type VaultDb } from '../db/pouch';
+import { DOC_TYPES, type CustomerData } from '../db/types';
 import { userDbUrlFor } from '../sync/couch-auth';
-import { startSync, stopSync } from '../sync/couch';
-import { uploadVaultState, downloadVaultState } from '../sync/couch-vault-state';
+import { startSync, stopSync, getSyncState, subscribeSyncEvents, type SyncState } from '../sync/couch';
+import {
+  uploadVaultState,
+  downloadVaultState,
+  fetchVaultStateOverHttp,
+  type VaultStateDoc,
+} from '../sync/couch-vault-state';
 import {
   consumePendingOAuthResult,
   clearAuthCompleteHash,
@@ -40,7 +51,22 @@ import {
 import { TokenStore } from '../auth/token-store';
 import { IdleLock } from '../sync/idle-lock';
 
-type View = 'loading' | 'oauth' | 'login' | 'unlocked' | 'settings' | 'device-limit';
+type View = 'loading' | 'oauth' | 'login' | 'join_vault' | 'unlocked' | 'settings' | 'device-limit';
+
+const VAULT_STATE_PROBE_TIMEOUT_MS = 5_000;
+
+async function fetchVaultStateWithTimeout(
+  username: string,
+  jwt: string,
+  timeoutMs = VAULT_STATE_PROBE_TIMEOUT_MS,
+): Promise<VaultStateDoc | null> {
+  return Promise.race<VaultStateDoc | null>([
+    fetchVaultStateOverHttp(username, jwt),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('vault-state probe timed out')), timeoutMs),
+    ),
+  ]);
+}
 
 async function deriveKekFromSecret(
   secret: Uint8Array,
@@ -118,6 +144,7 @@ export function AppShell(): JSX.Element {
   const [tokenStore, setTokenStore] = useState<TokenStore | null>(null);
   const [pendingOAuth, setPendingOAuth] = useState<OAuthResult | null>(() => readPendingOAuth());
   const [authHint, setAuthHint] = useState<string | null>(null);
+  const [serverVaultState, setServerVaultState] = useState<VaultStateDoc | null>(null);
   const routedOnceRef = useRef(false);
 
   // On mount: probe local state, pick up any OAuth callback result, route.
@@ -155,10 +182,29 @@ export function AppShell(): JSX.Element {
 
       // Route:
       // - Vault already on device → go straight to unlock.
-      // - No local vault, OAuth result present → create/restore flow.
+      // - No local vault, OAuth result present → probe server for an
+      //   existing vault before defaulting to "create new vault". A hit
+      //   means another device already created the vault for this user;
+      //   we route to the join flow so we don't silently fork the data.
       // - No local vault, no OAuth result → show OAuth screen.
       if (hasVault) {
         setView('login');
+      } else if (incoming?.tokens?.jwt && incoming.couchdbUsername) {
+        let probed: VaultStateDoc | null = null;
+        try {
+          probed = await fetchVaultStateWithTimeout(
+            incoming.couchdbUsername,
+            incoming.tokens.jwt,
+          );
+        } catch (err) {
+          console.warn('[AppShell] vault-state probe failed', err);
+        }
+        if (probed) {
+          setServerVaultState(probed);
+          setView('join_vault');
+        } else {
+          setView('login');
+        }
       } else if (incoming) {
         setView('login');
       } else {
@@ -260,6 +306,48 @@ export function AppShell(): JSX.Element {
   }, []);
 
   /**
+   * Second-device join: server already has a `vault-state` doc; the user
+   * provides the same Recovery Secret used at vault creation. We unwrap
+   * the shared DEK locally, then materialise a local vault record that
+   * mirrors the server's `vaultId` + `deviceSalt` so payload `kid` and
+   * KEK derivation match across devices.
+   */
+  const onJoinVault = useCallback(async (rs: Uint8Array): Promise<void> => {
+    if (!serverVaultState) throw new Error('No server-side vault-state to join.');
+    const deviceSalt = decodeBase64url(serverVaultState.deviceSalt);
+    const kek = await deriveKekFromRs(rs, deviceSalt);
+    const unwrapped = await unwrapDekWithKek(serverVaultState.wrappedDekRs, kek);
+
+    const oauth = pendingOAuth ?? readPendingOAuth();
+    const userId = oauth?.couchdbUsername ?? `local-${serverVaultState.vaultId}`;
+
+    const local: VaultState = {
+      vaultId: serverVaultState.vaultId,
+      deviceSalt: serverVaultState.deviceSalt,
+      wrappedDekPrf: null,
+      wrappedDekRs: serverVaultState.wrappedDekRs,
+      credentialId: null,
+      userId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      rsConfirmed: true,
+      metadata: createDefaultMetadata(),
+    };
+    await createVaultState(local);
+
+    setVaultId(serverVaultState.vaultId);
+    setDek(unwrapped);
+    setHasExistingVault(true);
+  }, [serverVaultState, pendingOAuth]);
+
+  const onJoinSignOut = useCallback(() => {
+    stashPendingOAuth(null);
+    setPendingOAuth(null);
+    setServerVaultState(null);
+    setView('oauth');
+  }, []);
+
+  /**
    * After unlock: open PouchDB, materialise the TokenStore from the encrypted
    * identity doc (if any), otherwise seed it from a pending OAuth result, and
    * start sync.
@@ -300,6 +388,7 @@ export function AppShell(): JSX.Element {
           const vault = await getVaultState(vaultId);
           if (vault?.wrappedDekRs) {
             await uploadVaultState(opened, {
+              vaultId,
               deviceSalt: vault.deviceSalt,
               wrappedDekRs: vault.wrappedDekRs,
               version: vault.wrappedDekRs.version,
@@ -329,6 +418,75 @@ export function AppShell(): JSX.Element {
       void closeVaultDb();
     };
   }, [tokenStore]);
+
+  // E2E test bridge — gated on a localStorage sentinel so production users
+  // never see it. Tests opt in by setting `tricho-e2e-bridge` to "1" before
+  // navigation; the bridge exposes the same primitives the production UI
+  // uses (no test-only behavior, just a stable handle by name).
+  useEffect(() => {
+    if (view !== 'unlocked') return;
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('tricho-e2e-bridge') !== '1') return;
+    if (!db || !vaultId) return;
+    const bridge = {
+      vaultId,
+      username,
+      getSyncState,
+      subscribeSyncEvents: (cb: (s: SyncState) => void) => subscribeSyncEvents(cb),
+      putCustomer: async (data: Partial<CustomerData>): Promise<{ id: string; rev: string }> => {
+        const dbRef = getVaultDb();
+        if (!dbRef) throw new Error('vault db not open');
+        const id = `customer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const full: CustomerData = {
+          firstName: data.firstName ?? '',
+          lastName: data.lastName ?? '',
+          phone: data.phone,
+          email: data.email,
+          notes: data.notes,
+          createdAt: data.createdAt ?? Date.now(),
+          tags: data.tags,
+          allergenIds: data.allergenIds,
+        };
+        return putEncrypted<CustomerData>(dbRef, {
+          _id: id,
+          type: DOC_TYPES.CUSTOMER,
+          updatedAt: Date.now(),
+          deleted: false,
+          data: full,
+        });
+      },
+      updateCustomer: async (id: string, patch: Partial<CustomerData>): Promise<{ id: string; rev: string }> => {
+        const dbRef = getVaultDb();
+        if (!dbRef) throw new Error('vault db not open');
+        const existing = await getDecrypted<CustomerData>(dbRef, id);
+        if (!existing) throw new Error(`customer ${id} not found`);
+        return putEncrypted<CustomerData>(dbRef, {
+          _id: id,
+          _rev: existing._rev,
+          type: DOC_TYPES.CUSTOMER,
+          updatedAt: Date.now(),
+          deleted: false,
+          data: { ...existing.data, ...patch },
+        });
+      },
+      getCustomer: async (id: string): Promise<CustomerData | null> => {
+        const dbRef = getVaultDb();
+        if (!dbRef) throw new Error('vault db not open');
+        const got = await getDecrypted<CustomerData>(dbRef, id);
+        return got?.data ?? null;
+      },
+      listCustomers: async (): Promise<Array<{ id: string; data: CustomerData }>> => {
+        const dbRef = getVaultDb();
+        if (!dbRef) throw new Error('vault db not open');
+        const rows = await queryDecrypted<CustomerData>(dbRef, DOC_TYPES.CUSTOMER);
+        return rows.map((r) => ({ id: r._id, data: r.data }));
+      },
+    };
+    (window as unknown as { __trichoE2E?: typeof bridge }).__trichoE2E = bridge;
+    return () => {
+      delete (window as unknown as { __trichoE2E?: typeof bridge }).__trichoE2E;
+    };
+  }, [view, db, vaultId, username]);
 
   // Idle lock: clear in-memory secrets after inactivity; persistent identity
   // doc stays encrypted at rest so reopening is one biometric tap.
@@ -373,6 +531,7 @@ export function AppShell(): JSX.Element {
     if (db) {
       try {
         await uploadVaultState(db, {
+          vaultId,
           deviceSalt: vault.deviceSalt,
           wrappedDekRs: wrapped,
           version: wrapped.version,
@@ -418,6 +577,18 @@ export function AppShell(): JSX.Element {
     );
   }
 
+  if (view === 'join_vault') {
+    return (
+      <JoinVaultScreen
+        onJoinVault={async (rs) => {
+          await onJoinVault(rs);
+          await onUnlocked();
+        }}
+        onSignOut={onJoinSignOut}
+      />
+    );
+  }
+
   if (view === 'device-limit') {
     // When the server refused a new device, we don't yet have a TokenStore
     // (no vault is open). Render a minimal explanation + the option to
@@ -459,31 +630,136 @@ export function AppShell(): JSX.Element {
     );
   }
 
+  return <UnlockedShell db={db} vaultId={vaultId} onSettings={() => setView('settings')} />;
+}
+
+interface UnlockedShellProps {
+  db: VaultDb | null;
+  vaultId: string | null;
+  onSettings: () => void;
+}
+
+function UnlockedShell({ db, vaultId, onSettings }: UnlockedShellProps): JSX.Element {
+  // Hash-based router: '#/clients/<id>' opens the client detail. Hash routing
+  // keeps the app a single Astro static page (no per-id [id].astro needed)
+  // and works on any static host without server-side rewrites.
+  const [hash, setHash] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.hash : '',
+  );
+
+  useEffect(() => {
+    bootstrapTheme();
+    const onHashChange = (): void => setHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  if (!db || !vaultId) {
+    return <div style={{ padding: 32 }}>Trezor není dostupný.</div>;
+  }
+
+  const clientMatch = hash.match(/^#\/clients\/([^/?]+)/);
+  const customerId = clientMatch ? decodeURIComponent(clientMatch[1]!) : null;
+  const variant: 'a' | 'b' = customerId ? 'b' : 'a';
+
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>TrichoApp</h1>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SyncStatus variant="compact" />
-          {username && <button onClick={() => setView('settings')}>Settings</button>}
-        </div>
-      </header>
-      {db && vaultId ? (
-        <>
-          <section style={{ background: 'rgba(255,255,255,0.8)', borderRadius: 16, padding: 24, boxShadow: '0 4px 18px rgba(0,0,0,0.05)', marginBottom: 16 }}>
-            <CustomerCRM db={db} />
-          </section>
-          <section style={{ background: 'rgba(255,255,255,0.8)', borderRadius: 16, padding: 24, boxShadow: '0 4px 18px rgba(0,0,0,0.05)' }}>
-            <PhotoCapture db={db} vaultId={vaultId} />
-          </section>
-          <section style={{ marginTop: 16, fontSize: 12, color: '#999' }}>
-            Vault <code>{vaultId}</code>
-            {username && <> · user <code>{username}</code></>}
-          </section>
-        </>
-      ) : (
-        <p>Vault not available.</p>
-      )}
+    <div className="phone phone--viewport">
+      <div className="phone-inner">
+        <ChromeButtons variant={variant} backHref="#/" />
+        {customerId ? (
+          <ClientDetail db={db} vaultId={vaultId} customerId={customerId} />
+        ) : (
+          <DailySchedule db={db} />
+        )}
+        <BottomSheet
+          renderers={{
+            menu: () => (
+              <MenuSheet
+                onSettings={() => {
+                  closeSheet();
+                  onSettings();
+                }}
+                onLogout={() => {
+                  closeSheet();
+                  // Reload to reset auth state — IdleLock-style wipe.
+                  window.location.reload();
+                }}
+              />
+            ),
+            'fab-add': (payload) => <FabAddSheet payload={payload} />,
+            context: () => (
+              <MenuSheet
+                onSettings={() => {
+                  closeSheet();
+                  onSettings();
+                }}
+                onLogout={() => {
+                  closeSheet();
+                  window.location.reload();
+                }}
+              />
+            ),
+          }}
+        />
+      </div>
+      <style>{`
+        .phone {
+          background: var(--phone-frame);
+          border-radius: 44px;
+          padding: 8px;
+          position: relative;
+          overflow: hidden;
+          box-shadow: var(--phone-shadow);
+          width: 390px;
+          margin: 24px auto;
+        }
+        .phone-inner {
+          position: relative;
+          background: var(--bg);
+          border-radius: 38px;
+          overflow: hidden;
+          height: 780px;
+        }
+        .phone-inner::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: var(--paper-grain-svg);
+          background-size: 200px 200px;
+          mix-blend-mode: var(--paper-blend);
+          opacity: var(--paper-opacity);
+          pointer-events: none;
+          z-index: 25;
+        }
+        .phone--viewport {
+          width: 100%;
+          max-width: 100vw;
+          padding: 0;
+          border-radius: 0;
+          box-shadow: none;
+          background: var(--bg);
+          margin: 0;
+        }
+        .phone--viewport .phone-inner {
+          border-radius: 0;
+          height: 100vh;
+          height: 100dvh;
+        }
+        @media (min-width: 480px) {
+          .phone--viewport {
+            width: 390px;
+            margin: 24px auto;
+            background: var(--phone-frame);
+            border-radius: 44px;
+            padding: 8px;
+            box-shadow: var(--phone-shadow);
+          }
+          .phone--viewport .phone-inner {
+            border-radius: 38px;
+            height: 780px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

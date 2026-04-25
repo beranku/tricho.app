@@ -30,7 +30,7 @@ Everything in the per-user database is of shape:
 {
   _id: string,          // "<type>:<uuid>"
   _rev: string,         // PouchDB MVCC revision
-  type: 'customer' | 'visit' | 'photo-meta' | 'vault-state',
+  type: 'customer' | 'visit' | 'appointment' | 'photo-meta' | 'vault-state',
   updatedAt: number,    // ms since epoch, used for conflict resolution
   deleted: boolean,     // soft-delete flag
   payload: {            // opaque AES-256-GCM ciphertext
@@ -60,12 +60,18 @@ The only doc that deviates is `vault-state` — it holds the already-wrapped DEK
 | Live replication + conflict resolution | `src/sync/couch.ts` | 141 |
 | Multi-device vault state | `src/sync/couch-vault-state.ts` | 63 |
 | Encrypted photo attachments | `src/sync/photos.ts` | 75 |
-| App shell | `src/components/AppShell.tsx` | 320 |
+| App shell + hash router | `src/components/AppShell.tsx` | ~480 |
 | Unlock / create-vault UI | `src/components/LoginScreen.tsx`, `RSConfirmation.tsx` | (unchanged) |
 | Settings (sync toggle, RS rotation) | `src/components/SettingsScreen.tsx` | 135 |
 | Sync state HUD | `src/components/SyncStatus.tsx` | 81 |
-| CRM | `src/components/CustomerCRM.tsx` | 125 |
-| Photos | `src/components/PhotoCapture.tsx` | 188 |
+| Daily-schedule view (Phone A) | `src/components/islands/DailySchedule.tsx` | ~480 |
+| Client-detail view (Phone B) | `src/components/islands/ClientDetail.tsx` | ~430 |
+| Cam-card (encrypted photo capture) | `src/components/islands/CameraCard.tsx` | ~330 |
+| Bottom-sheet nav | `src/components/islands/BottomSheet.tsx`, `MenuSheet.tsx` | ~280 |
+| Pure Astro presentation | `src/components/astro/**/*.astro` | (zero-JS, SSR'd) |
+| Czech formatting helpers | `src/lib/format/{date,time,duration,pluralize}.ts` | ~120 |
+| Cross-island state | `src/lib/store/{theme,sheet,phoneScroll}.ts` (nanostores) | ~140 |
+| Appointment domain helpers | `src/lib/appointment/{status,slots,query}.ts` | ~140 |
 
 ## Unlock flow
 
@@ -105,7 +111,21 @@ Secrets live SOPS-encrypted under `secrets/<profile>.sops.yaml`; see `secrets/RE
 
 The pre-Makefile two-file compose flow (`infrastructure/couchdb/docker-compose.yml` + `infrastructure/traefik/docker-compose.yml`) stays functional during rollout but is deprecated; READMEs there redirect here.
 
+## UI architecture (post `prototype-ui-integration`)
+
+The post-unlock surface is split into pure Astro components (zero-JS, SSR'd) and React islands (hydrated `client:*`):
+
+- **Astro components** under `src/components/astro/` — `PhoneFrame`, `StatusBar`, `Slot`/`SlotDone`/`SlotActive`/`SlotFree`, `DayHeaderToday`, `DayDivider`, `DetailCard`, `Chip`, hand-drawn + geometric icons. These compile to HTML; their JS payload is zero.
+- **React islands** under `src/components/islands/` — `AppShell`'s post-unlock state hosts a hash router (`#/clients/:id`) that mounts `DailySchedule` (Phone A) or `ClientDetail` (Phone B). `BottomSheet`, `CameraCard`, `ThemeToggle`, `PhoneScroll`, `FabSecondary` provide interactivity. Cross-island state lives in `nanostores` (~1KB) so each island hydrates independently.
+- **Theme persistence** uses a dedicated `tricho_app_prefs` PouchDB (separate from the unlocked vault) with a single `_local/theme` doc. The `_local/` prefix guarantees non-replication (per `local-database`); the doc is plaintext (theme is a non-sensitive display preference). An inline bootstrap script in `Layout.astro` reads the doc before paint to avoid a light→dark flash.
+- **PWA** — `@vite-pwa/astro` generates `dist/sw.js` precaching JS/CSS/HTML/SVG/woff2/manifest with workbox `CacheFirst` strategies for fonts and images. Self-hosted Fraunces / Geist / Caveat / Patrick Hand under `public/fonts/` (latin + latin-ext subsets); zero runtime fetches to Google Fonts.
+
+### Appointment query path (zero-knowledge note)
+
+`appointment.startAt` is sensitive plaintext that lives only inside the encrypted `payload` — it is **not** on the wire and cannot be indexed. Schedule queries scan all `appointment` docs by type via the existing `[type, updatedAt]` index, decrypt each row, then filter by `startAt` client-side. Trading a O(log N + k) range query for O(N_appointments) decrypts is acceptable for a single-user practice and preserves the zero-knowledge invariant.
+
 ## Known follow-ups
 
 - Social login (Google/Apple) is not wired — account identity is just a per-vault CouchDB credential. A JWT bridge through the auth-proxy could be added later.
 - Photos are attachments on their meta doc; if a practice accumulates thousands of large photos, move to an S3-backed attachment proxy.
+- Appointment editing flow, statistics page, archive page, full settings, calendar date-picker, weather data — deferred from `prototype-ui-integration` to a follow-up change.

@@ -1,0 +1,48 @@
+---
+import { formatTime } from '../../lib/format/time';
+
+/**
+ * Základní slot — nadcházející termín. Grid 3 sloupce: čas | jméno+služby | action.
+ * Pro další varianty viz SlotDone, SlotActive, SlotFree.
+ */
+interface Props {
+  startAt: Date;
+  clientName: string;
+  /** Seznam aplikovaných služeb, bude spojeno čárkami */
+  services: string[];
+  /** URL na detail klienta */
+  href?: string;
+}
+
+const { startAt, clientName, services, href } = Astro.props;
+const timeStr = formatTime(startAt);
+const servicesStr = services.join(', ');
+---
+
+<a class="slot" href={href}>
+  <span class="ty-slot-time">{timeStr}</span>
+  <div class="slot-content">
+    <div class="ty-slot-name nowrap">{clientName}</div>
+    {servicesStr && <div class="ty-slot-sub">{servicesStr}</div>}
+  </div>
+  <span></span>
+</a>
+
+<style>
+  .slot {
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    align-items: start;
+    padding: 14px 20px;
+    gap: 16px;
+    min-height: 64px;
+    color: inherit;
+    text-decoration: none;
+  }
+  .slot:active {
+    background: var(--surface-2);
+  }
+  .slot-content {
+    min-width: 0;
+  }
+</style>

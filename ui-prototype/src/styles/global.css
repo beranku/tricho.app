@@ -1,0 +1,6 @@
+/* Tricho.App — globální styly
+   Importováno v src/layouts/AppLayout.astro */
+
+@import './tokens.css';
+@import './base.css';
+@import './typography.css';

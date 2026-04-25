@@ -1,0 +1,19 @@
+---
+// SVG noise overlay — already injected globally via Layout.astro's
+// <div class="paper-grain">. This wrapper is for component-local use
+// inside the bottom sheet, where we want grain on a non-fixed surface.
+---
+
+<div class="paper-grain-local" aria-hidden="true"></div>
+
+<style>
+  .paper-grain-local {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--paper-grain-svg);
+    background-size: 200px 200px;
+    mix-blend-mode: var(--paper-blend);
+    opacity: var(--paper-opacity);
+  }
+</style>

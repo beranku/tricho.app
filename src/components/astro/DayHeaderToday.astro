@@ -1,0 +1,111 @@
+---
+// Sticky header for the today section. Identical structure with DayDivider so
+// push-stack swap between Dnes and Zítra is visually seamless.
+import SunHandDrawn from './icons/SunHandDrawn.astro';
+import Caret from './icons/Caret.astro';
+
+interface Props {
+  date: string;       // "22. dubna"
+  isLive?: boolean;   // controls kicker color
+  weatherLabel?: string;  // "15°"
+}
+const { date, isLive = true, weatherLabel = '—°' } = Astro.props;
+---
+
+<div class="day-header-today">
+  <span class="weather-sun-left" aria-hidden="true">
+    <SunHandDrawn />
+  </span>
+  <button class="chrome-title" type="button" aria-label="Vybrat datum">
+    <div class="chrome-stack">
+      <span class="chrome-kicker-wrap">
+        <span class="kicker" data-live={isLive ? 'true' : 'false'}>Dnes</span>
+        <span class="weather-temp-subtle font-geist tabular-nums">{weatherLabel}</span>
+      </span>
+      <span class="chrome-main font-fraunces tabular-nums">
+        {date}
+        <span class="chrome-caret" aria-hidden="true"><Caret /></span>
+      </span>
+    </div>
+  </button>
+</div>
+
+<style>
+  .day-header-today {
+    position: sticky;
+    top: 46px;
+    min-height: 48px;
+    padding: 6px 68px 10px;     /* 12 chrome pad + 44 button + 12 gap */
+    background: var(--bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: var(--z-top-chrome);
+  }
+  .weather-sun-left {
+    position: absolute;
+    left: 64px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--copper);
+    opacity: 0.9;
+    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    z-index: 1;
+  }
+  .chrome-title {
+    position: relative;
+    flex: 0 1 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .chrome-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
+  }
+  .chrome-kicker-wrap {
+    position: relative;
+    display: inline-block;
+    line-height: 1;
+  }
+  .weather-temp-subtle {
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--ink-4);
+  }
+  [data-live="true"].kicker { color: var(--teal); }
+  .chrome-main {
+    font-weight: 500;
+    font-variation-settings: 'opsz' 28;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .chrome-caret {
+    color: var(--ink-4);
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    transform: translateY(1px);
+  }
+</style>

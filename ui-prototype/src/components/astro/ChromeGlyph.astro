@@ -1,0 +1,56 @@
+---
+/**
+ * Chrome glyph button wrapper — 44×44 touch target pro ikony v chrome-buttons.
+ *
+ * Může sloužit jako `<button>`, `<a>` nebo interaktivní element.
+ * Child content přes `<slot>` (obvykle SVG ikona).
+ *
+ * Pokud komponenta potřebuje interakci (open sheet), použije se client:load
+ * wrapper island. Samotný ChromeGlyph je vždy čistý Astro.
+ */
+interface Props {
+  /** Accessible label (povinné) */
+  ariaLabel: string;
+  /** Odkaz (pokud je button, nech undefined) */
+  href?: string;
+  /** Additional class */
+  class?: string;
+  /** HTML id (pokud je potřeba) */
+  id?: string;
+}
+
+const { ariaLabel, href, class: className, id } = Astro.props;
+const Tag = href ? 'a' : 'button';
+const attrs = href
+  ? { href, 'aria-label': ariaLabel }
+  : { type: 'button' as const, 'aria-label': ariaLabel };
+---
+
+<Tag class:list={['chrome-glyph', className]} {...attrs} id={id}>
+  <slot />
+</Tag>
+
+<style>
+  .chrome-glyph {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+    background: transparent;
+    border: none;
+    flex-shrink: 0;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background var(--t-std);
+    text-decoration: none;
+  }
+  .chrome-glyph:active {
+    background: var(--surface-2);
+  }
+  .chrome-glyph:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+  }
+</style>

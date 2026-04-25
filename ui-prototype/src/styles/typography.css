@@ -1,0 +1,175 @@
+/* ═══════════════════════════════════════════════════════════════════
+   TRICHO.APP — TYPOGRAPHY UTILITIES
+   Přesné mappings pro role — viz tricho-north-star.md § 4
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── FONT FAMILIES (pro použití v custom selektorech) ─── */
+.font-serif   { font-family: 'Fraunces', serif; }
+.font-sans    { font-family: 'Geist', sans-serif; }
+.font-hand    { font-family: 'Patrick Hand', cursive; }
+.font-cursive { font-family: 'Caveat', cursive; }
+
+/* ─── TABULAR NUMS — povinné pro čísla (časy, data, ceny) ─── */
+.tab-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── NOWRAP — pro jména a data ─── */
+.nowrap {
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ROLE-BASED CLASSES
+   Používá se v Astro/React komponentách místo inline CSS.
+   Každá třída přesně odpovídá řádku z North Star § 4.4 tabulky.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Kicker — DNES, ZÍTRA, HISTORIE (copper uppercase nadpisy sekcí) */
+.ty-kicker {
+  font-family: 'Geist', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--copper);
+  line-height: 1;
+}
+.ty-kicker.live {
+  color: var(--teal);
+}
+
+/* Hlavní datum / čas / jméno v chrome / divider */
+.ty-header-main {
+  font-family: 'Fraunces', serif;
+  font-variation-settings: 'opsz' 28;
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.ty-header-main.client-name {
+  font-variation-settings: 'opsz' 36;
+}
+
+/* Čas slotu (09:10) */
+.ty-slot-time {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 17px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.ty-slot-time.dim {
+  color: var(--ink-4);
+  font-weight: 400;
+}
+
+/* Jméno klienta ve slotu */
+.ty-slot-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 17px;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* Sub-text slotu (služba, poznámka) */
+.ty-slot-sub {
+  font-family: 'Geist', sans-serif;
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.25;
+  margin-top: 3px;
+}
+
+/* Volno X min — Patrick Hand prose */
+.ty-free {
+  font-family: 'Patrick Hand', cursive;
+  font-size: 15px;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+
+/* Plus u volného slotu (Caveat cursive) */
+.ty-plus {
+  font-family: 'Caveat', cursive;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--copper);
+  line-height: 1;
+  text-align: right;
+}
+
+/* Temperature u chromu (10°, tlumená) */
+.ty-temp {
+  font-family: 'Geist', sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* Alergen badge (Caveat, amber) */
+.ty-allergen {
+  font-family: 'Caveat', cursive;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--amber);
+  line-height: 1;
+}
+
+/* Remaining time (live, teal) */
+.ty-remaining {
+  font-family: 'Geist', sans-serif;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--teal);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* Camera hint overlay */
+.ty-cam-hint {
+  font-family: 'Patrick Hand', cursive;
+  font-size: 13px;
+  color: rgba(245, 237, 224, 0.5);
+  line-height: 1.2;
+}
+
+/* Chip (Geist) */
+.ty-chip {
+  font-family: 'Geist', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink-2);
+}
+
+/* Detail section label ("DNEŠNÍ FOTOGRAFIE") */
+.ty-detail-label {
+  font-family: 'Geist', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  line-height: 1;
+}
+
+/* Sheet nav item (Fraunces, 18px) */
+.ty-nav-item {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}

@@ -12,6 +12,7 @@ import type { EncryptedPayload } from '../crypto/payload';
 export const DOC_TYPES = {
   CUSTOMER: 'customer',
   VISIT: 'visit',
+  APPOINTMENT: 'appointment',
   PHOTO_META: 'photo-meta',
   VAULT_STATE: 'vault-state',
 } as const;
@@ -46,6 +47,8 @@ export interface CustomerData {
   birthDate?: string;
   createdAt: number;
   tags?: string[];
+  /** Allergen ids (encrypted plaintext) — surfaced as Caveat-amber chips. */
+  allergenIds?: string[];
 }
 
 export interface VisitData {
@@ -58,12 +61,39 @@ export interface VisitData {
   createdAt: number;
 }
 
+export type AppointmentStatus = 'scheduled' | 'active' | 'done';
+
+export interface AppointmentData {
+  customerId: string;
+  /** Unix ms — start of the appointment slot. */
+  startAt: number;
+  /** Unix ms — end of the appointment slot. */
+  endAt: number;
+  /** Persisted status; `currentStatus(appt, now)` shadows this from time. */
+  status: AppointmentStatus;
+  /** Czech service label, e.g. "Diagnostika", "Konzultace". */
+  serviceLabel: string;
+  /** Allergen ids referenced from the customer's allergen list. */
+  allergenIds?: string[];
+  /** Product ids actually applied during the appointment. */
+  productIds?: string[];
+  notes?: string;
+  createdAt: number;
+}
+
+export type PhotoAngle = 'before' | 'detail' | 'after';
+
 export interface PhotoMetaData {
   customerId: string;
   visitId?: string;
+  /** Optional back-reference to a specific appointment instance. */
+  appointmentId?: string;
   takenAt: number;
   contentType: string;
-  angle?: string;
+  /** Typed enum (was free-form string). Legacy values normalise to 'detail' in UI. */
+  angle?: PhotoAngle;
+  /** Hand-written cam-card chip text — Czech UTF-8, ≤24 chars. */
+  label?: string;
   notes?: string;
   createdAt: number;
 }
@@ -86,6 +116,31 @@ export function validateVisitData(data: unknown): asserts data is VisitData {
     throw new Error('customerId required');
   }
   if (typeof d.date !== 'number') throw new Error('date required');
+}
+
+const APPOINTMENT_STATUSES: ReadonlySet<string> = new Set(['scheduled', 'active', 'done']);
+
+export function validateAppointmentData(data: unknown): asserts data is AppointmentData {
+  if (!data || typeof data !== 'object') throw new Error('Appointment data must be an object');
+  const d = data as Record<string, unknown>;
+  if (typeof d.customerId !== 'string' || !d.customerId.length) {
+    throw new Error('customerId required');
+  }
+  if (typeof d.startAt !== 'number' || !Number.isFinite(d.startAt)) {
+    throw new Error('startAt must be a number');
+  }
+  if (typeof d.endAt !== 'number' || !Number.isFinite(d.endAt)) {
+    throw new Error('endAt must be a number');
+  }
+  if (d.endAt <= d.startAt) {
+    throw new Error('endAt must be > startAt');
+  }
+  if (typeof d.status !== 'string' || !APPOINTMENT_STATUSES.has(d.status)) {
+    throw new Error('status must be scheduled | active | done');
+  }
+  if (typeof d.serviceLabel !== 'string') {
+    throw new Error('serviceLabel required');
+  }
 }
 
 export function generateDocId(type: DocType): string {

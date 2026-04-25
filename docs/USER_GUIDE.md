@@ -23,14 +23,17 @@ Welcome to TrichoApp! This guide will help you get started with your secure, enc
 
 ### What is TrichoApp?
 
-TrichoApp is a secure CRM (Customer Relationship Management) app designed specifically for hairdressers and salon professionals. It helps you:
+TrichoApp is a secure CRM (Customer Relationship Management) app designed specifically for trichologists and salon professionals. It helps you:
 
+- **Plan your day** - The daily-schedule view (Phone A) shows today's appointments with sticky day-headers, "scroll to today", and an at-a-glance free-slot overview.
+- **Open any client** - Tap a slot to dive into the client-detail view (Phone B): active appointment countdown, allergen badges, before/detail/after camera capture, services and products chips, hand-written notes, and the next scheduled term.
 - **Manage customer information** - Names, contact details, preferences, notes
-- **Track visits** - Services performed, products used, observations, pricing
-- **Store photos** - Before/after photos, scalp conditions, style inspirations
+- **Track visits and appointments** - Services performed, products used, observations, pricing
+- **Store photos** - Before / detail / after labels travel with each photo and are tied to the customer (and optionally the active appointment).
 - **Work offline** - No internet? No problem! Everything works locally
 - **Sync across devices** - Your phone, tablet, and computer stay in sync automatically
 - **Protect privacy** - All data is encrypted end-to-end
+- **Light & dark theme** - Toggle from the bottom-sheet menu; your choice persists on this device only and never leaves it.
 
 ### Why End-to-End Encryption?
 

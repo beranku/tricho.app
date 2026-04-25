@@ -1,0 +1,43 @@
+---
+/**
+ * Phone viewport. V produkci má height: 100vh, v prototypu/desktop náhledu
+ * 780px s border-radius (iOS style).
+ */
+interface Props {
+  /** Pokud je true, frame má iOS border-radius a stín (pro prototype/landscape view) */
+  framed?: boolean;
+}
+const { framed = false } = Astro.props;
+---
+
+<div class:list={['phone', { framed }]}>
+  <div class="phone-inner">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .phone {
+    position: relative;
+    width: 100%;
+    max-width: 430px;
+    height: 100vh;
+    margin: 0 auto;
+    background: var(--bg);
+  }
+  .phone.framed {
+    height: 780px;
+    border-radius: 44px;
+    box-shadow:
+      0 4px 24px -4px rgba(42, 35, 27, 0.12),
+      0 20px 48px -12px rgba(42, 35, 27, 0.18);
+    overflow: hidden;
+  }
+  .phone-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+</style>

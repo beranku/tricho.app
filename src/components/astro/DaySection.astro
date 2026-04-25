@@ -1,0 +1,19 @@
+---
+// Section containing block for a day's sticky header + slots.
+// `data-today="true"` flags the today section for scroll-to-today logic.
+interface Props {
+  day: string;          // "YYYY-MM-DD"
+  isToday?: boolean;
+}
+const { day, isToday = false } = Astro.props;
+---
+
+<section class="day-section" data-day={day} data-today={isToday ? 'true' : undefined}>
+  <slot />
+</section>
+
+<style>
+  .day-section {
+    display: block;
+  }
+</style>

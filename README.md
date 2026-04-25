@@ -1,15 +1,33 @@
-# Tricho.app - PWA Kamera
+# Tricho.app — Trichologický deník a CRM
 
-Progresivní webová aplikace (PWA) pro pořizování a ukládání fotografií přímo v prohlížeči. Všechna data zůstávají lokálně na zařízení uživatele.
+End-to-end šifrovaná PWA pro trichology a kadeřníky: deníkový plán dne,
+detaily klientů, alergeny, before/detail/after fotografie. Veškerá data
+zůstávají na zařízení uživatele a synchronizace přes CouchDB cestuje
+výhradně jako šifrovaný `payload`.
 
 ## Funkce
 
-- **Kamera** - přístup k fotoaparátu zařízení, přepínání mezi kamerami
-- **Lokální úložiště** - fotografie se ukládají do IndexedDB prohlížeče
-- **Galerie** - prohlížení fotek organizovaných do sezení (sessions)
-- **Nastavení** - kvalita JPEG, rozlišení, limity úložiště
-- **PWA** - instalace na domovskou obrazovku, offline podpora
-- **Automatická správa** - mazání starých fotek při překročení limitů
+- **Denní plán** — Phone A: sticky hlavičky dnů, sluníčko v dnešním headeru,
+  scroll-to-today FAB, sloty `done`/`active`/`scheduled` + dopočítané volné
+  úseky (volno 35 min) v pracovní době.
+- **Detail klienta** — Phone B: kicker `Klient` + jméno v Fraunces, current-head
+  s alergen badge a `zbývá X min` countdownem, cam-card pro before/detail/after
+  zachycení, chip sekce služeb a produktů, ruční poznámky, další termín.
+- **Kamera** — přístup ke kameře, JPEG capture → AES-256-GCM šifrovaný blob
+  uložený jako PouchDB attachment na photo-meta dokumentu.
+- **Lokální úložiště** — PouchDB nad IndexedDB; každý dokument je
+  `{_id, _rev, type, updatedAt, deleted, payload}` a jeho `payload` je
+  AEAD ciphertext s AAD vázaným na `{vaultId, docId}`.
+- **Synchronizace** — CouchDB 3 s `couch_peruser` přes JWT-bearer fetch;
+  konflikty řešené deterministicky (newest-wins) bez sémantického merge.
+- **Bottom-sheet menu** — navigace (klienti, statistika, archiv, nastavení),
+  sync status, přepínač motivu (světlý/tmavý), odhlášení.
+- **Hand-drawn akcenty** — ballpoint stroke jen na třech místech (sluníčko,
+  copper check, copper plus); zbytek UI je geometrický.
+- **PWA** — instalace na domovskou obrazovku, plná offline podpora
+  (`@vite-pwa/astro` + workbox; self-hosted fonty).
+- **Recovery Secret** — offline obnova přístupu bez serverového stavu;
+  WebAuthn + PRF jako každodenní odemykání.
 
 ## Tech Stack
 

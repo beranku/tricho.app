@@ -1,0 +1,50 @@
+---
+import CheckHandDrawn from './icons/CheckHandDrawn.astro';
+
+/**
+ * Chip / tag pro seznam služeb nebo produktů.
+ * Variant "product" přidá copper check indikující použití.
+ */
+interface Props {
+  /** Variant — product má check indicator */
+  variant?: 'service' | 'product';
+  /** Optional price suffix (e.g., "450 Kč") */
+  price?: string;
+}
+
+const { variant = 'service', price } = Astro.props;
+---
+
+<span class:list={['ty-chip chip', { 'chip-product': variant === 'product' }]}>
+  {variant === 'product' && (
+    <span class="chip-check">
+      <CheckHandDrawn size={12} />
+    </span>
+  )}
+  <slot />
+  {price && <span class="chip-price"> · {price}</span>}
+</span>
+
+<style>
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-chip);
+  }
+
+  .chip-check {
+    color: var(--copper-mid);
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+  }
+
+  .chip-price {
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+</style>
