@@ -2,6 +2,10 @@
 dist/
 # generated types
 .astro/
+# Paraglide JS compiler output (regenerated via Vite plugin)
+src/paraglide/
+# Inlang plugin cache (regenerated on demand)
+project.inlang/cache/
 
 # dependencies
 node_modules/
@@ -27,6 +31,7 @@ infrastructure/.env
 # Playwright run artifacts
 playwright-report/
 test-results/
+test-results-ui/
 
 # Coverage output (per-tier summaries — committed baseline is coverage-baseline.json)
 /coverage/

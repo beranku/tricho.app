@@ -34,6 +34,8 @@ import {
   isRecoverySessionConfirmed,
   CHECKSUM_LENGTH,
 } from '../auth/recovery';
+import { useStore } from '@nanostores/react';
+import { localeStore, m } from '../i18n';
 
 /**
  * RS Confirmation component props
@@ -82,6 +84,7 @@ export function RSConfirmation({
   showQRCode = false,
   className,
 }: RSConfirmationProps): JSX.Element {
+  useStore(localeStore);
   // State for checksum input
   const [checksumInput, setChecksumInput] = useState('');
   const [confirmationState, setConfirmationState] = useState<ConfirmationState>('input');
@@ -118,7 +121,7 @@ export function RSConfirmation({
     e.preventDefault();
 
     if (checksumInput.length !== CHECKSUM_LENGTH) {
-      setErrorMessage(`Please enter all ${CHECKSUM_LENGTH} characters`);
+      setErrorMessage(m.rs_enterAll({ length: CHECKSUM_LENGTH }));
       return;
     }
 
@@ -132,7 +135,7 @@ export function RSConfirmation({
       if (!isValid) {
         setAttemptCount((prev) => prev + 1);
         setConfirmationState('error');
-        setErrorMessage('Checksum does not match. Please check your Recovery Secret and try again.');
+        setErrorMessage(m.rs_checksumMismatch());
         return;
       }
 
@@ -144,14 +147,14 @@ export function RSConfirmation({
         onConfirmed();
       } else {
         setConfirmationState('error');
-        setErrorMessage('Failed to confirm Recovery Secret. Please try again.');
+        setErrorMessage(m.rs_confirmFailed());
       }
     } catch (error) {
       setConfirmationState('error');
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : 'An unexpected error occurred. Please try again.'
+          : m.rs_unexpectedError()
       );
     }
   }, [checksumInput, recoverySecret.encoded, onConfirmed]);
@@ -170,11 +173,8 @@ export function RSConfirmation({
     return (
       <div className={`rs-confirmation rs-confirmation--success ${className ?? ''}`}>
         <div className="rs-confirmation__icon rs-confirmation__icon--success">✓</div>
-        <h3 className="rs-confirmation__title">Recovery Secret Confirmed</h3>
-        <p className="rs-confirmation__message">
-          Your Recovery Secret has been verified. Keep it safe - you'll need it to recover your
-          vault if you lose access to your passkey.
-        </p>
+        <h3 className="rs-confirmation__title">{m.rs_successTitle()}</h3>
+        <p className="rs-confirmation__message">{m.rs_successMessage()}</p>
       </div>
     );
   }
@@ -183,24 +183,21 @@ export function RSConfirmation({
     <div className={`rs-confirmation ${className ?? ''}`}>
       {/* Header */}
       <div className="rs-confirmation__header">
-        <h3 className="rs-confirmation__title">Save Your Recovery Secret</h3>
-        <p className="rs-confirmation__subtitle">
-          This is your backup key. Write it down and store it securely. You will need it to recover
-          your vault if you lose access to your passkey.
-        </p>
+        <h3 className="rs-confirmation__title">{m.rs_title()}</h3>
+        <p className="rs-confirmation__subtitle">{m.rs_setupSubtitle()}</p>
       </div>
 
       {/* RS Display */}
       <div className="rs-confirmation__rs-display">
-        <div className="rs-confirmation__rs-label">Recovery Secret</div>
+        <div className="rs-confirmation__rs-label">{m.rs_displayLabel()}</div>
         <div className="rs-confirmation__rs-value">{formattedRs}</div>
         <button
           type="button"
           className="rs-confirmation__copy-btn"
           onClick={handleCopyToClipboard}
-          aria-label="Copy Recovery Secret to clipboard"
+          aria-label={m.rs_copyAria()}
         >
-          Copy
+          {m.rs_copy()}
         </button>
       </div>
 
@@ -209,11 +206,9 @@ export function RSConfirmation({
         <div className="rs-confirmation__qr-section">
           <div className="rs-confirmation__qr-placeholder">
             {/* QR code would be rendered here with a library like qrcode.react */}
-            <span className="rs-confirmation__qr-note">QR Code</span>
+            <span className="rs-confirmation__qr-note">{m.rs_qrPlaceholder()}</span>
           </div>
-          <p className="rs-confirmation__qr-hint">
-            Scan this QR code to import your Recovery Secret on another device
-          </p>
+          <p className="rs-confirmation__qr-hint">{m.rs_qrHint()}</p>
         </div>
       )}
 
@@ -221,18 +216,15 @@ export function RSConfirmation({
       <form className="rs-confirmation__form" onSubmit={handleSubmit}>
         <div className="rs-confirmation__form-header">
           <label htmlFor="rs-checksum" className="rs-confirmation__form-label">
-            Confirm your Recovery Secret
+            {m.rs_formLabel()}
           </label>
-          <p className="rs-confirmation__form-hint">
-            Enter the last {CHECKSUM_LENGTH} characters of your Recovery Secret to verify you have
-            saved it correctly.
-          </p>
+          <p className="rs-confirmation__form-hint">{m.rs_formHint({ length: CHECKSUM_LENGTH })}</p>
         </div>
 
         <div className="rs-confirmation__input-row">
           <div className="rs-confirmation__expected-chars">
             {/* Visual hint showing which characters to enter */}
-            <span className="rs-confirmation__char-hint">Last {CHECKSUM_LENGTH} characters:</span>
+            <span className="rs-confirmation__char-hint">{m.rs_charsHint({ length: CHECKSUM_LENGTH })}</span>
             <span className="rs-confirmation__char-highlight">{recoverySecret.checksum}</span>
           </div>
 
@@ -244,7 +236,7 @@ export function RSConfirmation({
             }`}
             value={checksumInput}
             onChange={handleChecksumChange}
-            placeholder={`Enter ${CHECKSUM_LENGTH} characters`}
+            placeholder={m.rs_inputPlaceholder({ length: CHECKSUM_LENGTH })}
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
@@ -261,8 +253,7 @@ export function RSConfirmation({
             <span className="rs-confirmation__error-text">{errorMessage}</span>
             {attemptCount >= 3 && (
               <p className="rs-confirmation__error-hint">
-                Tip: The checksum is the last {CHECKSUM_LENGTH} characters shown above in the
-                Recovery Secret.
+                {m.rs_retryHint({ length: CHECKSUM_LENGTH })}
               </p>
             )}
           </div>
@@ -277,7 +268,7 @@ export function RSConfirmation({
               onClick={onCancel}
               disabled={confirmationState === 'validating'}
             >
-              Cancel
+              {m.rs_cancel()}
             </button>
           )}
           <button
@@ -285,7 +276,7 @@ export function RSConfirmation({
             className="rs-confirmation__btn rs-confirmation__btn--primary"
             disabled={checksumInput.length !== CHECKSUM_LENGTH || confirmationState === 'validating'}
           >
-            {confirmationState === 'validating' ? 'Verifying...' : 'Confirm'}
+            {confirmationState === 'validating' ? m.rs_verifying() : m.rs_confirm()}
           </button>
         </div>
       </form>
@@ -293,9 +284,7 @@ export function RSConfirmation({
       {/* Security reminder */}
       <div className="rs-confirmation__security-note">
         <span className="rs-confirmation__security-icon">🔒</span>
-        <p className="rs-confirmation__security-text">
-          Never share your Recovery Secret with anyone. Anthropic staff will never ask for it.
-        </p>
+        <p className="rs-confirmation__security-text">{m.rs_securityText()}</p>
       </div>
     </div>
   );

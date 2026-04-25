@@ -4,11 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { RSConfirmation } from './RSConfirmation';
 import { generateRecoverySecret, createRecoveryExportSession } from '../auth/recovery';
 import type { RecoverySecretResult } from '../auth/recovery';
+import { setLocale } from '../i18n';
 
 let rs: RecoverySecretResult;
 const VAULT_ID = 'vault-rs-test';
 
 beforeEach(() => {
+  // RSConfirmation tests assert English placeholder/button text.
+  setLocale('en');
   sessionStorage.clear();
   rs = generateRecoverySecret();
   createRecoveryExportSession(VAULT_ID, 'user-1', rs.encoded);

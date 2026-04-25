@@ -106,15 +106,19 @@ describe('DailySchedule', () => {
 
   it('renders the empty-state placeholder when there are no appointments', async () => {
     render(<DailySchedule db={db} />);
+    // Empty-state copy now comes from `m.menu_promo_body()` (cs):
+    // "Otevřete plán a prohlížejte detaily klientů."
     await waitFor(() =>
-      expect(screen.getByText(/Zatím tu není žádný zákrok\./i)).toBeInTheDocument(),
+      expect(screen.getByText(/Otevřete plán/i)).toBeInTheDocument(),
     );
   });
 
   it('renders the primary FAB and the secondary scroll-to-today FAB', async () => {
     render(<DailySchedule db={db} />);
+    // Primary FAB aria-label = `m.schedule_addAppointment()` (cs ⇒ "Přidat termín")
+    // Secondary FAB aria-label = `m.schedule_scrollToTodayLabel()` (cs ⇒ "Zpět na dnešek")
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Přidat zákrok/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /Přidat termín/i })).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: /Zpět na dnešek/i })).toBeInTheDocument();
   });

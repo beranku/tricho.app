@@ -1,19 +1,26 @@
 /**
- * Czech-formatted sync status row, suitable for embedding inside the bottom
- * sheet. Subscribes to subscribeSyncEvents from src/sync/couch.
+ * Locale-aware sync status row, embedded inside the bottom sheet.
+ * Subscribes to subscribeSyncEvents from src/sync/couch and to the locale
+ * store so labels update on language switch.
  */
 import { useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import { subscribeSyncEvents, type SyncState } from '../../sync/couch';
+import { localeStore, m } from '../../i18n';
 
-const LABELS: Record<SyncState['status'], string> = {
-  idle: 'Připraveno',
-  connecting: 'Připojuji…',
-  syncing: 'Synchronizuji…',
-  paused: 'Synchronizováno',
-  error: 'Chyba synchronizace',
-};
+function statusLabel(status: SyncState['status']): string {
+  switch (status) {
+    case 'idle': return m.sync_idle();
+    case 'connecting': return m.sync_connecting();
+    case 'syncing': return m.sync_status_syncing();
+    case 'paused': return m.sync_done();
+    case 'error': return m.sync_status_error();
+    case 'gated': return m.plan_renewalRequiredTitle();
+  }
+}
 
 export function SyncStatusRow(): JSX.Element {
+  useStore(localeStore);
   const [state, setState] = useState<SyncState | null>(null);
 
   useEffect(() => {
@@ -21,13 +28,14 @@ export function SyncStatusRow(): JSX.Element {
   }, []);
 
   const status = state?.status ?? 'idle';
-  const label = LABELS[status];
+  const label = statusLabel(status);
   const dotColour = {
     idle: 'var(--ink-4)',
     connecting: 'var(--copper)',
     syncing: 'var(--teal)',
     paused: 'var(--teal)',
     error: 'var(--amber)',
+    gated: 'var(--amber)',
   }[status];
 
   return (

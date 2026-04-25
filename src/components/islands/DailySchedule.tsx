@@ -6,6 +6,7 @@
  * Customer names are looked up at render time (cheap; few customers per day).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import type { VaultDb } from '../../db/pouch';
 import { getDecrypted, watchChanges, DOC_TYPES } from '../../db/pouch';
 import {
@@ -18,6 +19,7 @@ import {
 import type { CustomerData } from '../../db/types';
 import { formatDate, formatTime, formatDuration, formatWeekdayKicker } from '../../lib/format';
 import { openSheet } from '../../lib/store/sheet';
+import { localeStore, m } from '../../i18n';
 import { PhoneScroll } from './PhoneScroll';
 import { FabSecondary } from './FabSecondary';
 
@@ -46,6 +48,9 @@ function endOfDay(d: Date): Date {
 }
 
 export function DailySchedule({ db }: DailyScheduleProps): JSX.Element {
+  // Re-render on locale change so every `m.<key>()` and dispatched format
+  // helper picks up the new locale within the next paint.
+  useStore(localeStore);
   const today = useMemo(() => startOfDay(new Date()), []);
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [customerNames, setCustomerNames] = useState<Map<string, string>>(new Map());
@@ -108,8 +113,8 @@ export function DailySchedule({ db }: DailyScheduleProps): JSX.Element {
         const isFuture = date.getTime() > today.getTime();
         const delta = Math.round((date.getTime() - today.getTime()) / DAY_MS);
         const kicker = (() => {
-          if (delta === 1) return 'Zítra';
-          if (delta === -1) return 'Včera';
+          if (delta === 1) return m.schedule_tomorrow();
+          if (delta === -1) return m.schedule_yesterday();
           return formatWeekdayKicker(date);
         })();
         const dateLabel = formatDate(date, today);
@@ -128,14 +133,16 @@ export function DailySchedule({ db }: DailyScheduleProps): JSX.Element {
                   <FreeSlotInline
                     key={`free-${day}-${idx}`}
                     time={formatTime(new Date(slot.startAt))}
-                    durationLabel={`volno ${formatDuration(slot.endAt - slot.startAt)}`}
+                    durationLabel={m.schedule_freeSlot({
+                      duration: formatDuration(slot.endAt - slot.startAt),
+                    })}
                     startAt={slot.startAt}
                   />
                 );
               }
               const a = slot.appointment;
               const status = currentStatus(a, Date.now());
-              const name = customerNames.get(a.customerId) ?? 'Klient';
+              const name = customerNames.get(a.customerId) ?? m.schedule_clientFallback();
               const time = formatTime(new Date(a.startAt));
               if (status === 'done' || (isPast && status !== 'active')) {
                 return <DoneSlotInline key={a.id} appointmentId={a.customerId} time={time} name={name} sub={a.serviceLabel} />;
@@ -174,9 +181,9 @@ function DayHeaderTodayInline({ date }: { date: string }): JSX.Element {
           <path d="M 17 7 L 18.6 5.4" />
         </svg>
       </span>
-      <button type="button" className="chrome-title" aria-label="Vybrat datum">
+      <button type="button" className="chrome-title" aria-label={m.schedule_today()}>
         <div className="chrome-stack">
-          <span className="kicker live">Dnes</span>
+          <span className="kicker live">{m.schedule_today()}</span>
           <span className="chrome-main font-fraunces tabular-nums">{date}</span>
         </div>
       </button>
@@ -235,7 +242,7 @@ function DoneSlotInline({ appointmentId, time, name, sub }: { appointmentId: str
         <span className="slot-name font-fraunces">{name}</span>
         <span className="slot-sub font-geist">{sub}</span>
       </span>
-      <span className="slot-done-check" aria-label="Dokončeno">
+      <span className="slot-done-check" aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -267,7 +274,7 @@ function FabPrimary(): JSX.Element {
     <button
       type="button"
       className="fab"
-      aria-label="Přidat zákrok"
+      aria-label={m.schedule_addAppointment()}
       onClick={() => openSheet('fab-add')}
     >
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -309,8 +316,7 @@ function FabPrimary(): JSX.Element {
 function EmptyDay(): JSX.Element {
   return (
     <div className="empty-day font-patrick">
-      <p>Zatím tu není žádný zákrok.</p>
-      <p>Tapněte na <span className="empty-plus font-caveat">+</span> a přidejte první.</p>
+      <p>{m.menu_promo_body()}</p>
       <style>{`
         .empty-day {
           margin: 32px 24px;

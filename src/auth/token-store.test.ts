@@ -90,6 +90,56 @@ describe('TokenStore', () => {
     spy.mockRestore();
   });
 
+  it('bearerFetch throws PlanExpiredError on 402', async () => {
+    const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
+    const store = new TokenStore(db);
+    await store.seedFromOAuth(mockOAuthResult());
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'plan_expired',
+          reason: 'sync_entitlement_missing',
+          paidUntil: 1234,
+          gracePeriodEndsAt: 5678,
+        }),
+        { status: 402, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const { PlanExpiredError } = await import('./subscription');
+    await expect(store.bearerFetch('https://example.test/userdb-foo/doc')).rejects.toBeInstanceOf(
+      PlanExpiredError,
+    );
+    spy.mockRestore();
+  });
+
+  it('bearerFetch still does the 401-refresh dance independently of 402', async () => {
+    const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
+    const store = new TokenStore(db);
+    await store.seedFromOAuth(mockOAuthResult());
+    let calls = 0;
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      calls += 1;
+      // First call: 401 to trigger refresh; second call to /auth/refresh
+      // returns the new tokens; third call (the retry) returns 200.
+      if (calls === 1) return new Response('', { status: 401 });
+      if (calls === 2) {
+        return new Response(
+          JSON.stringify({
+            jwt: 'new.jwt.token',
+            jwtExp: Math.floor(Date.now() / 1000) + 3600,
+            refreshToken: 'new-rt',
+            refreshTokenExp: Date.now() + 86400_000,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response('ok', { status: 200 });
+    });
+    const res = await store.bearerFetch('https://example.test/userdb-foo/doc');
+    expect(res.status).toBe(200);
+    spy.mockRestore();
+  });
+
   it('clear() removes identity doc and resets in-memory state', async () => {
     const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
     const store = new TokenStore(db);

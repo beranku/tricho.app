@@ -40,6 +40,8 @@ import {
   parseRsInput,
   type RecoverySecretResult,
 } from '../auth/recovery';
+import { useStore } from '@nanostores/react';
+import { localeStore, m } from '../i18n';
 import { RSConfirmation } from './RSConfirmation';
 
 /**
@@ -114,6 +116,7 @@ export function LoginScreen({
   className,
   children,
 }: LoginScreenProps): JSX.Element {
+  useStore(localeStore);
   // Screen state
   const [state, setState] = useState<LoginScreenState>('checking');
   const [vaultId, setVaultId] = useState<string | null>(initialVaultId ?? null);
@@ -148,7 +151,7 @@ export function LoginScreen({
             setState('create_rs');
           }
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to check vault status');
+          setError(err instanceof Error ? err.message : m.login_error_checkVault());
           setState('error');
         }
       } else {
@@ -188,7 +191,7 @@ export function LoginScreen({
   // Handle passkey registration
   const handleRegisterPasskey = useCallback(async () => {
     if (!vaultId || !recoverySecret || !onCreateVault || !onRegisterPasskey) {
-      setError('Missing required handlers for vault creation');
+      setError(m.login_error_missingHandlers());
       setState('error');
       return;
     }
@@ -208,7 +211,7 @@ export function LoginScreen({
       setState('unlocked');
       onUnlocked();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create vault');
+      setError(err instanceof Error ? err.message : m.login_error_failedCreate());
       setState('error');
     }
   }, [vaultId, recoverySecret, onCreateVault, onRegisterPasskey, onUnlocked]);
@@ -216,7 +219,7 @@ export function LoginScreen({
   // Handle unlock with passkey
   const handleUnlockWithPasskey = useCallback(async () => {
     if (!onUnlockWithPasskey) {
-      setError('Passkey unlock not available');
+      setError(m.login_error_passkeyUnavailable());
       setState('error');
       return;
     }
@@ -230,7 +233,7 @@ export function LoginScreen({
       onUnlocked();
     } catch (err) {
       setUnlockAttempts((prev) => prev + 1);
-      setError(err instanceof Error ? err.message : 'Failed to unlock with passkey');
+      setError(err instanceof Error ? err.message : m.login_error_failedUnlock());
       setState('unlock');
     }
   }, [onUnlockWithPasskey, onUnlocked]);
@@ -252,14 +255,14 @@ export function LoginScreen({
   // Handle unlock with RS
   const handleUnlockWithRS = useCallback(async () => {
     if (!onUnlockWithRS) {
-      setError('RS unlock not available');
+      setError(m.login_error_rsUnavailable());
       return;
     }
 
     // Validate RS format
     const normalizedRs = parseRsInput(rsInput);
     if (!isValidRsFormat(normalizedRs)) {
-      setRsInputError('Invalid Recovery Secret format. Please check and try again.');
+      setRsInputError(m.login_recovery_invalidFormat());
       return;
     }
 
@@ -273,7 +276,7 @@ export function LoginScreen({
       onUnlocked();
     } catch (err) {
       setUnlockAttempts((prev) => prev + 1);
-      setRsInputError(err instanceof Error ? err.message : 'Failed to unlock with Recovery Secret');
+      setRsInputError(err instanceof Error ? err.message : m.login_recovery_failed());
       setState('recovery');
     }
   }, [rsInput, onUnlockWithRS, onUnlocked]);
@@ -309,7 +312,7 @@ export function LoginScreen({
         <div className="login-screen__header">
           <div className="login-screen__logo">🔐</div>
           <h1 className="login-screen__title">TrichoApp</h1>
-          <p className="login-screen__subtitle">Secure Photo Management</p>
+          <p className="login-screen__subtitle">{m.login_subtitle()}</p>
         </div>
 
         {/* Content based on state */}
@@ -318,18 +321,15 @@ export function LoginScreen({
           {state === 'checking' && (
             <div className="login-screen__checking">
               <div className="login-screen__spinner" />
-              <p>Checking vault status...</p>
+              <p>{m.login_checkingVault()}</p>
             </div>
           )}
 
           {/* Create RS state */}
           {state === 'create_rs' && recoverySecret && (
             <div className="login-screen__create-rs">
-              <h2>Create Your Vault</h2>
-              <p className="login-screen__description">
-                First, save your Recovery Secret. This is the only way to recover your data if you
-                lose access to your passkey.
-              </p>
+              <h2>{m.login_create_title()}</h2>
+              <p className="login-screen__description">{m.login_create_description()}</p>
 
               <RSConfirmation
                 recoverySecret={recoverySecret}
@@ -353,14 +353,12 @@ export function LoginScreen({
           {/* Register passkey state */}
           {state === 'register_passkey' && (
             <div className="login-screen__register-passkey">
-              <h2>Register Your Passkey</h2>
-              <p className="login-screen__description">
-                Now let's set up your passkey. This will be your primary way to unlock your vault.
-              </p>
+              <h2>{m.login_register_title()}</h2>
+              <p className="login-screen__description">{m.login_register_description()}</p>
 
               <div className="login-screen__passkey-info">
                 <span className="login-screen__passkey-icon">🔑</span>
-                <p>Your passkey uses biometrics or device PIN for secure, passwordless access.</p>
+                <p>{m.login_register_passkeyInfo()}</p>
               </div>
 
               <button
@@ -368,7 +366,7 @@ export function LoginScreen({
                 className="login-screen__btn login-screen__btn--primary"
                 onClick={handleRegisterPasskey}
               >
-                Register Passkey
+                {m.login_register_button()}
               </button>
             </div>
           )}
@@ -376,10 +374,8 @@ export function LoginScreen({
           {/* Unlock state */}
           {state === 'unlock' && (
             <div className="login-screen__unlock">
-              <h2>Welcome Back</h2>
-              <p className="login-screen__description">
-                Use your passkey to unlock your vault.
-              </p>
+              <h2>{m.login_unlock_title()}</h2>
+              <p className="login-screen__description">{m.login_unlock_description()}</p>
 
               <button
                 type="button"
@@ -387,7 +383,7 @@ export function LoginScreen({
                 onClick={handleUnlockWithPasskey}
               >
                 <span className="login-screen__btn-icon">🔑</span>
-                Unlock with Passkey
+                {m.login_unlock_button()}
               </button>
 
               {error && (
@@ -399,13 +395,13 @@ export function LoginScreen({
 
               {unlockAttempts >= 2 && (
                 <div className="login-screen__recovery-hint">
-                  <p>Having trouble with your passkey?</p>
+                  <p>{m.login_recovery_hintMessage()}</p>
                   <button
                     type="button"
                     className="login-screen__btn login-screen__btn--secondary"
                     onClick={handleSwitchToRecovery}
                   >
-                    Use Recovery Secret
+                    {m.login_recovery_useRsButton()}
                   </button>
                 </div>
               )}
@@ -416,21 +412,19 @@ export function LoginScreen({
           {state === 'unlocking' && (
             <div className="login-screen__unlocking">
               <div className="login-screen__spinner" />
-              <p>Unlocking your vault...</p>
+              <p>{m.login_unlocking_message()}</p>
             </div>
           )}
 
           {/* Recovery state */}
           {state === 'recovery' && (
             <div className="login-screen__recovery">
-              <h2>Recovery Mode</h2>
-              <p className="login-screen__description">
-                Enter your Recovery Secret to unlock your vault.
-              </p>
+              <h2>{m.login_recovery_title()}</h2>
+              <p className="login-screen__description">{m.login_recovery_description()}</p>
 
               <div className="login-screen__rs-input-container">
                 <label htmlFor="rs-recovery-input" className="login-screen__label">
-                  Recovery Secret
+                  {m.login_recovery_label()}
                 </label>
                 <textarea
                   id="rs-recovery-input"
@@ -439,7 +433,7 @@ export function LoginScreen({
                   }`}
                   value={rsInput}
                   onChange={handleRsInputChange}
-                  placeholder="Enter your Recovery Secret (e.g., ABCD-EFGH-IJKL-...)"
+                  placeholder={m.login_recovery_placeholder()}
                   rows={4}
                   spellCheck={false}
                   autoComplete="off"
@@ -457,7 +451,7 @@ export function LoginScreen({
                   className="login-screen__btn login-screen__btn--secondary"
                   onClick={handleCancel}
                 >
-                  Back
+                  {m.login_recovery_back()}
                 </button>
                 <button
                   type="button"
@@ -465,7 +459,7 @@ export function LoginScreen({
                   onClick={handleUnlockWithRS}
                   disabled={!rsInput.trim()}
                 >
-                  Unlock
+                  {m.login_recovery_unlock()}
                 </button>
               </div>
             </div>
@@ -475,7 +469,7 @@ export function LoginScreen({
           {state === 'recovering' && (
             <div className="login-screen__recovering">
               <div className="login-screen__spinner" />
-              <p>Recovering your vault...</p>
+              <p>{m.login_recovering_message()}</p>
             </div>
           )}
 
@@ -483,14 +477,14 @@ export function LoginScreen({
           {state === 'error' && (
             <div className="login-screen__error-state">
               <div className="login-screen__error-icon-large">⚠️</div>
-              <h2>Something went wrong</h2>
+              <h2>{m.login_errorState_title()}</h2>
               <p className="login-screen__error-message">{error}</p>
               <button
                 type="button"
                 className="login-screen__btn login-screen__btn--secondary"
                 onClick={handleCancel}
               >
-                Try Again
+                {m.login_errorState_retry()}
               </button>
             </div>
           )}
@@ -499,8 +493,8 @@ export function LoginScreen({
         {/* Footer */}
         <div className="login-screen__footer">
           <p className="login-screen__footer-text">
-            Your data is encrypted and stored locally.
-            {state === 'unlock' && ' Only you can access it.'}
+            {m.login_footer_text()}
+            {state === 'unlock' && ` ${m.login_footer_extra()}`}
           </p>
         </div>
       </div>

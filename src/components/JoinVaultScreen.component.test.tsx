@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { JoinVaultScreen } from './JoinVaultScreen';
+import { setLocale } from '../i18n';
 
 // A real, syntactically-valid 32-byte base32 RS would round-trip through
 // generateRecoverySecret; we instead exercise parseRsInput's expectation
@@ -9,6 +10,10 @@ import { JoinVaultScreen } from './JoinVaultScreen';
 const VALID_RS = 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA';
 
 describe('JoinVaultScreen', () => {
+  // This screen's assertions check English UI strings — opt the test locale
+  // out of the cs default set in src/test/component-setup.ts.
+  beforeEach(() => setLocale('en'));
+
   it('renders RS textarea + sign-out + unlock buttons', () => {
     render(<JoinVaultScreen onJoinVault={vi.fn()} onSignOut={vi.fn()} />);
     expect(screen.getByLabelText(/Recovery Secret/i)).toBeInTheDocument();

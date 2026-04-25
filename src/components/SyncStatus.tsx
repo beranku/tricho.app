@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import { getSyncState, subscribeSyncEvents, type SyncState } from '../sync/couch';
+import { localeStore, m } from '../i18n';
 
 export interface SyncStatusProps {
   variant?: 'compact' | 'full';
   className?: string;
 }
 
-const statusLabels: Record<SyncState['status'], string> = {
-  idle: 'Offline',
-  connecting: 'Connecting…',
-  syncing: 'Syncing',
-  paused: 'Up to date',
-  error: 'Sync error',
-};
+function statusLabel(status: SyncState['status']): string {
+  switch (status) {
+    case 'idle': return m.syncStatus_idle();
+    case 'connecting': return m.syncStatus_connecting();
+    case 'syncing': return m.syncStatus_syncing();
+    case 'paused': return m.syncStatus_paused();
+    case 'error': return m.syncStatus_error();
+    case 'gated': return m.syncStatus_gated();
+  }
+}
 
 const statusColors: Record<SyncState['status'], string> = {
   idle: '#8e8e93',
@@ -20,13 +25,15 @@ const statusColors: Record<SyncState['status'], string> = {
   syncing: '#007aff',
   paused: '#34c759',
   error: '#ff3b30',
+  gated: '#ff9500',
 };
 
 export function SyncStatus({ variant = 'compact', className }: SyncStatusProps): JSX.Element {
+  useStore(localeStore);
   const [state, setState] = useState<SyncState>(getSyncState);
   useEffect(() => subscribeSyncEvents(setState), []);
 
-  const label = statusLabels[state.status];
+  const label = statusLabel(state.status);
   const color = statusColors[state.status];
 
   if (variant === 'compact') {
@@ -53,26 +60,26 @@ export function SyncStatus({ variant = 'compact', className }: SyncStatusProps):
       </div>
       <dl style={{ margin: '8px 0 0', fontSize: 13, color: '#555' }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <dt>user</dt>
+          <dt>{m.syncStatus_userLabel()}</dt>
           <dd style={{ margin: 0 }}>{state.username ?? '—'}</dd>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <dt>pushed</dt>
+          <dt>{m.syncStatus_pushedLabel()}</dt>
           <dd style={{ margin: 0 }}>{state.pushed}</dd>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <dt>pulled</dt>
+          <dt>{m.syncStatus_pulledLabel()}</dt>
           <dd style={{ margin: 0 }}>{state.pulled}</dd>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <dt>last event</dt>
+          <dt>{m.syncStatus_lastEventLabel()}</dt>
           <dd style={{ margin: 0 }}>
             {state.lastEventAt ? new Date(state.lastEventAt).toLocaleTimeString() : '—'}
           </dd>
         </div>
         {state.error && (
           <div style={{ display: 'flex', gap: 8, color: '#ff3b30' }}>
-            <dt>error</dt>
+            <dt>{m.syncStatus_errorLabel()}</dt>
             <dd style={{ margin: 0 }}>{state.error}</dd>
           </div>
         )}

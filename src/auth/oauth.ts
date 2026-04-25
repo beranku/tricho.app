@@ -21,12 +21,46 @@ export interface OAuthDevice {
   lastSeenAt: number;
 }
 
+export type PlanId = 'free' | 'pro-monthly' | 'pro-yearly' | 'max-monthly' | 'max-yearly';
+export type PaidPlanId = Exclude<PlanId, 'free'>;
+export type TierKey = 'free' | 'pro' | 'max';
+export type BillingPeriod = 'month' | 'year' | null;
+export type BillingProvider = 'stripe' | 'bank-transfer' | null;
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'expired';
+export type Entitlement = 'sync' | 'backup';
+
 export interface OAuthSubscription {
   tier: 'free' | 'paid';
+  plan: PlanId;
+  tierKey: TierKey;
+  billingPeriod: BillingPeriod;
+  provider: BillingProvider;
+  status: SubscriptionStatus;
+  entitlements: Entitlement[];
   deviceLimit: number;
+  backupRetentionMonths: number;
+  gracePeriodSeconds: number;
+  gracePeriodEndsAt: number | null;
+  freeDeviceGrandfathered: boolean;
   storageLimitMB: number;
   paidUntil: number | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
 }
+
+export function tierOf(planId: PlanId): TierKey {
+  if (planId === 'pro-monthly' || planId === 'pro-yearly') return 'pro';
+  if (planId === 'max-monthly' || planId === 'max-yearly') return 'max';
+  return 'free';
+}
+
+export function billingPeriodOf(planId: PlanId): BillingPeriod {
+  if (planId === 'pro-monthly' || planId === 'max-monthly') return 'month';
+  if (planId === 'pro-yearly' || planId === 'max-yearly') return 'year';
+  return null;
+}
+
+export const PAID_PLAN_IDS: PaidPlanId[] = ['pro-monthly', 'pro-yearly', 'max-monthly', 'max-yearly'];
 
 export interface OAuthResult {
   ok: boolean;

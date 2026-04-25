@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import AstroPWA from '@vite-pwa/astro';
+import { paraglideVitePlugin } from '@inlang/paraglide-js';
 
 // When running Astro's dev server inside a container behind Traefik, the
 // browser connects to a public hostname that the container itself can't see.
@@ -38,12 +39,17 @@ export default defineConfig({
       manifest: {
         name: 'Tricho',
         short_name: 'Tricho',
-        description: 'Trichologický deník a CRM',
+        // Manifest description is install-prompt metadata, not user-facing
+        // app copy; localizing it requires per-locale manifests, deferred.
+        description: 'Trichology diary and CRM (offline-first PWA)',
         theme_color: '#FDFAF3',
         background_color: '#FDFAF3',
         display: 'standalone',
         orientation: 'portrait',
-        lang: 'cs',
+        // Default-locale-only manifest. The runtime swaps `<html lang>`
+        // per the user's `_local/locale` choice; the manifest is not
+        // localized in this iteration (see proposal non-goals).
+        lang: 'en',
         start_url: '/',
         scope: '/',
         icons: [
@@ -80,5 +86,19 @@ export default defineConfig({
       },
     }),
   ],
-  vite: viteServer ? { server: viteServer } : {},
+  vite: {
+    ...(viteServer ? { server: viteServer } : {}),
+    plugins: [
+      // Paraglide JS 2.0 — compiles `src/i18n/messages/*.json` into the
+      // tree-shakable runtime under `src/paraglide/`. Strategy is
+      // `globalVariable` (set by `src/i18n/runtime.ts` after reading
+      // `_local/locale`) with `baseLocale` (English) as last-resort fallback.
+      // No URL/cookie strategy: this PWA has no SEO-indexable surface.
+      paraglideVitePlugin({
+        project: './project.inlang',
+        outdir: './src/paraglide',
+        strategy: ['globalVariable', 'baseLocale'],
+      }),
+    ],
+  },
 });

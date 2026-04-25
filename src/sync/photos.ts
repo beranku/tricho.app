@@ -10,6 +10,7 @@
 import type { VaultDb } from '../db/pouch';
 import { putEncrypted, DOC_TYPES } from '../db/pouch';
 import { generateDocId, type PhotoMetaData } from '../db/types';
+import { formatUtcMonth } from '../lib/format/utc-month';
 
 const ATTACHMENT_NAME = 'blob';
 const ATTACHMENT_TYPE = 'application/octet-stream';
@@ -31,14 +32,19 @@ export async function storePhoto(db: VaultDb, input: StorePhotoInput): Promise<s
   const id = generateDocId(DOC_TYPES.PHOTO_META);
   const now = Date.now();
   const meta: PhotoMetaData = { ...input.meta, createdAt: now };
+  // Plaintext top-level field bucketing this photo into a calendar month so
+  // server-side cron can compose monthly backups without decrypting payload.
+  // Computed from `takenAt` (UTC) and frozen on first write.
+  const monthBucket = formatUtcMonth(meta.takenAt);
 
-  // 1) Write the encrypted photo-meta doc.
+  // 1) Write the encrypted photo-meta doc with the plaintext bucket field.
   const { rev } = await putEncrypted<PhotoMetaData>(db, {
     _id: id,
     type: DOC_TYPES.PHOTO_META,
     updatedAt: now,
     deleted: false,
     data: meta,
+    monthBucket,
   });
 
   // 2) Attach the encrypted blob to the doc. Replication ships attachments
@@ -65,5 +71,7 @@ export async function getPhotoBlob(db: VaultDb, id: string): Promise<Blob> {
 export async function deletePhoto(db: VaultDb, id: string): Promise<void> {
   const existing = await db.pouch.get(id).catch(() => null);
   if (!existing) return;
+  // Preserve monthBucket — bucket is bound to capture time, not edit time, so
+  // a soft-delete must not move the photo to a different month's backup.
   await db.pouch.put({ ...existing, deleted: true, updatedAt: Date.now() });
 }

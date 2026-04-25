@@ -8,7 +8,7 @@ const base = import.meta.env.BASE_URL;
 ---
 
 <!DOCTYPE html>
-<html lang="cs">
+<html>
 <head>
   <meta charset="UTF-8" />
   <title>{title}</title>
@@ -18,37 +18,59 @@ const base = import.meta.env.BASE_URL;
   <link rel="manifest" href={`${base}manifest.webmanifest`} />
   <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
 
-  <!-- Anti-flash theme bootstrap. Reads `_local/theme` from PouchDB on
-       cold load (when available) and falls back to OS preference. Runs
-       synchronously before paint. Inlined to avoid an extra fetch. -->
+  <!-- Anti-flash bootstrap. Reads `_local/theme` and `_local/locale` from
+       the PouchDB IndexedDB store and applies `data-theme` + `lang` before
+       paint. Falls back to `prefers-color-scheme` (theme) and a region-
+       stripped `navigator.language` matched against the registered locale
+       set (locale). Inlined and self-contained — must not import modules. -->
   <script is:inline>
     (function () {
+      var SUPPORTED = ['en', 'cs'];
+      var DEFAULT_LOCALE = 'en';
+
+      function pickHostLocale() {
+        var nav = (navigator && navigator.language) || '';
+        var bare = nav.split('-')[0].toLowerCase();
+        return SUPPORTED.indexOf(bare) >= 0 ? bare : DEFAULT_LOCALE;
+      }
+      // Synchronous default: host language so `<html lang>` is set before
+      // paint even if IndexedDB is slow.
+      document.documentElement.setAttribute('lang', pickHostLocale());
+
       try {
         var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (prefersDark) document.documentElement.dataset.theme = 'dark';
 
-        // Lazy: open the same IndexedDB PouchDB uses, look up _local/theme.
-        // Doing this synchronously is impossible — IndexedDB is async — but we
-        // kick the read off as early as possible and replace `data-theme`
-        // before first paint where we can.
+        // PouchDB stores its DB under '_pouch_<name>'; we look up both
+        // _local/theme and _local/locale and replace defaults if present.
         var req = indexedDB.open('_pouch_tricho_app_prefs');
         req.onsuccess = function (ev) {
           var db = ev.target.result;
           if (!db.objectStoreNames.contains('document-store')) { db.close(); return; }
           var tx = db.transaction('document-store', 'readonly');
           var store = tx.objectStore('document-store');
-          var get = store.get('_local/theme');
-          get.onsuccess = function () {
-            var doc = get.result && get.result.data;
+
+          var themeReq = store.get('_local/theme');
+          themeReq.onsuccess = function () {
+            var doc = themeReq.result && themeReq.result.data;
             if (doc && doc.theme === 'dark') {
               document.documentElement.dataset.theme = 'dark';
             } else if (doc && doc.theme === 'light') {
               delete document.documentElement.dataset.theme;
             }
-            db.close();
           };
+
+          var localeReq = store.get('_local/locale');
+          localeReq.onsuccess = function () {
+            var doc = localeReq.result && localeReq.result.data;
+            if (doc && doc.locale && SUPPORTED.indexOf(doc.locale) >= 0) {
+              document.documentElement.setAttribute('lang', doc.locale);
+            }
+          };
+
+          tx.oncomplete = function () { db.close(); };
         };
-      } catch (_) { /* fall back to default light */ }
+      } catch (_) { /* fall back to defaults already applied */ }
     })();
   </script>
 </head>

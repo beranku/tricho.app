@@ -48,4 +48,42 @@ describe('photos (attachments)', () => {
     await deletePhoto(db, id);
     expect((await listPhotoIds(db)).length).toBe(0);
   });
+
+  it('writes plaintext monthBucket field at top level from takenAt', async () => {
+    const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
+    vi.spyOn(db.pouch, 'putAttachment').mockResolvedValue({ ok: true, id: '', rev: '' } as never);
+    const takenAt = Date.UTC(2026, 3, 15, 10, 30); // 2026-04-15
+    const id = await storePhoto(db, {
+      meta: { customerId: 'c1', takenAt, contentType: 'image/jpeg' },
+      cipherBlob: new Blob([new Uint8Array(8) as BlobPart]),
+    });
+    const raw = await db.pouch.get(id);
+    expect((raw as { monthBucket?: string }).monthBucket).toBe('2026-04');
+  });
+
+  it('soft-delete preserves monthBucket', async () => {
+    const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
+    vi.spyOn(db.pouch, 'putAttachment').mockResolvedValue({ ok: true, id: '', rev: '' } as never);
+    const takenAt = Date.UTC(2026, 0, 15);
+    const id = await storePhoto(db, {
+      meta: { customerId: 'c1', takenAt, contentType: 'image/jpeg' },
+      cipherBlob: new Blob([new Uint8Array(8) as BlobPart]),
+    });
+    await deletePhoto(db, id);
+    const raw = await db.pouch.get(id, { deleted_conflicts: true } as never).catch(() => db.pouch.get(id));
+    expect((raw as { monthBucket?: string }).monthBucket).toBe('2026-01');
+  });
+
+  it('uses UTC, not local time for bucketing', async () => {
+    const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
+    vi.spyOn(db.pouch, 'putAttachment').mockResolvedValue({ ok: true, id: '', rev: '' } as never);
+    // 2026-04-30T23:30:00Z is 2026-05-01T01:30:00 in CET — bucket must stay April
+    const takenAt = Date.UTC(2026, 3, 30, 23, 30);
+    const id = await storePhoto(db, {
+      meta: { customerId: 'c1', takenAt, contentType: 'image/jpeg' },
+      cipherBlob: new Blob([new Uint8Array(8) as BlobPart]),
+    });
+    const raw = await db.pouch.get(id);
+    expect((raw as { monthBucket?: string }).monthBucket).toBe('2026-04');
+  });
 });

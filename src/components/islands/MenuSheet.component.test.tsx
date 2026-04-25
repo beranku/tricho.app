@@ -16,15 +16,17 @@ vi.mock('../../lib/store/theme', async (orig) => {
 });
 
 describe('MenuSheet', () => {
-  it('renders the seven required navigation rows', () => {
+  it('renders the required navigation rows including language + theme', () => {
     render(<MenuSheet />);
-    // The "menu" sheet must contain rows for: Klienti, Statistika, Archiv,
-    // Nastavení, Synchronizace status, Téma toggle, Odhlásit.
+    // After the i18n migration, labels come from `m.<key>()` and the
+    // component-test setup pins locale to `cs`, so Czech strings are
+    // the expected output.
     expect(screen.getByText('Klienti')).toBeInTheDocument();
     expect(screen.getByText('Statistika')).toBeInTheDocument();
     expect(screen.getByText('Archiv')).toBeInTheDocument();
     expect(screen.getByText('Nastavení')).toBeInTheDocument();
-    expect(screen.getByText('Vzhled')).toBeInTheDocument();
+    expect(screen.getByText('Jazyk')).toBeInTheDocument();
+    expect(screen.getByText('Motiv')).toBeInTheDocument();
     expect(screen.getByText('Odhlásit')).toBeInTheDocument();
   });
 
@@ -52,9 +54,10 @@ describe('MenuSheet', () => {
 });
 
 describe('FabAddSheet', () => {
-  it('shows "Plánování v příští verzi" placeholder', () => {
+  it('shows the add-appointment title from the catalog', () => {
     render(<FabAddSheet />);
-    expect(screen.getByText('Plánování v příští verzi')).toBeInTheDocument();
+    // `m.schedule_addAppointment()` under cs ⇒ "Přidat termín".
+    expect(screen.getByText('Přidat termín')).toBeInTheDocument();
   });
 
   it('shows the start time when payload provides startAt', () => {

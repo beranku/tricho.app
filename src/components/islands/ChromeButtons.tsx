@@ -4,7 +4,9 @@
  * variant 'a': Phone A (menu + ellipsis)
  * variant 'b': Phone B (back + ellipsis)
  */
+import { useStore } from '@nanostores/react';
 import { openSheet } from '../../lib/store/sheet';
+import { localeStore, m } from '../../i18n';
 
 export interface ChromeButtonsProps {
   variant?: 'a' | 'b';
@@ -12,13 +14,14 @@ export interface ChromeButtonsProps {
 }
 
 export function ChromeButtons({ variant = 'a', backHref = '/' }: ChromeButtonsProps): JSX.Element {
+  useStore(localeStore);
   return (
     <div className="chrome-buttons">
       {variant === 'a' ? (
         <button
           type="button"
           className="chrome-glyph"
-          aria-label="Otevřít menu"
+          aria-label={m.chrome_openMenu()}
           onClick={() => openSheet('menu', { triggerId: 'menu-btn' })}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -28,7 +31,7 @@ export function ChromeButtons({ variant = 'a', backHref = '/' }: ChromeButtonsPr
           </svg>
         </button>
       ) : (
-        <a className="chrome-glyph" href={backHref} aria-label="Zpět">
+        <a className="chrome-glyph" href={backHref} aria-label={m.chrome_back()}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="14,6 8,12 14,18" />
           </svg>
@@ -37,7 +40,7 @@ export function ChromeButtons({ variant = 'a', backHref = '/' }: ChromeButtonsPr
       <button
         type="button"
         className="chrome-glyph"
-        aria-label="Další možnosti"
+        aria-label={m.chrome_more()}
         onClick={() => openSheet('context', { triggerId: 'ellipsis-btn' })}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

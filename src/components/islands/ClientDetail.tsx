@@ -3,6 +3,7 @@
  * + photos. Renders current-head, cam-card, thumbnail strip, detail card.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import type { VaultDb } from '../../db/pouch';
 import { getDecrypted, watchChanges, DOC_TYPES, queryDecrypted } from '../../db/pouch';
 import {
@@ -12,6 +13,7 @@ import {
 } from '../../lib/appointment';
 import type { CustomerData, PhotoMetaData, PlaintextDoc } from '../../db/types';
 import { formatDate, formatDuration } from '../../lib/format';
+import { localeStore, m } from '../../i18n';
 import { CameraCard } from './CameraCard';
 import { PhoneScroll } from './PhoneScroll';
 
@@ -22,6 +24,7 @@ export interface ClientDetailProps {
 }
 
 export function ClientDetail({ db, vaultId, customerId }: ClientDetailProps): JSX.Element {
+  useStore(localeStore);
   const [customer, setCustomer] = useState<CustomerData | null | undefined>(undefined);
   const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
   const [photos, setPhotos] = useState<PlaintextDoc<PhotoMetaData>[]>([]);
@@ -71,7 +74,7 @@ export function ClientDetail({ db, vaultId, customerId }: ClientDetailProps): JS
   if (customer === undefined) {
     return (
       <PhoneScroll>
-        <p className="loading">Načítám…</p>
+        <p className="loading">{m.appShell_loading()}</p>
         <style>{`.loading { padding: 32px 24px; color: var(--ink-3); font-family: 'Geist', sans-serif; }`}</style>
       </PhoneScroll>
     );
@@ -81,7 +84,7 @@ export function ClientDetail({ db, vaultId, customerId }: ClientDetailProps): JS
     return (
       <PhoneScroll>
         <div className="not-found">
-          <p className="font-fraunces">Klient nenalezen</p>
+          <p className="font-fraunces">{m.client_notFound()}</p>
         </div>
         <style>{`
           .not-found {
@@ -103,7 +106,9 @@ export function ClientDetail({ db, vaultId, customerId }: ClientDetailProps): JS
     ? capitalize(active.allergenIds[0]!)
     : undefined;
   const remainingLabel =
-    active && active.endAt > now ? `zbývá ${formatDuration(active.endAt - now)}` : undefined;
+    active && active.endAt > now
+      ? m.client_remainingMinutes({ minutes: formatDuration(active.endAt - now) })
+      : undefined;
 
   return (
     <PhoneScroll>
@@ -140,7 +145,7 @@ function capitalize(s: string): string {
 function ClientChromeHeader({ name }: { name: string }): JSX.Element {
   return (
     <div className="client-chrome">
-      <span className="kicker">Klient</span>
+      <span className="kicker">{m.client_kicker()}</span>
       <span className="chrome-main client-name font-fraunces">{name}</span>
       <style>{`
         .client-chrome {
@@ -193,7 +198,7 @@ function ThumbnailStrip({ photos }: { photos: PlaintextDoc<PhotoMetaData>[] }): 
   if (photos.length === 0) {
     return (
       <div className="thumbs-empty font-patrick">
-        Zatím bez fotografií
+        {m.client_noPhotos()}
         <style>{`
           .thumbs-empty {
             padding: 0 16px 18px;
@@ -261,7 +266,7 @@ function ServicesSection({ appointments }: { appointments: AppointmentRecord[] }
   return (
     <div className="detail-section">
       <div className="section-head-row">
-        <span className="section-label">Služby</span>
+        <span className="section-label">{m.client_section_services()}</span>
       </div>
       <div className="chips-row">
         {services.map((s) => (
@@ -271,7 +276,7 @@ function ServicesSection({ appointments }: { appointments: AppointmentRecord[] }
         ))}
         <button type="button" className="chip chip--add font-geist">
           <span className="chip-add-plus" aria-hidden="true">+</span>
-          <span>Přidat</span>
+          <span>{m.client_add()}</span>
         </button>
       </div>
     </div>
@@ -285,7 +290,7 @@ function ProductsSection({ appointments }: { appointments: AppointmentRecord[] }
   return (
     <div className="detail-section">
       <div className="section-head-row">
-        <span className="section-label">Produkty</span>
+        <span className="section-label">{m.client_section_products()}</span>
       </div>
       <div className="chips-row">
         {products.map((p) => (
@@ -295,7 +300,7 @@ function ProductsSection({ appointments }: { appointments: AppointmentRecord[] }
         ))}
         <button type="button" className="chip chip--add font-geist">
           <span className="chip-add-plus" aria-hidden="true">+</span>
-          <span>Přidat</span>
+          <span>{m.client_add()}</span>
         </button>
       </div>
     </div>
@@ -306,13 +311,13 @@ function NoteSection({ notes }: { notes?: string }): JSX.Element {
   return (
     <div className="detail-section">
       <div className="section-head-row">
-        <span className="section-label">Poznámka</span>
+        <span className="section-label">{m.client_section_note()}</span>
       </div>
       {notes ? (
         <p className="note-text font-patrick">{notes}</p>
       ) : (
         <p className="note-text font-patrick" style={{ color: 'var(--ink-4)' }}>
-          Bez poznámky
+          {m.client_noNote()}
         </p>
       )}
     </div>
@@ -328,9 +333,9 @@ function NextTermSection({
 }): JSX.Element {
   return (
     <div className="next-term">
-      <span className="section-label next-term-label">Další termín</span>
+      <span className="section-label next-term-label">{m.client_section_nextTerm()}</span>
       <span className="next-term-value font-patrick">
-        {nextScheduled ? formatDate(nextScheduled.startAt, now) : 'Termín neplánován'}
+        {nextScheduled ? formatDate(nextScheduled.startAt, now) : m.client_noNextTerm()}
       </span>
     </div>
   );

@@ -5,22 +5,26 @@
 import { useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { themeStore, toggleTheme, bootstrapTheme } from '../../lib/store/theme';
+import { localeStore, m } from '../../i18n';
 
 export function ThemeToggle(): JSX.Element {
   const theme = useStore(themeStore);
+  useStore(localeStore); // re-render on locale switch so labels update
 
   useEffect(() => {
     void bootstrapTheme();
   }, []);
 
   const isDark = theme === 'dark';
+  const label = isDark ? m.menu_theme_dark() : m.menu_theme_light();
+  const oppositeLabel = isDark ? m.menu_theme_light() : m.menu_theme_dark();
 
   return (
     <button
       type="button"
       className="theme-toggle-btn"
       onClick={() => { void toggleTheme(); }}
-      aria-label={isDark ? 'Přepnout na světlý motiv' : 'Přepnout na tmavý motiv'}
+      aria-label={`${m.menu_theme_label()}: ${oppositeLabel}`}
       data-theme-toggle="true"
     >
       <span className="sun-icon" aria-hidden="true" hidden={isDark}>
@@ -41,7 +45,7 @@ export function ThemeToggle(): JSX.Element {
           <path d="M20 14 A8 8 0 1 1 10 4 A6 6 0 0 0 20 14 Z" />
         </svg>
       </span>
-      <span className="theme-toggle-label">{isDark ? 'Tmavý' : 'Světlý'}</span>
+      <span className="theme-toggle-label">{label}</span>
       <style>{`
         .theme-toggle-btn {
           display: inline-flex;

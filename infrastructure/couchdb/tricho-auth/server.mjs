@@ -7,6 +7,8 @@ import { createPublicKey } from 'node:crypto';
 import { Meta } from './meta.mjs';
 import { JwtSigner, generateKeypair } from './jwt.mjs';
 import { createRouter } from './routes.mjs';
+import { Entitlements } from './billing/entitlements.mjs';
+import { createCouchProxy, USERDB_PATH_RE } from './billing/proxy.mjs';
 
 // For every env var listed here, prefer the literal env value if set;
 // otherwise, if `<name>_FILE` points at a readable file, load its contents
@@ -144,11 +146,63 @@ async function bootstrap() {
   }
 }
 
-const router = createRouter({ meta, signer, env: process.env });
-const server = http.createServer(router);
+const entitlements = new Entitlements({ meta });
+
+// Billing flag — when false, the proxy is mounted but waves all requests
+// through. This lets us deploy the proxy ahead of flipping enforcement.
+const BILLING_ENABLED = process.env.BILLING_ENABLED === 'true';
+
+const couchProxy = createCouchProxy({
+  couchdbUrl: COUCHDB_URL,
+  couchdbAuthHeader: 'Basic ' + Buffer.from(`${ADMIN_USER}:${ADMIN_PASSWORD}`).toString('base64'),
+  signer,
+  entitlements,
+  billingEnabled: BILLING_ENABLED,
+});
+
+const router = createRouter({ meta, signer, env: process.env, entitlements });
+
+function handler(req, res) {
+  // Route /userdb-* paths through the entitlement proxy; everything else
+  // continues to the existing router.
+  const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+  if (USERDB_PATH_RE.test(url.pathname)) {
+    return couchProxy(req, res);
+  }
+  return router(req, res);
+}
+
+const server = http.createServer(handler);
 
 bootstrap().then(() => {
   server.listen(PORT, () => {
     console.log(`[tricho-auth] listening on :${PORT} → ${COUCHDB_URL}`);
   });
+  maybeStartBackupCron();
 });
+
+function maybeStartBackupCron() {
+  if (process.env.BACKUP_CRON_ENABLED !== 'true') return;
+  const intervalHours = Number.parseFloat(process.env.BACKUP_CRON_INTERVAL_HOURS ?? '24');
+  if (!Number.isFinite(intervalHours) || intervalHours <= 0) return;
+  const intervalMs = Math.round(intervalHours * 60 * 60 * 1000);
+  console.log(`[tricho-auth] backup cron enabled, interval=${intervalHours}h`);
+
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const { runBackupCron } = await import('./billing/backup-cron.mjs');
+      const result = await runBackupCron({ meta, env: process.env });
+      console.log(`[tricho-auth] backup cron run`, JSON.stringify(result));
+    } catch (err) {
+      console.error('[tricho-auth] backup cron failed', err);
+    } finally {
+      running = false;
+    }
+  };
+  // Run once at boot (after a short delay so HTTP is up first), then on the interval.
+  setTimeout(() => { void tick(); }, 30_000).unref?.();
+  setInterval(() => { void tick(); }, intervalMs).unref?.();
+}

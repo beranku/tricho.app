@@ -239,7 +239,10 @@ export class TokenStore {
 
   /**
    * PouchDB `fetch` override that injects `Authorization: Bearer <jwt>` and
-   * transparently refreshes once on a 401 before giving up.
+   * transparently refreshes once on a 401 before giving up. On 402, the
+   * server is signalling the user's plan does not entitle this request;
+   * we throw a typed `PlanExpiredError` so AppShell can route to the Plan
+   * screen instead of letting the sync state machine retry forever.
    */
   bearerFetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
     await this.ensureFreshJwt();
@@ -250,12 +253,24 @@ export class TokenStore {
       return { ...init, headers };
     };
     let res = await fetch(input, attach(this.jwt()));
+    if (res.status === 402) await throwPlanExpired(res);
     if (res.status !== 401) return res;
     // One retry after forcing a refresh.
     this.state.jwt = null;
     const ok = await this.ensureFreshJwt();
     if (!ok) return res;
     res = await fetch(input, attach(this.jwt()));
+    if (res.status === 402) await throwPlanExpired(res);
     return res;
   };
+}
+
+async function throwPlanExpired(res: Response): Promise<never> {
+  const body = await res.json().catch(() => ({} as Record<string, unknown>));
+  const { PlanExpiredError } = await import('./subscription');
+  throw new PlanExpiredError({
+    paidUntil: typeof body.paidUntil === 'number' ? body.paidUntil : null,
+    gracePeriodEndsAt: typeof body.gracePeriodEndsAt === 'number' ? body.gracePeriodEndsAt : null,
+    reason: typeof body.reason === 'string' ? body.reason : 'plan_expired',
+  });
 }

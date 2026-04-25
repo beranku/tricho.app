@@ -12,6 +12,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
+import { setLocale } from '../i18n';
 
 // Reset DOM + mocks between tests so one test's side effects don't leak.
 afterEach(() => {
@@ -20,6 +21,11 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  // Component tests pre-date the i18n migration and assert Czech-language
+  // output (e.g. "Tmavý", "Klienti"). Default the active locale to Czech
+  // so these assertions hold; tests that exercise English specifically
+  // can call setLocale('en') at the top of their `beforeEach`.
+  setLocale('cs');
   // ── getUserMedia ─────────────────────────────────────────────────
   if (!navigator.mediaDevices) {
     Object.defineProperty(navigator, 'mediaDevices', {

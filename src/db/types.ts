@@ -26,6 +26,13 @@ export interface BaseEncryptedDoc {
   updatedAt: number;
   deleted: boolean;
   payload: EncryptedPayload;
+  /**
+   * Calendar-month bucket "YYYY-MM" derived from the doc's primary timestamp
+   * at write time. Set on photo-meta docs from `takenAt`; absent on other
+   * doc types (server treats undefined as "include in textual snapshot").
+   * The bucket is stable — once set, edits MUST NOT change it.
+   */
+  monthBucket?: string;
 }
 
 export interface PlaintextDoc<T> {

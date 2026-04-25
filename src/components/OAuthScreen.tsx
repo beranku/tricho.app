@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useStore } from '@nanostores/react';
 import { startProviderLogin } from '../auth/oauth';
+import { localeStore, m } from '../i18n';
 
 export interface OAuthScreenProps {
   onUnlockWithRecoverySecret?: () => void;
@@ -32,6 +34,7 @@ const buttonBase: React.CSSProperties = {
 };
 
 export function OAuthScreen({ onUnlockWithRecoverySecret, hint }: OAuthScreenProps): JSX.Element {
+  useStore(localeStore);
   const [busy, setBusy] = useState<'google' | 'apple' | null>(null);
 
   return (
@@ -39,7 +42,7 @@ export function OAuthScreen({ onUnlockWithRecoverySecret, hint }: OAuthScreenPro
       <header style={{ textAlign: 'center', marginBottom: 24 }}>
         <h1 style={{ margin: '0 0 8px', fontSize: 28 }}>TrichoApp</h1>
         <p style={{ margin: 0, color: '#555', fontSize: 14 }}>
-          Your private salon CRM. Encrypted on your device.
+          {m.oauth_appDescription()}
         </p>
       </header>
 
@@ -59,7 +62,7 @@ export function OAuthScreen({ onUnlockWithRecoverySecret, hint }: OAuthScreenPro
           }}
         >
           <span aria-hidden style={{ fontWeight: 700 }}>G</span>
-          {busy === 'google' ? 'Redirecting…' : 'Continue with Google'}
+          {busy === 'google' ? m.oauth_redirecting() : m.oauth_continueGoogle()}
         </button>
         <button
           style={{ ...buttonBase, background: '#000', color: '#fff', border: 'none' }}
@@ -70,7 +73,7 @@ export function OAuthScreen({ onUnlockWithRecoverySecret, hint }: OAuthScreenPro
           }}
         >
           <span aria-hidden style={{ fontWeight: 700 }}></span>
-          {busy === 'apple' ? 'Redirecting…' : 'Continue with Apple'}
+          {busy === 'apple' ? m.oauth_redirecting() : m.oauth_continueApple()}
         </button>
       </div>
 
@@ -80,13 +83,13 @@ export function OAuthScreen({ onUnlockWithRecoverySecret, hint }: OAuthScreenPro
             onClick={onUnlockWithRecoverySecret}
             style={{ background: 'transparent', border: 'none', color: '#007aff', cursor: 'pointer', fontSize: 13 }}
           >
-            Already set up on this device? Unlock with Recovery Secret
+            {m.oauth_unlockWithRsLink()}
           </button>
         </div>
       )}
 
       <footer style={{ marginTop: 28, textAlign: 'center', fontSize: 11, color: '#999' }}>
-        Sign-in is used only for sync and device management. Your data is encrypted on this device before it leaves.
+        {m.oauth_footer()}
       </footer>
     </div>
   );

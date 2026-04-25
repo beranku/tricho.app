@@ -5,6 +5,7 @@ import { jwtVerify, importSPKI } from 'jose';
 import { issueTokens } from './jwt.mjs';
 import * as google from './providers/google.mjs';
 import * as apple from './providers/apple.mjs';
+import { publicPlanCatalog, getPlan } from './billing/plans.mjs';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -54,6 +55,15 @@ function readBody(req) {
         reject(err);
       }
     });
+    req.on('error', reject);
+  });
+}
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }
@@ -123,6 +133,20 @@ function generateDeviceId() {
   return randomBytes(16).toString('base64url');
 }
 
+function getBackupRoot(env) {
+  return env.BACKUP_ROOT ?? null;
+}
+
+function enrichSubscription(sub) {
+  if (!sub) return null;
+  const grace = (sub.gracePeriodSeconds ?? 7 * 86400) * 1000;
+  const gracePeriodEndsAt = sub.paidUntil != null ? sub.paidUntil + grace : null;
+  return {
+    ...sub,
+    gracePeriodEndsAt,
+  };
+}
+
 function isString(v) {
   return typeof v === 'string' && v.length > 0;
 }
@@ -162,7 +186,10 @@ try {
 </body></html>`;
 }
 
-export function createRouter({ meta, signer, env }) {
+export function createRouter({ meta, signer, env, entitlements = null }) {
+  function invalidateEntitlements(canonicalUsername) {
+    if (entitlements && canonicalUsername) entitlements.invalidate(canonicalUsername);
+  }
   const COOKIE_SECRET = env.TRICHO_AUTH_COOKIE_SECRET ?? randomBytes(32).toString('base64url');
   const APP_ORIGIN = env.APP_ORIGIN ?? '';
   const googleCfg = google.googleConfig(env);
@@ -211,7 +238,16 @@ export function createRouter({ meta, signer, env }) {
         couchdbUsername,
         couchdbPassword: couchPassword,
       });
-      await meta.ensureSubscription(`user:${couchdbUsername}`, { tier: 'free', deviceLimit: 2 });
+      await meta.ensureSubscription(`user:${couchdbUsername}`, {
+        tier: 'free',
+        plan: 'free',
+        provider: null,
+        status: 'active',
+        entitlements: [],
+        deviceLimit: 1,
+        gracePeriodSeconds: 7 * 86400,
+        freeDeviceGrandfathered: false,
+      });
       isNewUser = true;
     } else {
       await meta.touchUser(userDoc);
@@ -224,7 +260,10 @@ export function createRouter({ meta, signer, env }) {
     let deviceDoc = deviceId ? existingDevices.find((d) => d.deviceId === deviceId && !d.revoked) : null;
     if (!deviceDoc) {
       const sub = await meta.getSubscription(`user:${couchdbUsername}`);
-      const limit = sub?.deviceLimit ?? 2;
+      const baseLimit = sub?.deviceLimit ?? 1;
+      // Grandfather: a free user who held two devices before the limit dropped
+      // to 1 keeps both, but cannot add a third.
+      const limit = sub?.freeDeviceGrandfathered ? Math.max(baseLimit, 2) : baseLimit;
       const active = existingDevices.filter((d) => !d.revoked);
       if (active.length >= limit) {
         deviceApproved = false;
@@ -274,7 +313,9 @@ export function createRouter({ meta, signer, env }) {
       devices: existingDevices
         .filter((d) => !d.revoked)
         .map((d) => ({ id: d.deviceId, name: d.name, addedAt: d.addedAt, lastSeenAt: d.lastSeenAt })),
-      subscription: await meta.getSubscription(`user:${couchdbUsername}`).catch(() => null),
+      subscription: enrichSubscription(
+        await meta.getSubscription(`user:${couchdbUsername}`).catch(() => null),
+      ),
       tokens: tokensOut,
     };
 
@@ -475,11 +516,249 @@ export function createRouter({ meta, signer, env }) {
         return json(res, 200, { ok: true });
       }
 
+      if (req.method === 'GET' && path === '/auth/plans') {
+        return json(res, 200, { plans: publicPlanCatalog(env) });
+      }
+
       if (req.method === 'GET' && path === '/auth/subscription') {
         const identity = await requireAuth(req);
         if (!identity) return json(res, 401, { error: 'unauthorized' });
         const sub = await meta.getSubscription(`user:${identity.couchdbUsername}`);
-        return json(res, 200, { subscription: sub });
+        return json(res, 200, { subscription: enrichSubscription(sub) });
+      }
+
+      // ── Billing: Stripe ────────────────────────────────────────────────
+      if (req.method === 'POST' && path === '/auth/billing/stripe/checkout') {
+        if (env.BILLING_ENABLED !== 'true') return json(res, 503, { error: 'billing_disabled' });
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const body = (await readBody(req).catch(() => ({}))) || {};
+        const { plan, successUrl, cancelUrl } = body;
+        const PAID = ['pro-monthly', 'pro-yearly', 'max-monthly', 'max-yearly'];
+        if (!PAID.includes(plan)) return json(res, 400, { error: 'invalid_plan' });
+        if (!isString(successUrl) || !isString(cancelUrl)) return json(res, 400, { error: 'invalid_urls' });
+        const userId = `user:${identity.couchdbUsername}`;
+        const sub = await meta.getSubscription(userId);
+        if (sub?.provider === 'stripe' && sub.status === 'active') {
+          return json(res, 409, { error: 'active_subscription', provider: 'stripe' });
+        }
+        // Bridge from existing bank-transfer paidUntil with a Stripe trial.
+        let trialDays = 0;
+        if (sub?.provider === 'bank-transfer' && sub.paidUntil != null && sub.paidUntil > Date.now()) {
+          trialDays = Math.ceil((sub.paidUntil - Date.now()) / (86400 * 1000));
+        }
+        try {
+          const { createCheckoutSession } = await import('./billing/stripe.mjs');
+          const result = await createCheckoutSession({
+            env,
+            user: { canonicalUsername: identity.couchdbUsername, email: identity.email },
+            plan,
+            successUrl,
+            cancelUrl,
+            trialDays,
+          });
+          // Persist the customerId hint so we can recover it without round-tripping.
+          if (result.customerId && (!sub || sub.stripeCustomerId !== result.customerId)) {
+            await meta.updateSubscription(userId, { stripeCustomerId: result.customerId });
+          }
+          return json(res, 200, { checkoutUrl: result.checkoutUrl });
+        } catch (err) {
+          console.error('[tricho-auth] stripe checkout failed', err);
+          return json(res, 500, { error: 'stripe_failed' });
+        }
+      }
+
+      if (req.method === 'GET' && path === '/auth/billing/stripe/portal') {
+        if (env.BILLING_ENABLED !== 'true') return json(res, 503, { error: 'billing_disabled' });
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const sub = await meta.getSubscription(`user:${identity.couchdbUsername}`);
+        if (!sub?.stripeCustomerId) return json(res, 409, { error: 'no_stripe_customer' });
+        const returnUrl = url.searchParams.get('return_url') ?? env.APP_ORIGIN ?? '/';
+        try {
+          const { openCustomerPortal } = await import('./billing/stripe.mjs');
+          const { portalUrl } = await openCustomerPortal({
+            env,
+            stripeCustomerId: sub.stripeCustomerId,
+            returnUrl,
+          });
+          return json(res, 200, { portalUrl });
+        } catch (err) {
+          console.error('[tricho-auth] stripe portal failed', err);
+          return json(res, 500, { error: 'stripe_failed' });
+        }
+      }
+
+      if (req.method === 'POST' && path === '/auth/billing/stripe/webhook') {
+        if (env.BILLING_ENABLED !== 'true') return json(res, 503, { error: 'billing_disabled' });
+        const rawBody = await readRawBody(req);
+        try {
+          const { handleStripeWebhook } = await import('./billing/webhook.mjs');
+          const result = await handleStripeWebhook({
+            meta,
+            entitlements,
+            env,
+            rawBody,
+            signatureHeader: req.headers['stripe-signature'],
+          });
+          return json(res, result.status, result.body);
+        } catch (err) {
+          console.error('[tricho-auth] stripe webhook handler failed', err);
+          return json(res, 500, { error: 'webhook_failed' });
+        }
+      }
+
+      // ── Billing: Bank transfer ─────────────────────────────────────────
+      if (req.method === 'POST' && path === '/auth/billing/bank-transfer/intent') {
+        if (env.BILLING_ENABLED !== 'true') return json(res, 503, { error: 'billing_disabled' });
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const body = (await readBody(req).catch(() => ({}))) || {};
+        const { plan } = body;
+        const PAID = ['pro-monthly', 'pro-yearly', 'max-monthly', 'max-yearly'];
+        if (!PAID.includes(plan)) return json(res, 400, { error: 'invalid_plan' });
+        const userId = `user:${identity.couchdbUsername}`;
+        const sub = await meta.getSubscription(userId);
+        if (sub?.provider === 'stripe' && sub.status === 'active') {
+          return json(res, 409, { error: 'active_subscription', provider: 'stripe' });
+        }
+        try {
+          const { createIntent } = await import('./billing/bank-transfer.mjs');
+          const intent = await createIntent({ meta, env, userId, plan });
+          return json(res, 200, { intent });
+        } catch (err) {
+          console.error('[tricho-auth] create bank-transfer intent failed', err);
+          return json(res, 500, { error: 'bank_transfer_failed' });
+        }
+      }
+
+      if (req.method === 'GET' && path.startsWith('/auth/billing/bank-transfer/intent/')) {
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const intentId = decodeURIComponent(path.slice('/auth/billing/bank-transfer/intent/'.length));
+        if (!isString(intentId)) return json(res, 400, { error: 'invalid_intent_id' });
+        const intent = await meta.getPaymentIntent(intentId);
+        if (!intent) return json(res, 404, { error: 'intent_not_found' });
+        if (intent.userId !== `user:${identity.couchdbUsername}`) return json(res, 403, { error: 'forbidden' });
+        return json(res, 200, { intent });
+      }
+
+      if (req.method === 'DELETE' && path.startsWith('/auth/billing/bank-transfer/intent/')) {
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const intentId = decodeURIComponent(path.slice('/auth/billing/bank-transfer/intent/'.length));
+        const { cancelIntent } = await import('./billing/bank-transfer.mjs');
+        const result = await cancelIntent({
+          meta,
+          intentId,
+          userId: `user:${identity.couchdbUsername}`,
+        });
+        return json(res, result.status, result.body);
+      }
+
+      if (req.method === 'POST' && path === '/auth/billing/bank-transfer/admin/confirm') {
+        const adminToken = env.BILLING_ADMIN_TOKEN ?? null;
+        const provided = (req.headers.authorization ?? '').replace(/^Bearer\s+/, '');
+        if (!adminToken || provided !== adminToken) return json(res, 401, { error: 'unauthorized' });
+        const body = (await readBody(req).catch(() => ({}))) || {};
+        const { intentId } = body;
+        if (!isString(intentId)) return json(res, 400, { error: 'invalid_intent_id' });
+        const { confirmIntent } = await import('./billing/bank-transfer.mjs');
+        const result = await confirmIntent({ meta, env, intentId });
+        if (result.status === 200 && result.body?.intent) {
+          // Invalidate cache for the user so subsequent sync requests pass.
+          const userId = result.body.intent.userId;
+          if (userId?.startsWith('user:')) invalidateEntitlements(userId.slice('user:'.length));
+        }
+        return json(res, result.status, result.body);
+      }
+
+      if (req.method === 'POST' && path === '/auth/subscription/cancel') {
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const userId = `user:${identity.couchdbUsername}`;
+        const sub = await meta.getSubscription(userId);
+        if (!sub || sub.tier === 'free') return json(res, 400, { error: 'no_active_subscription' });
+        if (sub.provider === 'stripe') {
+          if (typeof env.STRIPE_SECRET_KEY === 'string' && sub.stripeSubscriptionId) {
+            // Best-effort Stripe API call. The webhook will be the canonical
+            // writer of `status: "canceled"`; we set it locally too so the UI
+            // reflects the intent immediately.
+            try {
+              const { cancelStripeSubscription } = await import('./billing/stripe.mjs');
+              await cancelStripeSubscription({
+                env,
+                stripeSubscriptionId: sub.stripeSubscriptionId,
+              });
+            } catch (err) {
+              console.warn('[tricho-auth] stripe cancel failed', err.message);
+            }
+          }
+          await meta.updateSubscription(userId, { status: 'canceled' });
+          invalidateEntitlements(identity.couchdbUsername);
+          return json(res, 200, { ok: true });
+        }
+        // Bank-transfer: no auto-renew exists, so cancel is just a flag.
+        await meta.updateSubscription(userId, { status: 'canceled' });
+        invalidateEntitlements(identity.couchdbUsername);
+        return json(res, 200, { ok: true });
+      }
+
+      // ── Monthly backups ───────────────────────────────────────────────
+      if (req.method === 'GET' && path === '/auth/backup/months') {
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        const months = await meta.listMonthlyBackups(identity.couchdbUsername);
+        return json(res, 200, {
+          months: months.map((m) => ({
+            monthKey: m.monthKey,
+            sizeBytes: m.sizeBytes ?? 0,
+            finalized: Boolean(m.finalized),
+            docCount: m.docCount ?? 0,
+            photoCount: m.photoCount ?? 0,
+            generatedAt: m.generatedAt ?? 0,
+          })),
+        });
+      }
+
+      const monthMatch = path.match(/^\/auth\/backup\/months\/(\d{4}-\d{2})$/);
+      if (req.method === 'GET' && monthMatch) {
+        const identity = await requireAuth(req);
+        if (!identity) return json(res, 401, { error: 'unauthorized' });
+        if (env.BILLING_ENABLED === 'true' && entitlements) {
+          const r = await entitlements.check(identity.couchdbUsername, 'backup');
+          if (!r.allowed) {
+            return json(res, 402, {
+              error: 'plan_expired',
+              reason: 'backup_entitlement_missing',
+              paidUntil: r.subscription?.paidUntil ?? null,
+              gracePeriodEndsAt: r.gracePeriodEndsAt,
+            });
+          }
+        }
+        const monthKey = monthMatch[1];
+        const manifest = await meta.getMonthlyBackup(identity.couchdbUsername, monthKey);
+        if (!manifest) return json(res, 404, { error: 'not_found' });
+        if (!getBackupRoot(env)) return json(res, 503, { error: 'backup_storage_not_configured' });
+        try {
+          const { BackupStore } = await import('./billing/backup-store.mjs');
+          const store = new BackupStore({ root: getBackupRoot(env) });
+          if (!(await store.existsMonth({ canonicalUsername: identity.couchdbUsername, monthKey }))) {
+            return json(res, 404, { error: 'not_found' });
+          }
+          res.writeHead(200, {
+            ...CORS_HEADERS,
+            'content-type': 'application/zip',
+            'content-length': String(manifest.sizeBytes ?? 0),
+            'content-disposition': `attachment; filename="${monthKey}.tricho-backup.zip"`,
+          });
+          const stream = store.openMonthReadStream({ canonicalUsername: identity.couchdbUsername, monthKey });
+          stream.pipe(res);
+          return undefined;
+        } catch (err) {
+          console.error('[tricho-auth] monthly backup download failed', err);
+          return json(res, 500, { error: 'backup_download_failed' });
+        }
       }
 
       // ── JWKS ───────────────────────────────────────────────────────────

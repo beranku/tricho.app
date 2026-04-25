@@ -4,8 +4,10 @@
  */
 import { useStore } from '@nanostores/react';
 import { phoneScrollStore } from '../../lib/store/phoneScroll';
+import { localeStore, m } from '../../i18n';
 
 export function FabSecondary(): JSX.Element {
+  useStore(localeStore);
   const { todayInView, todayDirection } = useStore(phoneScrollStore);
   const visible = !todayInView && todayDirection !== null;
 
@@ -19,7 +21,7 @@ export function FabSecondary(): JSX.Element {
     <button
       type="button"
       className={`fab-secondary ${visible ? 'visible' : ''} direction-${todayDirection ?? 'up'}`}
-      aria-label="Zpět na dnešek"
+      aria-label={m.schedule_scrollToTodayLabel()}
       onClick={scrollToToday}
     >
       <span className="fab-arrow" aria-hidden="true">

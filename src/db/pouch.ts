@@ -137,7 +137,7 @@ async function decrypt<T>(db: VaultDb, doc: BaseEncryptedDoc, context: string): 
 
 export async function putEncrypted<T>(
   db: VaultDb,
-  doc: Omit<PlaintextDoc<T>, '_rev'> & { _rev?: string },
+  doc: Omit<PlaintextDoc<T>, '_rev'> & { _rev?: string; monthBucket?: string },
 ): Promise<{ id: string; rev: string }> {
   const payload = await encrypt(db, doc.data, { context: doc.type, documentId: doc._id });
   const wireDoc: BaseEncryptedDoc = {
@@ -146,6 +146,7 @@ export async function putEncrypted<T>(
     type: doc.type,
     updatedAt: doc.updatedAt,
     deleted: doc.deleted,
+    ...(doc.monthBucket ? { monthBucket: doc.monthBucket } : {}),
     payload,
   };
   const res = await db.pouch.put(wireDoc);

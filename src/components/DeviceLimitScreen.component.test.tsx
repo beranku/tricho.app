@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DeviceLimitScreen } from './DeviceLimitScreen';
 import { fakeDevice, fakeSubscription } from '../test/fixtures/oauth';
+import { setLocale } from '../i18n';
 
 // Mock the HTTP helpers at the module boundary so component behaviour is
 // exercised end-to-end but no network calls leave the test.
@@ -19,6 +20,8 @@ const tokenStore = {
 } as unknown as Parameters<typeof DeviceLimitScreen>[0]['tokenStore'];
 
 beforeEach(() => {
+  // English assertions; opt out of the cs default.
+  setLocale('en');
   (fetchDevices as ReturnType<typeof vi.fn>).mockResolvedValue({
     devices: [fakeDevice({ id: 'd1', name: 'Old Laptop' }), fakeDevice({ id: 'd2', name: 'Old Phone' })],
     subscription: fakeSubscription(),

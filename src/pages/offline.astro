@@ -1,18 +1,47 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { m } from '../i18n';
+
+// This page is pre-rendered (and pre-cached by the SW) at build time, so
+// strings here resolve to baseLocale (English). A small inline script
+// swaps them at runtime if the user picked another locale and that
+// catalog is present in the page's data-attribute fallbacks.
+const fallbacks = {
+  en: {
+    title: 'No connection',
+    body: 'Tricho works without the internet. Open the schedule, browse clients, capture photos — sync will resume when the connection is back.',
+    back: '← Back to schedule',
+  },
+  cs: {
+    title: 'Bez připojení',
+    body: 'Tricho funguje i bez internetu. Otevřete plán, prohlížejte klienty, focejte zákroky — synchronizace se rozjede, jakmile budete zase online.',
+    back: '← Zpět na plán',
+  },
+} as const;
 ---
 
 <Layout title="TrichoApp — offline">
   <main class="offline">
     <div class="offline-card">
-      <h1 class="font-fraunces">Bez připojení</h1>
-      <p class="font-patrick">
-        Tricho funguje i bez internetu. Otevřete plán, prohlížejte klienty,
-        focejte zákroky — synchronizace se rozjede, jakmile budete zase online.
-      </p>
-      <a href="/" class="back-link font-geist">← Zpět na plán</a>
+      <h1 class="font-fraunces" data-i18n="offline-title">{m.offline_pageTitle()}</h1>
+      <p class="font-patrick" data-i18n="offline-body">{m.offline_pageBody()}</p>
+      <a href="/" class="back-link font-geist" data-i18n="offline-back">{m.offline_backLink()}</a>
     </div>
   </main>
+  <script is:inline define:vars={{ fallbacks }}>
+    (function () {
+      function applyLocaleStrings(locale) {
+        const pack = fallbacks[locale];
+        if (!pack) return;
+        document.querySelector('[data-i18n="offline-title"]').textContent = pack.title;
+        document.querySelector('[data-i18n="offline-body"]').textContent = pack.body;
+        document.querySelector('[data-i18n="offline-back"]').textContent = pack.back;
+      }
+      // Read from _local/locale; bootstrap script may have already set <html lang>.
+      const lang = document.documentElement.getAttribute('lang');
+      if (lang && lang !== 'en' && fallbacks[lang]) applyLocaleStrings(lang);
+    })();
+  </script>
 </Layout>
 
 <style>

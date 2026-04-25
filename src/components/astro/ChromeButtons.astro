@@ -3,10 +3,16 @@
 // pass through to the sticky day-header (which holds the date & caret).
 //
 // Variant 'a' = Phone A (menu + ellipsis); 'b' = Phone B (back + ellipsis).
+//
+// Strings come from `m.<key>()` so the SSR-baked aria-labels match the
+// build-time baseLocale; the React island variant under
+// `src/components/islands/ChromeButtons.tsx` re-renders these labels in
+// the active locale on the client.
 import ChromeGlyph from './ChromeGlyph.astro';
 import Hamburger from './icons/Hamburger.astro';
 import Ellipsis from './icons/Ellipsis.astro';
 import BackArrow from './icons/BackArrow.astro';
+import { m } from '../../i18n';
 
 interface Props {
   variant?: 'a' | 'b';
@@ -17,15 +23,15 @@ const { variant = 'a', backHref = '/' } = Astro.props;
 
 <div class="chrome-buttons">
   {variant === 'a' ? (
-    <ChromeGlyph label="Otevřít menu" dataAction="open-sheet:menu">
+    <ChromeGlyph label={m.chrome_openMenu()} dataAction="open-sheet:menu">
       <Hamburger />
     </ChromeGlyph>
   ) : (
-    <ChromeGlyph label="Zpět" href={backHref}>
+    <ChromeGlyph label={m.chrome_back()} href={backHref}>
       <BackArrow />
     </ChromeGlyph>
   )}
-  <ChromeGlyph label="Další možnosti" dataAction="open-sheet:context">
+  <ChromeGlyph label={m.chrome_more()} dataAction="open-sheet:context">
     <Ellipsis />
   </ChromeGlyph>
 </div>

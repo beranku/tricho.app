@@ -7,16 +7,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VaultDb } from '../../db/pouch';
 import { storePhoto } from '../../sync/photos';
 import { envelopeEncrypt, encodeBase64url, decodeBase64url } from '../../crypto/envelope';
+import { useStore } from '@nanostores/react';
+import { localeStore, m } from '../../i18n';
 import type { PhotoAngle } from '../../db/types';
 
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.82;
 
-const ANGLE_LABELS: Record<PhotoAngle, string> = {
-  before: 'Před',
-  detail: 'Detail',
-  after: 'Po',
-};
+function angleLabel(angle: PhotoAngle): string {
+  switch (angle) {
+    case 'before': return m.camera_label_before();
+    case 'detail': return m.camera_label_detail();
+    case 'after': return m.camera_label_after();
+  }
+}
 
 export interface CameraCardProps {
   db: VaultDb;
@@ -27,6 +31,7 @@ export interface CameraCardProps {
 }
 
 export function CameraCard({ db, vaultId, customerId, appointmentId, onCaptured }: CameraCardProps): JSX.Element {
+  useStore(localeStore);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -99,7 +104,7 @@ export function CameraCard({ db, vaultId, customerId, appointmentId, onCaptured 
           takenAt: Date.now(),
           contentType: 'image/jpeg',
           angle,
-          label: ANGLE_LABELS[angle],
+          label: angleLabel(angle),
         },
         cipherBlob,
       });
@@ -115,7 +120,7 @@ export function CameraCard({ db, vaultId, customerId, appointmentId, onCaptured 
     return (
       <div className="cam-card cam-card--denied">
         <p className="cam-card-denied-text">
-          Pro zachycení fotografie je potřeba povolit přístup ke kameře.
+          {m.camera_permissionMessage()}
         </p>
         <style>{styles}</style>
       </div>
@@ -144,7 +149,7 @@ export function CameraCard({ db, vaultId, customerId, appointmentId, onCaptured 
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <span className="cam-label-current">{ANGLE_LABELS[angle]}</span>
+            <span className="cam-label-current">{angleLabel(angle)}</span>
             <span className="cam-label-caret" aria-hidden="true">▼</span>
           </button>
           <div role="menu" className="cam-label-menu">
@@ -157,7 +162,7 @@ export function CameraCard({ db, vaultId, customerId, appointmentId, onCaptured 
                 className={`cam-label-option ${a === angle ? 'active' : ''}`}
                 onClick={() => { setAngle(a); setMenuOpen(false); }}
               >
-                {ANGLE_LABELS[a]}
+                {angleLabel(a)}
               </button>
             ))}
           </div>
@@ -165,7 +170,7 @@ export function CameraCard({ db, vaultId, customerId, appointmentId, onCaptured 
         <button
           type="button"
           className="cam-capture"
-          aria-label="Pořídit fotografii"
+          aria-label={m.camera_take()}
           onClick={capture}
           disabled={busy}
         />

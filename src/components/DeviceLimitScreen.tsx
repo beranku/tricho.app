@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import type { TokenStore } from '../auth/token-store';
 import {
   fetchDevices,
@@ -6,11 +7,13 @@ import {
   type DeviceListEntry,
   type OAuthSubscription,
 } from '../auth/oauth';
+import { localeStore, m } from '../i18n';
 
 export interface DeviceLimitScreenProps {
   tokenStore: TokenStore;
   onDeviceFreed: () => void;
   onCancel?: () => void;
+  onUpgrade?: () => void;
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -22,7 +25,8 @@ const sectionStyle: React.CSSProperties = {
   boxShadow: '0 18px 40px rgba(15,23,42,0.18)',
 };
 
-export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: DeviceLimitScreenProps): JSX.Element {
+export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel, onUpgrade }: DeviceLimitScreenProps): JSX.Element {
+  useStore(localeStore);
   const [devices, setDevices] = useState<DeviceListEntry[] | null>(null);
   const [subscription, setSubscription] = useState<OAuthSubscription | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,9 +35,9 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
   const refresh = useCallback(async () => {
     setError(null);
     const ok = await tokenStore.ensureFreshJwt();
-    if (!ok) { setError('Session expired. Please sign in again.'); return; }
+    if (!ok) { setError(m.deviceLimit_sessionExpired_full()); return; }
     const result = await fetchDevices(tokenStore.jwt()!);
-    if (!result) { setError('Could not load devices.'); return; }
+    if (!result) { setError(m.deviceLimit_loadDevicesError()); return; }
     setDevices(result.devices);
     setSubscription(result.subscription);
   }, [tokenStore]);
@@ -44,9 +48,9 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
     setBusy(true);
     try {
       const ok = await tokenStore.ensureFreshJwt();
-      if (!ok) { setError('Session expired.'); return; }
+      if (!ok) { setError(m.settings_sessionExpired()); return; }
       const revoked = await revokeDevice(tokenStore.jwt()!, deviceId);
-      if (!revoked) { setError('Revoke failed.'); return; }
+      if (!revoked) { setError(m.deviceLimit_revokeFailed()); return; }
       onDeviceFreed();
     } finally {
       setBusy(false);
@@ -55,13 +59,14 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
 
   return (
     <div style={sectionStyle}>
-      <h2 style={{ marginTop: 0 }}>Device limit reached</h2>
+      <h2 style={{ marginTop: 0 }}>{m.deviceLimit_title()}</h2>
       <p style={{ color: '#555', fontSize: 14 }}>
         {subscription
-          ? `Your ${subscription.tier} plan allows ${subscription.deviceLimit} devices.`
-          : 'Your plan does not allow more devices.'}
-        {' '}
-        Revoke one of your existing devices to add this one, or upgrade.
+          ? m.deviceLimit_descriptionWith({
+              tier: subscription.tier,
+              limit: subscription.deviceLimit,
+            })
+          : m.deviceLimit_descriptionWithout()}
       </p>
 
       {error && (
@@ -69,9 +74,9 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
       )}
 
       {devices === null ? (
-        <p style={{ color: '#666' }}>Loading…</p>
+        <p style={{ color: '#666' }}>{m.deviceLimit_loading()}</p>
       ) : devices.length === 0 ? (
-        <p style={{ color: '#666' }}>No other devices found. Try again.</p>
+        <p style={{ color: '#666' }}>{m.deviceLimit_noOtherDevices()}</p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
           {devices.map((d) => (
@@ -90,7 +95,10 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 500 }}>{d.name}</div>
                 <div style={{ fontSize: 11, color: '#999' }}>
-                  added {new Date(d.addedAt).toLocaleString()} · last seen {new Date(d.lastSeenAt).toLocaleString()}
+                  {m.deviceLimit_addedAt({
+                    date: new Date(d.addedAt).toLocaleString(),
+                    seen: new Date(d.lastSeenAt).toLocaleString(),
+                  })}
                 </div>
               </div>
               <button
@@ -106,11 +114,29 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
                   opacity: busy ? 0.6 : 1,
                 }}
               >
-                Revoke
+                {m.deviceLimit_revoke()}
               </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {subscription?.tier === 'free' && onUpgrade && (
+        <button
+          onClick={onUpgrade}
+          style={{
+            marginTop: 16,
+            padding: '10px 16px',
+            borderRadius: 10,
+            background: '#007aff',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
+        >
+          {m.deviceLimit_upgradeCta()}
+        </button>
       )}
 
       {onCancel && (
@@ -118,7 +144,7 @@ export function DeviceLimitScreen({ tokenStore, onDeviceFreed, onCancel }: Devic
           onClick={onCancel}
           style={{ marginTop: 16, background: 'transparent', border: 'none', color: '#007aff', cursor: 'pointer' }}
         >
-          Cancel
+          {m.deviceLimit_cancel()}
         </button>
       )}
     </div>

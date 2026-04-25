@@ -13,9 +13,21 @@ export function fakeSubscription(
 ): OAuthSubscription {
   return {
     tier: 'free',
-    deviceLimit: 2,
+    plan: 'free',
+    tierKey: 'free',
+    billingPeriod: null,
+    provider: null,
+    status: 'active',
+    entitlements: [],
+    deviceLimit: 1,
+    backupRetentionMonths: 0,
+    gracePeriodSeconds: 7 * 86400,
+    gracePeriodEndsAt: null,
+    freeDeviceGrandfathered: false,
     storageLimitMB: 500,
     paidUntil: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
     ...overrides,
   };
 }

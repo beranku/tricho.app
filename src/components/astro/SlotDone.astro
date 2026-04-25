@@ -1,5 +1,6 @@
 ---
 import CheckHandDrawn from './icons/CheckHandDrawn.astro';
+import { m } from '../../i18n';
 interface Props {
   time: string;
   name: string;
@@ -15,7 +16,7 @@ const { time, name, sub, appointmentId } = Astro.props;
     <span class="slot-name font-fraunces">{name}</span>
     {sub && <span class="slot-sub font-geist">{sub}</span>}
   </span>
-  <span class="slot-done-check" aria-label="Dokončeno"><CheckHandDrawn /></span>
+  <span class="slot-done-check" aria-label={m.chrome_done()}><CheckHandDrawn /></span>
 </a>
 
 <style>

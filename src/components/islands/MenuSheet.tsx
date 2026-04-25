@@ -1,13 +1,16 @@
 /**
- * Bottom-sheet menu content. Renders rows: Klienti, Statistika, Archiv,
- * Nastavení, Synchronizace status, Téma toggle, Odhlásit.
+ * Bottom-sheet menu content. Renders rows for clients, statistics, archive,
+ * settings, sync status, theme toggle, language toggle, sign-out.
  *
- * Deferred features show "Připravujeme".
+ * Strings come from `m.<key>()` (Paraglide) — never inline.
  */
 import type { ReactNode } from 'react';
+import { useStore } from '@nanostores/react';
 import { closeSheet } from '../../lib/store/sheet';
+import { localeStore, m } from '../../i18n';
 import { SyncStatusRow } from './SyncStatusRow';
 import { ThemeToggle } from './ThemeToggle';
+import { LanguageToggle } from './LanguageToggle';
 
 export interface MenuSheetProps {
   onSettings?: () => void;
@@ -44,19 +47,27 @@ function Row({ icon, label, meta, href, onClick, disabled }: RowProps): JSX.Elem
 }
 
 export function MenuSheet({ onSettings, onLogout }: MenuSheetProps): JSX.Element {
+  // Subscribing to localeStore here makes the sheet re-render on language
+  // switch, so every `m.<key>()` call returns the freshly-set locale.
+  useStore(localeStore);
+
   return (
     <>
       <SyncStatusRow />
       <nav className="sheet-nav">
-        <Row label="Klienti" meta="Připravujeme" disabled />
-        <Row label="Statistika" meta="Připravujeme" disabled />
-        <Row label="Archiv" meta="Připravujeme" disabled />
-        <Row label="Nastavení" onClick={onSettings} />
+        <Row label={m.menu_clients()} meta={m.menu_clients_meta()} disabled />
+        <Row label={m.menu_statistics()} meta={m.menu_clients_meta()} disabled />
+        <Row label={m.menu_archive()} meta={m.menu_clients_meta()} disabled />
+        <Row label={m.menu_settings()} onClick={onSettings} />
         <div className="sheet-row sheet-row--toggle">
-          <span className="sheet-item-label">Vzhled</span>
+          <span className="sheet-item-label">{m.menu_language_label()}</span>
+          <LanguageToggle />
+        </div>
+        <div className="sheet-row sheet-row--toggle">
+          <span className="sheet-item-label">{m.menu_theme_label()}</span>
           <ThemeToggle />
         </div>
-        <Row label="Odhlásit" onClick={onLogout} />
+        <Row label={m.menu_signOut()} onClick={onLogout} />
       </nav>
       <style>{`
         .sheet-nav {
@@ -130,18 +141,18 @@ export function FabAddSheet({ payload }: { payload?: { startAt?: number } }): JS
     ? `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`
     : null;
 
+  // Subscribe so the sheet re-renders with the active locale's strings.
+  useStore(localeStore);
+
   return (
     <div className="fab-add-sheet">
-      <h2 className="fab-add-title">Plánování v příští verzi</h2>
+      <h2 className="fab-add-title">{m.schedule_addAppointment()}</h2>
       {formatted && (
-        <p className="fab-add-time">Začátek: <strong>{formatted}</strong></p>
+        <p className="fab-add-time">{formatted}</p>
       )}
-      <p className="fab-add-body">
-        Přidávání a úpravy zákroků dorazí v další verzi. Zatím můžete prohlížet
-        plán a otevírat detaily klientů.
-      </p>
+      <p className="fab-add-body">{m.menu_promo_body()}</p>
       <button type="button" className="fab-add-close" onClick={closeSheet}>
-        Zavřít
+        {m.common_close()}
       </button>
       <style>{`
         .fab-add-sheet {
@@ -163,11 +174,7 @@ export function FabAddSheet({ payload }: { payload?: { startAt?: number } }): JS
           font-family: 'Geist', sans-serif;
           font-size: 14px;
           color: var(--ink-2);
-        }
-        .fab-add-time strong {
-          font-family: 'Fraunces', serif;
           font-variant-numeric: tabular-nums;
-          font-weight: 600;
         }
         .fab-add-body {
           font-family: 'Patrick Hand', cursive;

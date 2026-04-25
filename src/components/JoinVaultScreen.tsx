@@ -1,9 +1,11 @@
 import React, { useCallback, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   decodeRsFromInput,
   isValidRsFormat,
   parseRsInput,
 } from '../auth/recovery';
+import { localeStore, m } from '../i18n';
 
 export type JoinVaultState = 'idle' | 'unlocking' | 'error';
 
@@ -20,6 +22,7 @@ export function JoinVaultScreen({
   onSignOut,
   className,
 }: JoinVaultScreenProps): JSX.Element {
+  useStore(localeStore);
   const [state, setState] = useState<JoinVaultState>('idle');
   const [rsInput, setRsInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +35,7 @@ export function JoinVaultScreen({
   const onSubmit = useCallback(async () => {
     const normalized = parseRsInput(rsInput);
     if (!isValidRsFormat(normalized)) {
-      setError('Invalid Recovery Secret format. Please check and try again.');
+      setError(m.login_recovery_invalidFormat());
       return;
     }
     setState('unlocking');
@@ -42,7 +45,7 @@ export function JoinVaultScreen({
       await onJoinVault(bytes);
     } catch (err) {
       setState('error');
-      setError(err instanceof Error ? err.message : 'Failed to unlock vault with that Recovery Secret.');
+      setError(err instanceof Error ? err.message : m.join_failed());
     }
   }, [rsInput, onJoinVault]);
 
@@ -52,26 +55,24 @@ export function JoinVaultScreen({
         <div className="login-screen__header">
           <div className="login-screen__logo">🔐</div>
           <h1 className="login-screen__title">TrichoApp</h1>
-          <p className="login-screen__subtitle">Restore vault on this device</p>
+          <p className="login-screen__subtitle">{m.join_screenSubtitle()}</p>
         </div>
 
         <div className="login-screen__content">
           <div className="login-screen__recovery">
-            <h2>Restore Your Vault</h2>
-            <p className="login-screen__description">
-              We found an existing vault for this account. Enter your Recovery Secret to unlock it on this device.
-            </p>
+            <h2>{m.join_restoreTitle()}</h2>
+            <p className="login-screen__description">{m.join_restoreDescription()}</p>
 
             <div className="login-screen__rs-input-container">
               <label htmlFor="join-rs-input" className="login-screen__label">
-                Recovery Secret
+                {m.login_recovery_label()}
               </label>
               <textarea
                 id="join-rs-input"
                 className={`login-screen__rs-input ${error ? 'login-screen__rs-input--error' : ''}`}
                 value={rsInput}
                 onChange={onChange}
-                placeholder="Enter your Recovery Secret (e.g., ABCD-EFGH-IJKL-...)"
+                placeholder={m.login_recovery_placeholder()}
                 rows={4}
                 spellCheck={false}
                 autoComplete="off"
@@ -91,7 +92,7 @@ export function JoinVaultScreen({
                 onClick={onSignOut}
                 disabled={state === 'unlocking'}
               >
-                Sign out
+                {m.join_signOut()}
               </button>
               <button
                 type="button"
@@ -99,7 +100,7 @@ export function JoinVaultScreen({
                 onClick={onSubmit}
                 disabled={!rsInput.trim() || state === 'unlocking'}
               >
-                {state === 'unlocking' ? 'Unlocking…' : 'Unlock'}
+                {state === 'unlocking' ? m.join_unlocking() : m.join_unlock()}
               </button>
             </div>
           </div>
@@ -107,7 +108,7 @@ export function JoinVaultScreen({
 
         <div className="login-screen__footer">
           <p className="login-screen__footer-text">
-            Your Recovery Secret stays on this device. The server only ever sees encrypted data.
+            {m.join_footer()}
           </p>
         </div>
       </div>

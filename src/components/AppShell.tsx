@@ -4,6 +4,16 @@ import { SettingsScreen } from './SettingsScreen';
 import { OAuthScreen } from './OAuthScreen';
 import { DeviceLimitScreen } from './DeviceLimitScreen';
 import { JoinVaultScreen } from './JoinVaultScreen';
+import { PlanScreen } from './PlanScreen';
+import { BankTransferInstructions } from './BankTransferInstructions';
+import { BackupExportScreen } from './BackupExportScreen';
+import { RestoreFromZipScreen } from './RestoreFromZipScreen';
+import { loadSubscription } from '../lib/store/subscription';
+import { PlanExpiredError } from '../auth/subscription';
+
+// Vite exposes env vars prefixed with VITE_; we treat the literal "true" as
+// the only truthy value so the default-empty-string falls back to disabled.
+const BILLING_UI_ENABLED = (import.meta.env?.VITE_BILLING_ENABLED as string | undefined) === 'true';
 import { ChromeButtons } from './islands/ChromeButtons';
 import { BottomSheet } from './islands/BottomSheet';
 import { MenuSheet, FabAddSheet } from './islands/MenuSheet';
@@ -11,6 +21,7 @@ import { DailySchedule } from './islands/DailySchedule';
 import { ClientDetail } from './islands/ClientDetail';
 import { openSheet, closeSheet } from '../lib/store/sheet';
 import { bootstrapTheme } from '../lib/store/theme';
+import { bootstrapLocale, m } from '../i18n';
 import {
   createVaultState,
   generateVaultId,
@@ -51,7 +62,18 @@ import {
 import { TokenStore } from '../auth/token-store';
 import { IdleLock } from '../sync/idle-lock';
 
-type View = 'loading' | 'oauth' | 'login' | 'join_vault' | 'unlocked' | 'settings' | 'device-limit';
+type View =
+  | 'loading'
+  | 'oauth'
+  | 'login'
+  | 'join_vault'
+  | 'unlocked'
+  | 'settings'
+  | 'device-limit'
+  | 'plan'
+  | 'bank-transfer'
+  | 'backup-export'
+  | 'restore-zip';
 
 const VAULT_STATE_PROBE_TIMEOUT_MS = 5_000;
 
@@ -136,6 +158,7 @@ function readPendingOAuth(): OAuthResult | null {
 
 export function AppShell(): JSX.Element {
   const [view, setView] = useState<View>('loading');
+  const [bankIntentId, setBankIntentId] = useState<string | null>(null);
   const [vaultId, setVaultId] = useState<string | null>(null);
   const [hasExistingVault, setHasExistingVault] = useState(false);
   const [dek, setDek] = useState<Uint8Array | null>(null);
@@ -174,7 +197,7 @@ export function AppShell(): JSX.Element {
 
       // Device-limit gate: server refused to approve this device for the user.
       if (incoming && !incoming.deviceApproved) {
-        setAuthHint(`You have reached the device limit on your plan (${incoming.subscription?.deviceLimit ?? 2}). Revoke an existing device to add this one.`);
+        setAuthHint(m.appShell_deviceLimitHint({ limit: incoming.subscription?.deviceLimit ?? 2 }));
         setView('device-limit');
         routedOnceRef.current = true;
         return;
@@ -403,6 +426,9 @@ export function AppShell(): JSX.Element {
           remoteUrl: userDbUrlFor(store.couchdbUsername()!),
           fetch: store.bearerFetch,
         });
+
+        // Load subscription so the Plan/Settings screens have current data.
+        void loadSubscription(store.jwt());
       }
     } catch (err) {
       console.error('[AppShell] onUnlocked failed', err);
@@ -417,6 +443,17 @@ export function AppShell(): JSX.Element {
       tokenStore?.dispose();
       void closeVaultDb();
     };
+  }, [tokenStore]);
+
+  // Watch sync state — when a 402 has gated us, surface the Plan screen so
+  // the user can renew. Re-fetch the subscription so the screen has fresh state.
+  useEffect(() => {
+    return subscribeSyncEvents((s) => {
+      if (s.status === 'gated') {
+        if (tokenStore) void loadSubscription(tokenStore.jwt());
+        setView((current) => (current === 'plan' || current === 'bank-transfer' ? current : 'plan'));
+      }
+    });
   }, [tokenStore]);
 
   // E2E test bridge — gated on a localStorage sentinel so production users
@@ -595,12 +632,12 @@ export function AppShell(): JSX.Element {
     // re-sign-in; revocation UX requires an existing unlocked vault.
     return (
       <div style={{ maxWidth: 520, margin: '80px auto', padding: 32, borderRadius: 20, background: 'rgba(255,255,255,0.9)', boxShadow: '0 18px 40px rgba(15,23,42,0.18)' }}>
-        <h2 style={{ marginTop: 0 }}>Device limit reached</h2>
+        <h2 style={{ marginTop: 0 }}>{m.deviceLimit_title()}</h2>
         <p style={{ color: '#555', fontSize: 14 }}>
-          {authHint ?? 'Revoke an existing device to add this one.'}
+          {authHint ?? m.appShell_deviceLimitFallback()}
         </p>
         <p style={{ color: '#555', fontSize: 13 }}>
-          Open TrichoApp on one of your existing devices, open Settings → Devices, and revoke the one you no longer use. Then come back here and sign in again.
+          {m.appShell_deviceLimitInstructions()}
         </p>
         <button
           onClick={() => {
@@ -611,7 +648,7 @@ export function AppShell(): JSX.Element {
           }}
           style={{ padding: '8px 16px', borderRadius: 10, background: '#007aff', color: '#fff', border: 'none', cursor: 'pointer' }}
         >
-          Back
+          {m.appShell_signInAgain()}
         </button>
       </div>
     );
@@ -626,6 +663,56 @@ export function AppShell(): JSX.Element {
         tokenStore={tokenStore}
         onWrapDekWithRs={onWrapDekWithRs}
         onClose={() => setView('unlocked')}
+        onOpenPlan={BILLING_UI_ENABLED ? () => setView('plan') : undefined}
+      />
+    );
+  }
+
+  if (view === 'plan' && tokenStore) {
+    return (
+      <PlanScreen
+        tokenStore={tokenStore}
+        onBack={() => setView(db ? 'settings' : 'unlocked')}
+        onRequestBankTransferIntent={(id) => {
+          setBankIntentId(id);
+          setView('bank-transfer');
+        }}
+        onOpenBackupExport={db && vaultId ? () => setView('backup-export') : undefined}
+      />
+    );
+  }
+
+  if (view === 'bank-transfer' && tokenStore && bankIntentId) {
+    return (
+      <BankTransferInstructions
+        tokenStore={tokenStore}
+        intentId={bankIntentId}
+        onBack={() => setView('plan')}
+        onPaid={() => {
+          setBankIntentId(null);
+          setView('plan');
+        }}
+      />
+    );
+  }
+
+  if (view === 'backup-export' && db && vaultId) {
+    return (
+      <BackupExportScreen
+        db={db}
+        vaultId={vaultId}
+        onBack={() => setView(tokenStore ? 'plan' : 'settings')}
+      />
+    );
+  }
+
+  if (view === 'restore-zip' && db) {
+    return (
+      <RestoreFromZipScreen
+        db={db}
+        expectedVaultId={vaultId ?? undefined}
+        onBack={() => setView(tokenStore ? 'plan' : 'login')}
+        onRestored={() => setView('unlocked')}
       />
     );
   }
@@ -649,13 +736,14 @@ function UnlockedShell({ db, vaultId, onSettings }: UnlockedShellProps): JSX.Ele
 
   useEffect(() => {
     bootstrapTheme();
+    void bootstrapLocale();
     const onHashChange = (): void => setHash(window.location.hash);
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   if (!db || !vaultId) {
-    return <div style={{ padding: 32 }}>Trezor není dostupný.</div>;
+    return <div style={{ padding: 32 }}>{m.appShell_vaultUnavailable()}</div>;
   }
 
   const clientMatch = hash.match(/^#\/clients\/([^/?]+)/);

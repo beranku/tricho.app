@@ -7,9 +7,7 @@ Short-lived RS256 JWT access tokens signed by `tricho-auth`, validated stateless
 Source files:
 - Server: `infrastructure/couchdb/tricho-auth/jwt.mjs`, `infrastructure/couchdb/tricho-auth/routes.mjs`.
 - Client: `src/auth/token-store.ts`, `src/auth/oauth.ts`, `src/sync/tab-channel.ts`.
-
 ## Requirements
-
 ### Requirement: RS256 JWT with `kid`
 Access tokens MUST be RS256-signed JWTs whose header includes a `kid` matching a key registered in CouchDB's `[jwt_keys]` config. Claims MUST include `iss === "tricho-auth"`, `aud === "couchdb"`, `sub` (the CouchDB username), `iat`, and `exp`.
 
@@ -94,3 +92,25 @@ The server MUST expose `GET /auth/.well-known/jwks.json` returning the public ke
 - THEN the response is `200` with a `keys` array
 - AND each key carries `kid`, `kty`, `alg`, and `use: "sig"`
 - AND the response has a `cache-control` header permitting short-term caching
+
+### Requirement: JWT alone does not confer sync access
+Possession of a valid bearer JWT MUST NOT, by itself, grant access to `/userdb-*/*`. The entitlement proxy in `tricho-auth` MUST gate sync access on subscription state independent of JWT validity. JWT shape (claims, TTL, kid binding) is unchanged.
+
+#### Scenario: Valid JWT + free plan = sync denied
+- GIVEN a free user with a fresh, valid JWT
+- WHEN they make a `GET /userdb-<hex>/_changes` request
+- THEN the request is rejected with `402 plan_expired`
+- AND no CouchDB call is made
+
+#### Scenario: Valid JWT + paid plan = sync allowed
+- GIVEN a paid user with a fresh, valid JWT
+- WHEN they make the same request
+- THEN the entitlement proxy forwards to CouchDB
+- AND the response is whatever CouchDB returns
+
+#### Scenario: JWT continues to work for /auth/* endpoints regardless of plan
+- GIVEN a free user with a valid JWT
+- WHEN they call `GET /auth/subscription`, `GET /auth/devices`, or `POST /auth/billing/stripe/checkout`
+- THEN the request succeeds
+- AND no entitlement check applies (these are auth-control-plane endpoints, not sync)
+

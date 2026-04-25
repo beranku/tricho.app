@@ -28,7 +28,7 @@ async function getPouch(): Promise<PouchConstructor> {
   return pouchPromise;
 }
 
-export type SyncStatus = 'idle' | 'connecting' | 'syncing' | 'paused' | 'error';
+export type SyncStatus = 'idle' | 'connecting' | 'syncing' | 'paused' | 'error' | 'gated';
 
 export interface SyncState {
   status: SyncStatus;
@@ -37,6 +37,9 @@ export interface SyncState {
   pushed: number;
   pulled: number;
   username: string | null;
+  /** When status is 'gated', the paidUntil from the 402 response. */
+  gatedPaidUntil?: number | null;
+  gatedReason?: string | null;
 }
 
 export type SyncListener = (state: SyncState) => void;
@@ -142,11 +145,47 @@ export async function startSync(db: VaultDb, opts: StartSyncOpts): Promise<void>
       }
     })
     .on('paused', (err) => {
+      if (isPlanExpiredErr(err)) {
+        gateOnPlanExpired(err);
+        return;
+      }
       emit({ status: err ? 'paused' : 'paused', error: err ? String(err) : null });
     })
     .on('active', () => emit({ status: 'syncing', error: null }))
-    .on('denied', (err) => emit({ status: 'error', error: `denied: ${String(err)}` }))
-    .on('error', (err) => emit({ status: 'error', error: String(err) }));
+    .on('denied', (err) => {
+      if (isPlanExpiredErr(err)) {
+        gateOnPlanExpired(err);
+        return;
+      }
+      emit({ status: 'error', error: `denied: ${String(err)}` });
+    })
+    .on('error', (err) => {
+      if (isPlanExpiredErr(err)) {
+        gateOnPlanExpired(err);
+        return;
+      }
+      emit({ status: 'error', error: String(err) });
+    });
+}
+
+function isPlanExpiredErr(err: unknown): boolean {
+  if (!err) return false;
+  const e = err as { name?: string; message?: string };
+  return e.name === 'PlanExpiredError' || /plan_expired/i.test(e.message ?? '');
+}
+
+function gateOnPlanExpired(err: unknown): void {
+  const e = err as { paidUntil?: number | null; reason?: string };
+  if (active) {
+    try { active.cancel(); } catch { /* noop */ }
+    active = null;
+  }
+  emit({
+    status: 'gated',
+    error: null,
+    gatedPaidUntil: e.paidUntil ?? null,
+    gatedReason: e.reason ?? 'plan_expired',
+  });
 }
 
 export function stopSync(): void {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SyncStatus } from './SyncStatus';
 import { expectA11yBasics } from '../test/component-setup';
+import { setLocale } from '../i18n';
 import * as couch from '../sync/couch';
 
 vi.mock('../sync/couch', async () => {
@@ -36,6 +37,8 @@ function mockState(s: Partial<SyncState>): void {
 }
 
 beforeEach(() => {
+  // SyncStatus assertions check English UI strings (e.g. "up to date").
+  setLocale('en');
   mockState({ status: 'idle' });
 });
 

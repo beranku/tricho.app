@@ -1,9 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PinSetupScreen } from './PinSetupScreen';
+import { setLocale } from '../i18n';
 
 describe('PinSetupScreen — setup mode', () => {
+  beforeEach(() => setLocale('en'));
+
   it('rejects submission when PINs do not match', async () => {
     const onSubmit = vi.fn();
     render(<PinSetupScreen mode="setup" onSubmit={onSubmit} />);
@@ -43,6 +46,8 @@ describe('PinSetupScreen — setup mode', () => {
 });
 
 describe('PinSetupScreen — unlock mode', () => {
+  beforeEach(() => setLocale('en'));
+
   it('has only one PIN input (no confirm)', () => {
     render(<PinSetupScreen mode="unlock" onSubmit={vi.fn()} />);
     expect(screen.getAllByPlaceholderText(/PIN/i)).toHaveLength(1);
