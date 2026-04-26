@@ -161,4 +161,206 @@ describe('mock-oidc (in-process)', () => {
     const { payload } = await jwtVerify(tokens.id_token, pub);
     expect(payload.sub).toBe('mutated-sub');
   });
+
+  it('exposes a tenanted Google discovery doc at /google/.well-known/openid-configuration', async () => {
+    const r = await fetch(`${localBase}/google/.well-known/openid-configuration`);
+    expect(r.ok).toBe(true);
+    const d = await r.json();
+    expect(d.issuer).toMatch(/\/google$/);
+    expect(d.authorization_endpoint).toMatch(/\/google\/authorize$/);
+    expect(d.token_endpoint).toMatch(/\/google\/token$/);
+    expect(d.jwks_uri).toMatch(/\/google\/\.well-known\/jwks\.json$/);
+  });
+
+  it('Google tenant round-trip works under /google/* prefix', async () => {
+    await fetch(`${localBase}/google/mock/identity`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sub: 'google-tenanted', email: 'g@t', email_verified: true }),
+    });
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    const authUrl = new URL(`${localBase}/google/authorize`);
+    authUrl.searchParams.set('client_id', 'c');
+    authUrl.searchParams.set('redirect_uri', 'http://client/cb');
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('code_challenge', challenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    const r = await fetch(authUrl, { redirect: 'manual' });
+    const code = new URL(r.headers.get('location')).searchParams.get('code');
+    const tr = await fetch(`${localBase}/google/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: 'http://client/cb', code_verifier: verifier }).toString(),
+    });
+    expect(tr.ok).toBe(true);
+    const tokens = await tr.json();
+    const jwks = await (await fetch(`${localBase}/google/.well-known/jwks.json`)).json();
+    const pub = await importJWK(jwks.keys[0], 'RS256');
+    const { payload } = await jwtVerify(tokens.id_token, pub);
+    expect(payload.iss).toMatch(/\/google$/);
+    expect(payload.sub).toBe('google-tenanted');
+  });
+
+  it('Apple tenant publishes JWKS at the issuer-relative /auth/keys path', async () => {
+    const r = await fetch(`${localBase}/apple/auth/keys`);
+    expect(r.ok).toBe(true);
+    const j = await r.json();
+    expect(j.keys).toHaveLength(1);
+    expect(j.keys[0].alg).toBe('RS256');
+  });
+
+  async function appleAuthorize(localBase, { sub, email, is_private_email, name } = {}) {
+    if (sub) {
+      await fetch(`${localBase}/apple/mock/identity`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sub, email, is_private_email, name }),
+      });
+    }
+    const authUrl = new URL(`${localBase}/apple/auth/authorize`);
+    authUrl.searchParams.set('client_id', 'com.tricho.app');
+    authUrl.searchParams.set('redirect_uri', 'http://client/cb');
+    authUrl.searchParams.set('response_type', 'code id_token');
+    authUrl.searchParams.set('response_mode', 'form_post');
+    authUrl.searchParams.set('state', 'st');
+    authUrl.searchParams.set('nonce', 'no');
+    return fetch(authUrl);
+  }
+
+  function parseFormPost(htmlBody) {
+    const fields = {};
+    const re = /<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"[^>]*\/>/g;
+    let m;
+    while ((m = re.exec(htmlBody))) {
+      fields[m[1]] = m[2]
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'");
+    }
+    return fields;
+  }
+
+  it('Apple authorize returns a form_post HTML page', async () => {
+    const r = await appleAuthorize(localBase, { sub: 'a-form-1', email: 'a@t', is_private_email: false, name: { firstName: 'Anna', lastName: 'Nováková' } });
+    expect(r.ok).toBe(true);
+    expect(r.headers.get('content-type')).toMatch(/text\/html/);
+    const body = await r.text();
+    expect(body).toMatch(/<form method="POST"/);
+    const fields = parseFormPost(body);
+    expect(fields.code).toBeTruthy();
+    expect(fields.state).toBe('st');
+  });
+
+  it('Apple first-time authorization includes the user form field, returning omits it', async () => {
+    // Reset to make sure we are first-time for this sub.
+    await fetch(`${localBase}/apple/mock/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sub: 'a-first-1' }),
+    });
+    const r1 = await appleAuthorize(localBase, { sub: 'a-first-1', email: 'a@t', is_private_email: false, name: { firstName: 'Anna', lastName: 'Nováková' } });
+    const fields1 = parseFormPost(await r1.text());
+    expect(fields1.user).toBeTruthy();
+    expect(JSON.parse(fields1.user)).toEqual({ name: { firstName: 'Anna', lastName: 'Nováková' } });
+
+    // Exchange the first code so the tenant marks the sub as seen.
+    await fetch(`${localBase}/apple/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: fields1.code, redirect_uri: 'http://client/cb' }).toString(),
+    });
+
+    // Re-authorize with the same sub — now the user field MUST be absent.
+    const r2 = await appleAuthorize(localBase);
+    const fields2 = parseFormPost(await r2.text());
+    expect(fields2.user).toBeUndefined();
+  });
+
+  it('Apple mock/reset clears the per-sub state so first-time fires again', async () => {
+    // Make sure sub is "seen" by exchanging once.
+    await fetch(`${localBase}/apple/mock/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sub: 'a-reset-1' }),
+    });
+    const r1 = await appleAuthorize(localBase, { sub: 'a-reset-1', email: 'a@t', name: { firstName: 'A', lastName: 'B' } });
+    const f1 = parseFormPost(await r1.text());
+    await fetch(`${localBase}/apple/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: f1.code, redirect_uri: 'http://client/cb' }).toString(),
+    });
+    // Confirm second authorize omits user.
+    const r2 = await appleAuthorize(localBase);
+    expect(parseFormPost(await r2.text()).user).toBeUndefined();
+
+    // Reset and reauthorize — user field should appear again.
+    await fetch(`${localBase}/apple/mock/reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sub: 'a-reset-1' }),
+    });
+    const r3 = await appleAuthorize(localBase);
+    expect(parseFormPost(await r3.text()).user).toBeTruthy();
+  });
+
+  it('Apple private-relay identity yields a privaterelay email and is_private_email=true in id_token', async () => {
+    await fetch(`${localBase}/apple/mock/reset`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const r = await appleAuthorize(localBase, { sub: 'a-priv-1', is_private_email: true, name: null });
+    const fields = parseFormPost(await r.text());
+    const tr = await fetch(`${localBase}/apple/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: fields.code, redirect_uri: 'http://client/cb' }).toString(),
+    });
+    expect(tr.ok).toBe(true);
+    const tokens = await tr.json();
+    const jwks = await (await fetch(`${localBase}/apple/auth/keys`)).json();
+    const pub = await importJWK(jwks.keys[0], 'RS256');
+    const { payload } = await jwtVerify(tokens.id_token, pub);
+    expect(payload.is_private_email).toBe(true);
+    expect(payload.email).toMatch(/@privaterelay\.appleid\.com$/);
+    expect(payload.iss).toMatch(/\/apple$/);
+  });
+
+  it('Apple id_token honours expires_in override (for refresh-path testing)', async () => {
+    await fetch(`${localBase}/apple/mock/identity`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sub: 'a-short', email: 's@t' }),
+    });
+    const authUrl = new URL(`${localBase}/apple/auth/authorize`);
+    authUrl.searchParams.set('client_id', 'c');
+    authUrl.searchParams.set('redirect_uri', 'http://client/cb');
+    authUrl.searchParams.set('response_type', 'code id_token');
+    authUrl.searchParams.set('response_mode', 'form_post');
+    authUrl.searchParams.set('expires_in', '30');
+    const r = await fetch(authUrl);
+    const fields = parseFormPost(await r.text());
+    const tr = await fetch(`${localBase}/apple/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: fields.code, redirect_uri: 'http://client/cb' }).toString(),
+    });
+    const tokens = await tr.json();
+    expect(tokens.expires_in).toBe(30);
+  });
+
+  it('cross-tenant code exchange is rejected', async () => {
+    // Mint a Google code, try to exchange via /apple/auth/token.
+    const r = await fetch(new URL(`${localBase}/google/authorize?client_id=c&redirect_uri=http://client/cb&response_type=code`), { redirect: 'manual' });
+    const code = new URL(r.headers.get('location')).searchParams.get('code');
+    const tr = await fetch(`${localBase}/apple/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: 'http://client/cb' }).toString(),
+    });
+    expect(tr.status).toBe(400);
+    const body = await tr.json();
+    expect(body.error).toBe('invalid_grant');
+    expect(body.error_description).toMatch(/tenant mismatch/);
+  });
 });

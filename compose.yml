@@ -224,6 +224,22 @@ services:
       APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
       APPLE_KEY_ID: ${APPLE_KEY_ID:-}
       APPLE_REDIRECT_URI: ${APPLE_REDIRECT_URI:-}
+      # In CI the Makefile/CI workflow points APPLE_OIDC_ISSUER at the
+      # mock-oidc Apple tenant; left unset → real Apple in prod.
+      APPLE_OIDC_ISSUER: ${APPLE_OIDC_ISSUER:-}
+      # Stripe billing — STRIPE_API_BASE is set only in CI to point at
+      # stripe-mock; unset → api.stripe.com. STRIPE_SECRET_KEY in CI is the
+      # well-known localstripe test key (sk_test_...); in prod it comes via
+      # the existing secrets path.
+      STRIPE_API_BASE: ${STRIPE_API_BASE:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      BILLING_ENABLED: ${BILLING_ENABLED:-}
+      PLAN_PRO_MONTHLY_STRIPE_PRICE_ID: ${PLAN_PRO_MONTHLY_STRIPE_PRICE_ID:-}
+      PLAN_PRO_YEARLY_STRIPE_PRICE_ID: ${PLAN_PRO_YEARLY_STRIPE_PRICE_ID:-}
+      PLAN_MAX_MONTHLY_STRIPE_PRICE_ID: ${PLAN_MAX_MONTHLY_STRIPE_PRICE_ID:-}
+      PLAN_MAX_YEARLY_STRIPE_PRICE_ID: ${PLAN_MAX_YEARLY_STRIPE_PRICE_ID:-}
     volumes:
       - tricho-jwt-shared:/shared/jwt:rw
     secrets:
@@ -486,6 +502,64 @@ services:
       traefik.http.services.mock-oidc.loadbalancer.server.port: "8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    profiles: [ci]
+
+  # ── Stripe mocks — ci profile only ─────────────────────────────────────────
+  # `stripe-mock` (port 12111) is stateless and OpenAPI-driven; we use it for
+  # SDK-shape contract tests at the backend-integration tier.
+  # `localstripe` (port 8420) is stateful and ships a `/js.stripe.com/v3/`
+  # shim so Playwright e2e flows can exercise Checkout + Elements end-to-end.
+  # Bump these images quarterly per docs/TESTING.md.
+  stripe-mock:
+    image: stripemock/stripe-mock:latest
+    container_name: tricho_stripe_mock
+    restart: unless-stopped
+    networks:
+      - tricho-net
+    expose:
+      - "12111"
+    healthcheck:
+      # stripe-mock has no built-in /health; a 401 from /v1/customers is
+      # confirmation that the listener is up and the OpenAPI is loaded.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:12111/v1/customers >/dev/null 2>&1; [ $$? -le 8 ]"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    profiles: [ci]
+
+  localstripe:
+    image: adrienverge/localstripe:latest
+    container_name: tricho_localstripe
+    restart: unless-stopped
+    networks:
+      - tricho-net
+    expose:
+      - "8420"
+    labels:
+      # Expose the Stripe.js shim through Traefik so the in-browser PWA can
+      # `loadStripe('pk_test_...')` against `/js.stripe.com/v3/` without any
+      # network egress. Path is rewritten to `/js.stripe.com/v3/` on the
+      # backend (localstripe serves the shim there).
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.routers.localstripe-js.rule: Host(`tricho.test`) && PathPrefix(`/js.stripe.com/v3`)
+      traefik.http.routers.localstripe-js.entrypoints: websecure
+      traefik.http.routers.localstripe-js.tls: "true"
+      traefik.http.services.localstripe-js.loadbalancer.server.port: "8420"
+      # Optional API surface — Playwright can talk to the backing API too if
+      # a spec wants stateful Customer/Subscription operations from the page
+      # context. Keep it path-prefixed so it does not clash with PWA routes.
+      traefik.http.routers.localstripe-api.rule: Host(`tricho.test`) && PathPrefix(`/_localstripe`)
+      traefik.http.routers.localstripe-api.entrypoints: websecure
+      traefik.http.routers.localstripe-api.tls: "true"
+      traefik.http.routers.localstripe-api.middlewares: localstripe-strip@docker
+      traefik.http.middlewares.localstripe-strip.stripprefix.prefixes: /_localstripe
+      traefik.http.services.localstripe-api.loadbalancer.server.port: "8420"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8420/js.stripe.com/v3/ >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10

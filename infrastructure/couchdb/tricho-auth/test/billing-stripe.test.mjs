@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
 import {
   verifyWebhookSignature,
   applyStripeEvent,
+  createCheckoutSession,
   InvalidSignatureError,
+  parseStripeBase,
   _setStripeClient,
 } from '../billing/stripe.mjs';
+import { loadStripeFixture, StripeCardError } from './fixtures/stripe-stub.mjs';
 import { fakeMeta } from './fixtures/meta.mjs';
 
 const SECRET = 'whsec_test_1234';
@@ -196,5 +199,118 @@ describe('applyStripeEvent', () => {
       event: { id: 'evt_x', type: 'random.event', data: { object: {} } },
     });
     expect(r.action).toBe('noop');
+  });
+});
+
+describe('createCheckoutSession (fixture playback)', () => {
+  const env = {
+    PLAN_PRO_MONTHLY_STRIPE_PRICE_ID: 'price_m',
+    STRIPE_SECRET_KEY: 'sk_test_unused',
+  };
+  const user = { canonicalUsername: 'g_test', email: 'u@t' };
+
+  afterEach(() => _setStripeClient(null));
+
+  it('declined card → StripeCardError with decline_code', async () => {
+    const { client } = loadStripeFixture('card-declined');
+    _setStripeClient(client);
+    await expect(
+      createCheckoutSession({
+        env,
+        user,
+        plan: 'pro-monthly',
+        successUrl: 'http://x/s',
+        cancelUrl: 'http://x/c',
+      }),
+    ).rejects.toMatchObject({
+      name: 'StripeCardError',
+      code: 'card_declined',
+      decline_code: 'card_declined',
+    });
+  });
+
+  it('insufficient funds surfaces decline_code:insufficient_funds', async () => {
+    const { client } = loadStripeFixture('card-declined-insufficient-funds');
+    _setStripeClient(client);
+    await expect(
+      createCheckoutSession({
+        env,
+        user,
+        plan: 'pro-monthly',
+        successUrl: 'http://x/s',
+        cancelUrl: 'http://x/c',
+      }),
+    ).rejects.toMatchObject({
+      name: 'StripeCardError',
+      decline_code: 'insufficient_funds',
+    });
+  });
+
+  it('3DS-required Checkout returns the redirect/client_secret payload', async () => {
+    const { client } = loadStripeFixture('requires-action-3ds');
+    _setStripeClient(client);
+    const r = await createCheckoutSession({
+      env,
+      user,
+      plan: 'pro-monthly',
+      successUrl: 'http://x/s',
+      cancelUrl: 'http://x/c',
+    });
+    expect(r.checkoutUrl).toBe('https://checkout.stripe.com/c/cs_3ds_1');
+    expect(r.sessionId).toBe('cs_3ds_1');
+  });
+});
+
+describe('idempotency replay (fixture playback)', () => {
+  afterEach(() => _setStripeClient(null));
+
+  it('returns the cached body for a repeated idempotency-key', async () => {
+    const { client } = loadStripeFixture('idempotency-replay');
+    _setStripeClient(client);
+
+    const first = await client.customers.create(
+      { email: 'u@t', metadata: { canonicalUsername: 'g_test' } },
+      { idempotencyKey: 'K-customers-create' },
+    );
+    expect(first.id).toBe('cus_replay_1');
+    expect(first._replayed).toBeUndefined();
+
+    const second = await client.customers.create(
+      { email: 'u@t', metadata: { canonicalUsername: 'g_test' } },
+      { idempotencyKey: 'K-customers-create' },
+    );
+    expect(second.id).toBe('cus_replay_1');
+    expect(second._replayed).toBe(true);
+  });
+});
+
+describe('parseStripeBase', () => {
+  it('returns empty object when the env value is unset', () => {
+    expect(parseStripeBase(undefined)).toEqual({});
+    expect(parseStripeBase('')).toEqual({});
+  });
+
+  it('parses an http URL with explicit port', () => {
+    expect(parseStripeBase('http://stripe-mock:12111')).toEqual({
+      host: 'stripe-mock',
+      port: 12111,
+      protocol: 'http',
+    });
+  });
+
+  it('parses an https URL and defaults port to 443', () => {
+    expect(parseStripeBase('https://api.example.com')).toEqual({
+      host: 'api.example.com',
+      port: 443,
+      protocol: 'https',
+    });
+  });
+
+  it('parses an http URL and defaults port to 80', () => {
+    expect(parseStripeBase('http://stripe-mock')).toEqual({
+      host: 'stripe-mock',
+      port: 80,
+      protocol: 'http',
+    });
   });
 });

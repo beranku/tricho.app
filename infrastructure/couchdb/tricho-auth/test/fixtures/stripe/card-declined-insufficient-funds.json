@@ -1,0 +1,25 @@
+{
+  "calls": [
+    {
+      "match": { "resource": "customers", "method": "search" },
+      "respond": { "kind": "value", "value": { "data": [] } }
+    },
+    {
+      "match": { "resource": "customers", "method": "create" },
+      "respond": {
+        "kind": "value",
+        "value": { "id": "cus_funds_x", "metadata": { "canonicalUsername": "g_test" } }
+      }
+    },
+    {
+      "match": { "resource": "checkout.sessions", "method": "create" },
+      "respond": {
+        "kind": "error",
+        "errorClass": "StripeCardError",
+        "code": "card_declined",
+        "decline_code": "insufficient_funds",
+        "message": "Your card has insufficient funds."
+      }
+    }
+  ]
+}

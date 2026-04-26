@@ -103,6 +103,22 @@ describe('handleStripeWebhook', () => {
     expect(state.subs.get('user:g_abc').paidUntil).toBe(paidAfterFirst);
   });
 
+  it('unknown event.type is acknowledged and acted on as a no-op', async () => {
+    const { meta, state } = fakeMeta();
+    withSub(state, {});
+    const ent = new Entitlements({ meta });
+    const before = JSON.stringify(state.subs.get('user:g_abc'));
+    const { rawBody, signatureHeader } = signed({
+      id: 'evt_unknown_1',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_1', metadata: { canonicalUsername: 'g_abc' } } },
+    });
+    const r = await handleStripeWebhook({ meta, entitlements: ent, env: ENV, rawBody, signatureHeader });
+    expect(r.status).toBe(200);
+    expect(r.body.action).toBe('noop');
+    expect(JSON.stringify(state.subs.get('user:g_abc'))).toBe(before);
+  });
+
   it('rejects malformed json', async () => {
     const { meta } = fakeMeta();
     const ent = new Entitlements({ meta });

@@ -9,6 +9,7 @@ import { JwtSigner, generateKeypair } from './jwt.mjs';
 import { createRouter } from './routes.mjs';
 import { Entitlements } from './billing/entitlements.mjs';
 import { createCouchProxy, USERDB_PATH_RE } from './billing/proxy.mjs';
+import { assertProdIntegrationsAreReal } from './env-guard.mjs';
 
 // For every env var listed here, prefer the literal env value if set;
 // otherwise, if `<name>_FILE` points at a readable file, load its contents
@@ -38,6 +39,8 @@ hydrateFromSecretFiles([
   'GOOGLE_CLIENT_SECRET',
   'APPLE_CLIENT_SECRET',
 ]);
+
+assertProdIntegrationsAreReal(process.env);
 
 const COUCHDB_URL = process.env.COUCHDB_URL ?? 'http://couchdb:5984';
 const ADMIN_USER = process.env.COUCHDB_ADMIN_USER ?? 'admin';

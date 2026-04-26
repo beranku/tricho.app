@@ -16,12 +16,27 @@ const requireFromHere = createRequire(import.meta.url);
 
 let stripeClient = null;
 
+// Convert a STRIPE_API_BASE URL (e.g. http://stripe-mock:12111) into the
+// host/port/protocol options the Stripe SDK exposes for this exact use case.
+// Returns an empty object when the input is undefined/empty so the SDK falls
+// back to its default (api.stripe.com).
+export function parseStripeBase(base) {
+  if (!base) return {};
+  const url = new URL(base);
+  const protocol = url.protocol.replace(/:$/, '');
+  const port = url.port ? Number(url.port) : protocol === 'https' ? 443 : 80;
+  return { host: url.hostname, port, protocol };
+}
+
 function client(env) {
   if (stripeClient) return stripeClient;
   const key = env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
   const Stripe = requireFromHere('stripe');
-  stripeClient = new Stripe(key, { apiVersion: env.STRIPE_API_VERSION ?? null });
+  stripeClient = new Stripe(key, {
+    apiVersion: env.STRIPE_API_VERSION ?? null,
+    ...parseStripeBase(env.STRIPE_API_BASE),
+  });
   return stripeClient;
 }
 

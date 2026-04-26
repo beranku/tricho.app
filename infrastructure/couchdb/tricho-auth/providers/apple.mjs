@@ -12,10 +12,21 @@
 import fs from 'node:fs';
 import { SignJWT, jwtVerify, createRemoteJWKSet, importPKCS8 } from 'jose';
 
-const APPLE_ISSUER = 'https://appleid.apple.com';
-const APPLE_AUTHORIZE = 'https://appleid.apple.com/auth/authorize';
-const APPLE_TOKEN = 'https://appleid.apple.com/auth/token';
-const APPLE_JWKS = new URL(`${APPLE_ISSUER}/auth/keys`);
+// Apple does not publish a `.well-known/openid-configuration`, so we derive
+// the four endpoint URLs from a single issuer base. Production resolves to
+// https://appleid.apple.com; CI overrides via APPLE_OIDC_ISSUER to point at
+// the in-stack mock-oidc Apple tenant.
+const DEFAULT_APPLE_ISSUER = 'https://appleid.apple.com';
+
+export function resolveAppleEndpoints(issuer) {
+  const base = (issuer ?? DEFAULT_APPLE_ISSUER).replace(/\/+$/, '');
+  return {
+    issuer: base,
+    authorize: `${base}/auth/authorize`,
+    token: `${base}/auth/token`,
+    jwks: new URL(`${base}/auth/keys`),
+  };
+}
 
 const clientSecretCache = new Map(); // kid -> { jwt, exp }
 
@@ -26,12 +37,15 @@ async function clientSecret(config) {
   const privateKey = await importPKCS8(config.privateKeyPem, 'ES256');
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 5 * 60; // Apple allows up to 6 months; 5 min is plenty.
+  // The client_secret JWT's `aud` is the issuer URL of the IdP (Apple in
+  // prod, mock-oidc in CI). Apple validates this; the mock skips validation
+  // but we still mint a correctly-shaped JWT for parity.
   const jwt = await new SignJWT({})
     .setProtectedHeader({ alg: 'ES256', kid: config.keyId })
     .setIssuer(config.teamId)
     .setIssuedAt(now)
     .setExpirationTime(exp)
-    .setAudience(APPLE_ISSUER)
+    .setAudience(config.endpoints.issuer)
     .setSubject(config.clientId)
     .sign(privateKey);
   clientSecretCache.set(config.keyId, { jwt, exp });
@@ -55,7 +69,7 @@ export async function startAuthorize(config) {
     nonce,
   });
   return {
-    url: `${APPLE_AUTHORIZE}?${params.toString()}`,
+    url: `${config.endpoints.authorize}?${params.toString()}`,
     state,
     nonce,
     codeVerifier: null, // Apple does not support PKCE public-client style
@@ -68,7 +82,7 @@ export async function handleCallback(config, { form, state, nonce }) {
   if (!form.code) throw new Error('missing_code');
 
   const secret = await clientSecret(config);
-  const res = await fetch(APPLE_TOKEN, {
+  const res = await fetch(config.endpoints.token, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -83,12 +97,23 @@ export async function handleCallback(config, { form, state, nonce }) {
   const tokenBody = await res.json();
   if (!tokenBody.id_token) throw new Error('no_id_token');
 
-  const jwks = createRemoteJWKSet(APPLE_JWKS);
+  const jwks = createRemoteJWKSet(config.endpoints.jwks);
   const { payload } = await jwtVerify(tokenBody.id_token, jwks, {
-    issuer: APPLE_ISSUER,
+    issuer: config.endpoints.issuer,
     audience: config.clientId,
   });
   if (payload.nonce && payload.nonce !== nonce) throw new Error('nonce_mismatch');
+
+  // Private-relay emails (`*@privaterelay.appleid.com`) are verified by
+  // construction — Apple proxies them. For non-relay addresses, we require
+  // an explicit email_verified === true (parity with Google).
+  const emailFromPayload = payload.email ?? null;
+  const isPrivateRelay =
+    payload.is_private_email === true ||
+    (typeof emailFromPayload === 'string' && /@privaterelay\.appleid\.com$/i.test(emailFromPayload));
+  if (!isPrivateRelay && payload.email_verified !== true) {
+    throw new Error('email_not_verified');
+  }
 
   // Apple only returns user info ON THE FIRST AUTHORIZATION, and it comes via
   // the `user` form field (JSON-encoded). Subsequent authorizations omit it.
@@ -106,11 +131,9 @@ export async function handleCallback(config, { form, state, nonce }) {
       // Malformed — best-effort.
     }
   }
-  const email = payload.email ?? null;
-
   return {
     subject: payload.sub,
-    email,
+    email: emailFromPayload,
     name,
     picture: null, // Apple never provides a picture.
     provider: 'apple',
@@ -138,5 +161,6 @@ export function appleConfig(env) {
     keyId: env.APPLE_KEY_ID,
     redirectUri: env.APPLE_REDIRECT_URI,
     privateKeyPem,
+    endpoints: resolveAppleEndpoints(env.APPLE_OIDC_ISSUER),
   };
 }

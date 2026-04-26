@@ -1,0 +1,16 @@
+{
+  "calls": [
+    {
+      "match": { "resource": "customers", "method": "search" },
+      "respond": { "kind": "value", "value": { "data": [] } }
+    },
+    {
+      "match": { "resource": "customers", "method": "create" },
+      "respond": {
+        "kind": "value",
+        "replayCacheKey": "K-customers-create",
+        "value": { "id": "cus_replay_1", "metadata": { "canonicalUsername": "g_test" } }
+      }
+    }
+  ]
+}

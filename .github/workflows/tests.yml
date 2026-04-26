@@ -212,13 +212,45 @@ jobs:
           COMPOSE_PROJECT_NAME: tricho-e2e-${{ github.run_id }}
           APP_HOST: tricho.test
           APP_ORIGIN: https://tricho.test
-          GOOGLE_ISSUER_URL: http://mock-oidc:8080
+          # Google OIDC → mock-oidc /google tenant.
+          GOOGLE_ISSUER_URL: http://mock-oidc:8080/google
           GOOGLE_CLIENT_ID: mock-client
           GOOGLE_REDIRECT_URI: https://tricho.test/auth/google/callback
+          # Apple OIDC → mock-oidc /apple tenant. APPLE_CLIENT_ID is only set
+          # when a CI .p8 key is rendered into the secret store; specs that
+          # need Apple skip when these are absent.
+          APPLE_OIDC_ISSUER: http://mock-oidc:8080/apple
+          APPLE_CLIENT_ID: ${{ vars.APPLE_CI_CLIENT_ID || '' }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_CI_TEAM_ID || '' }}
+          APPLE_KEY_ID: ${{ vars.APPLE_CI_KEY_ID || '' }}
+          APPLE_REDIRECT_URI: https://tricho.test/auth/apple/callback
+          # Stripe → stripe-mock for SDK contract; localstripe for stateful
+          # Checkout/Elements e2e. Both keys are well-known test values
+          # accepted by the mocks; STRIPE_API_BASE picks the contract mock
+          # for tricho-auth's outbound SDK calls.
+          STRIPE_API_BASE: http://stripe-mock:12111
+          STRIPE_SECRET_KEY: sk_test_localstripe_ci
+          STRIPE_PUBLISHABLE_KEY: pk_test_localstripe_ci
+          STRIPE_WEBHOOK_SECRET: whsec_test_ci
+          # Enable billing routes so the stripe-checkout e2e spec can drive
+          # /auth/billing/stripe/* against the mocks.
+          BILLING_ENABLED: "true"
+          PLAN_PRO_MONTHLY_STRIPE_PRICE_ID: price_test_pro_monthly_ci
+          PLAN_PRO_YEARLY_STRIPE_PRICE_ID: price_test_pro_yearly_ci
         run: |
           docker compose -f compose.yml --env-file .env --profile ci up -d --build
+          # Wait for every public-facing component before declaring the
+          # stack healthy. Loop probes auth, mock-oidc, and stripe-mock /
+          # localstripe through Traefik.
           for i in $(seq 1 60); do
-            if curl -skf https://tricho.test/auth/health >/dev/null; then
+            ok=1
+            curl -skf https://tricho.test/auth/health >/dev/null || ok=0
+            curl -skf https://tricho.test/mock-oidc/health >/dev/null || ok=0
+            curl -skf https://tricho.test/js.stripe.com/v3/ >/dev/null || ok=0
+            # stripe-mock has no public Traefik route; probe via docker exec.
+            docker compose -p "$COMPOSE_PROJECT_NAME" exec -T stripe-mock \
+              wget -qO- http://localhost:12111/v1/customers >/dev/null 2>&1 || ok=0
+            if [ "$ok" = "1" ]; then
               echo "stack healthy"
               exit 0
             fi

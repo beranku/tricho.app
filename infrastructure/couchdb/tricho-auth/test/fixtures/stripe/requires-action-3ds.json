@@ -1,0 +1,34 @@
+{
+  "calls": [
+    {
+      "match": { "resource": "customers", "method": "search" },
+      "respond": { "kind": "value", "value": { "data": [] } }
+    },
+    {
+      "match": { "resource": "customers", "method": "create" },
+      "respond": {
+        "kind": "value",
+        "value": { "id": "cus_3ds_x", "metadata": { "canonicalUsername": "g_test" } }
+      }
+    },
+    {
+      "match": { "resource": "checkout.sessions", "method": "create" },
+      "respond": {
+        "kind": "value",
+        "value": {
+          "id": "cs_3ds_1",
+          "url": "https://checkout.stripe.com/c/cs_3ds_1",
+          "status": "requires_action",
+          "payment_intent": {
+            "status": "requires_action",
+            "next_action": {
+              "type": "redirect_to_url",
+              "redirect_to_url": { "url": "https://hooks.stripe.com/3d_secure_2/test_redirect" }
+            },
+            "client_secret": "pi_3ds_1_secret_test"
+          }
+        }
+      }
+    }
+  ]
+}
