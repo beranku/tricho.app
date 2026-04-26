@@ -25,6 +25,7 @@
     "@nanostores/react": "^1.0.0",
     "@vite-pwa/astro": "^1.0.0",
     "astro": "^5.16.5",
+    "jsqr": "^1.4.0",
     "jszip": "^3.10.1",
     "nanostores": "^1.0.0",
     "pouchdb-adapter-memory": "^9.0.0",

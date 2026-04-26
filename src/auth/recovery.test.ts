@@ -36,6 +36,8 @@ import {
   clearRotationSession,
   getRotationNewVersion,
   requireConfirmedRotationSession,
+  toQrPayload,
+  fromQrPayload,
   type WrapDekWithRsHandler,
 } from './recovery';
 import {
@@ -1361,6 +1363,110 @@ describe('Recovery Secret - Rotation', () => {
       await rotateRecoverySecret(vault.vaultId, mockWrapHandler);
       updatedVault = await getVaultState(vault.vaultId);
       expect(updatedVault?.wrappedDekRs?.version).toBe(4);
+    });
+  });
+});
+
+describe('Recovery Secret - QR payload exchange', () => {
+  describe('toQrPayload / fromQrPayload', () => {
+    it('round-trips a freshly generated RS', () => {
+      const rs = generateRecoverySecret();
+      const decoded = fromQrPayload(toQrPayload(rs));
+      expect(decoded.ok).toBe(true);
+      if (!decoded.ok) return; // type guard
+      expect(Array.from(decoded.rs.raw)).toEqual(Array.from(rs.raw));
+      expect(decoded.rs.encoded).toBe(rs.encoded);
+      expect(decoded.rs.checksum).toBe(rs.checksum);
+    });
+
+    it('produces a stable payload format', () => {
+      const rs = generateRecoverySecret();
+      expect(toQrPayload(rs)).toMatch(/^TRICHO-RS-V1:[A-Z2-7]{52}$/);
+    });
+
+    it('rejects a payload missing the version prefix', () => {
+      const rs = generateRecoverySecret();
+      const result = fromQrPayload(rs.encoded); // raw body, no prefix
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toBe('invalid recovery key');
+    });
+
+    it('rejects arbitrary unrelated text', () => {
+      for (const garbage of [
+        '',
+        'hello world',
+        'WIFI:T:WPA;S:net;P:pw;;',
+        'https://example.com',
+        'TRICHO-RS-V2:AAAA',
+      ]) {
+        const result = fromQrPayload(garbage);
+        expect(result.ok).toBe(false);
+      }
+    });
+
+    it('rejects a short body', () => {
+      const result = fromQrPayload('TRICHO-RS-V1:ABCDEF');
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toBe('invalid recovery key');
+    });
+
+    it('rejects a body containing non-Base32 characters', () => {
+      const rs = generateRecoverySecret();
+      // Replace one character with `0` (not in Base32 alphabet A-Z + 2-7).
+      const corrupted =
+        'TRICHO-RS-V1:' + rs.encoded.slice(0, 25) + '0' + rs.encoded.slice(26);
+      const result = fromQrPayload(corrupted);
+      expect(result.ok).toBe(false);
+    });
+
+    it('rejection reason is generic and reveals nothing about the input', () => {
+      const reasons = new Set<string>();
+      for (const bad of [
+        '',
+        'TRICHO-RS-V1:',
+        'TRICHO-RS-V1:short',
+        'TRICHO-RS-V1:' + 'A'.repeat(51), // one short
+        'TRICHO-RS-V1:' + '0'.repeat(52), // invalid alphabet
+        'TRICHO-RS-V1:' + 'A'.repeat(53), // one long
+        'NOT-A-PREFIX',
+      ]) {
+        const result = fromQrPayload(bad);
+        if (!result.ok) reasons.add(result.reason);
+      }
+      // All failures share the same generic reason.
+      expect([...reasons]).toEqual(['invalid recovery key']);
+    });
+
+    it('a single-character flip to another valid Base32 char still decodes (detection happens at unwrap)', () => {
+      // This pins the truth that QR decoding cannot detect a "wrong RS" —
+      // only a malformed RS. A flipped character that lands on another valid
+      // Base32 letter just produces a different but well-formed RS, and the
+      // failure surfaces later when the derived KEK does not unwrap the
+      // stored wrappedDekRs.
+      const rs = generateRecoverySecret();
+      const orig = rs.encoded[10]!;
+      const replacement = orig === 'A' ? 'B' : 'A';
+      const flipped =
+        'TRICHO-RS-V1:' + rs.encoded.slice(0, 10) + replacement + rs.encoded.slice(11);
+      const result = fromQrPayload(flipped);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // ...but it is *not* the same RS as the original.
+      expect(Array.from(result.rs.raw)).not.toEqual(Array.from(rs.raw));
+    });
+  });
+
+  describe('QR payload contents do not leak server-side', () => {
+    // The "RS is never persisted server-side" requirement extends to the
+    // QR encoding. A unit-level proxy: `toQrPayload` returns a string
+    // containing the RS body, so any code path that posts that string to
+    // the network is a violation. This is enforced at the integration test
+    // level (see vitest.config.integration.ts coverage); here we only pin
+    // that the payload is a deterministic function of the input — i.e.,
+    // there is no hidden side channel.
+    it('payload is a pure function of the RS', () => {
+      const rs = generateRecoverySecret();
+      expect(toQrPayload(rs)).toBe(toQrPayload(rs));
     });
   });
 });

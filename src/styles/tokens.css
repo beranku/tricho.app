@@ -29,6 +29,7 @@
   /* Annotation (warm) */
   --copper: #B06E52;
   --copper-mid: #9A5E44;
+  --copper-tint: rgba(176, 110, 82, 0.08);
   --copper-border: rgba(176, 110, 82, 0.32);
   --amber: #B97940;
 
@@ -101,6 +102,7 @@
 
   --copper: #C48867;
   --copper-mid: #B37959;
+  --copper-tint: rgba(196, 136, 103, 0.10);
   --copper-border: rgba(196, 136, 103, 0.38);
   --amber: #D09860;
 

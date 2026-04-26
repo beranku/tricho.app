@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { LoginScreen } from './LoginScreen';
+import { WelcomeScreen } from './welcome/WelcomeScreen';
+import { UnlockGate } from './welcome/UnlockGate';
+import type { RecoverySecretResult } from '../auth/recovery';
 import { SettingsScreen } from './SettingsScreen';
-import { OAuthScreen } from './OAuthScreen';
 import { DeviceLimitScreen } from './DeviceLimitScreen';
-import { JoinVaultScreen } from './JoinVaultScreen';
 import { PlanScreen } from './PlanScreen';
 import { BankTransferInstructions } from './BankTransferInstructions';
 import { BackupExportScreen } from './BackupExportScreen';
 import { RestoreFromZipScreen } from './RestoreFromZipScreen';
 import { loadSubscription } from '../lib/store/subscription';
-import { PlanExpiredError } from '../auth/subscription';
 
 // Vite exposes env vars prefixed with VITE_; we treat the literal "true" as
 // the only truthy value so the default-empty-string falls back to disabled.
@@ -64,9 +63,7 @@ import { IdleLock } from '../sync/idle-lock';
 
 type View =
   | 'loading'
-  | 'oauth'
-  | 'login'
-  | 'join_vault'
+  | 'welcome'
   | 'unlocked'
   | 'settings'
   | 'device-limit'
@@ -203,44 +200,23 @@ export function AppShell(): JSX.Element {
         return;
       }
 
-      // Route:
-      // - Vault already on device → go straight to unlock.
-      // - No local vault, OAuth result present → probe server for an
-      //   existing vault before defaulting to "create new vault". A hit
-      //   means another device already created the vault for this user;
-      //   we route to the join flow so we don't silently fork the data.
-      // - No local vault, no OAuth result → show OAuth screen.
-      if (hasVault) {
-        setView('login');
-      } else if (incoming?.tokens?.jwt && incoming.couchdbUsername) {
-        let probed: VaultStateDoc | null = null;
+      // If we have an OAuth session but no local vault, probe the server
+      // so Step 3 of the welcome wizard auto-selects the existing flow.
+      if (!hasVault && incoming?.tokens?.jwt && incoming.couchdbUsername) {
         try {
-          probed = await fetchVaultStateWithTimeout(
+          const probed = await fetchVaultStateWithTimeout(
             incoming.couchdbUsername,
             incoming.tokens.jwt,
           );
+          if (probed) setServerVaultState(probed);
         } catch (err) {
           console.warn('[AppShell] vault-state probe failed', err);
         }
-        if (probed) {
-          setServerVaultState(probed);
-          setView('join_vault');
-        } else {
-          setView('login');
-        }
-      } else if (incoming) {
-        setView('login');
-      } else {
-        setView('oauth');
       }
+
+      setView('welcome');
       routedOnceRef.current = true;
     })();
-  }, []);
-
-  const onCheckVault = useCallback(async () => {
-    const vaults = await listVaultStates();
-    const first = vaults[0];
-    return { exists: Boolean(first), vaultId: first?.vaultId ?? null };
   }, []);
 
   /**
@@ -363,12 +339,26 @@ export function AppShell(): JSX.Element {
     setHasExistingVault(true);
   }, [serverVaultState, pendingOAuth]);
 
-  const onJoinSignOut = useCallback(() => {
-    stashPendingOAuth(null);
-    setPendingOAuth(null);
-    setServerVaultState(null);
-    setView('oauth');
-  }, []);
+  const onJoinWithRs = useCallback(
+    async (rs: RecoverySecretResult): Promise<{ ok: true; vaultId: string } | { ok: false; reason: 'wrong-key' | 'invalid' }> => {
+      try {
+        if (hasExistingVault) {
+          await onUnlockWithRS(rs.raw);
+          const vaults = await listVaultStates();
+          const v = vaults[0];
+          if (!v) return { ok: false, reason: 'invalid' };
+          return { ok: true, vaultId: v.vaultId };
+        }
+        if (!serverVaultState) return { ok: false, reason: 'invalid' };
+        await onJoinVault(rs.raw);
+        return { ok: true, vaultId: serverVaultState.vaultId };
+      } catch (err) {
+        console.warn('[AppShell] onJoinWithRs failed', err);
+        return { ok: false, reason: 'wrong-key' };
+      }
+    },
+    [hasExistingVault, serverVaultState, onUnlockWithRS, onJoinVault],
+  );
 
   /**
    * After unlock: open PouchDB, materialise the TokenStore from the encrypted
@@ -536,7 +526,7 @@ export function AppShell(): JSX.Element {
         if (tokenStore) void tokenStore.clear().catch(() => null);
         setDb(null);
         setTokenStore(null);
-        setView('login');
+        setView('welcome');
       },
     });
     lock.start();
@@ -580,48 +570,34 @@ export function AppShell(): JSX.Element {
     return wrapped;
   }, [dek, vaultId, db]);
 
-  const onUnlockWithRecoverySecret = useCallback(() => {
-    setAuthHint(null);
-    setView('login');
-  }, []);
-
   // ── Rendering ─────────────────────────────────────────────────────────
   if (view === 'loading') {
     return <div style={{ padding: 32 }}>Loading keystore…</div>;
   }
 
-  if (view === 'oauth') {
+  if (view === 'welcome') {
+    if (hasExistingVault) {
+      // Daily-unlock path: vault already exists on this device. Render
+      // the small UnlockGate (passkey + RS fallback) instead of the
+      // onboarding wizard.
+      return (
+        <UnlockGate
+          hasPasskey={Boolean(vaultId)}
+          onUnlockWithPasskey={onUnlockWithPasskey}
+          onUnlockWithRs={onUnlockWithRS}
+          onUnlocked={onUnlocked}
+        />
+      );
+    }
+    const oauth = pendingOAuth ?? readPendingOAuth();
     return (
-      <OAuthScreen
-        hint={authHint}
-        onUnlockWithRecoverySecret={hasExistingVault ? onUnlockWithRecoverySecret : undefined}
-      />
-    );
-  }
-
-  if (view === 'login') {
-    return (
-      <LoginScreen
-        onUnlocked={onUnlocked}
-        hasExistingVault={hasExistingVault}
-        vaultId={vaultId ?? undefined}
-        onCheckVault={onCheckVault}
+      <WelcomeScreen
+        authenticated={Boolean(oauth?.deviceApproved && oauth.tokens)}
+        hasServerVaultState={serverVaultState !== null}
         onCreateVault={onCreateVault}
+        onJoinWithRs={onJoinWithRs}
         onRegisterPasskey={onRegisterPasskey}
-        onUnlockWithPasskey={onUnlockWithPasskey}
-        onUnlockWithRS={onUnlockWithRS}
-      />
-    );
-  }
-
-  if (view === 'join_vault') {
-    return (
-      <JoinVaultScreen
-        onJoinVault={async (rs) => {
-          await onJoinVault(rs);
-          await onUnlocked();
-        }}
-        onSignOut={onJoinSignOut}
+        onUnlocked={onUnlocked}
       />
     );
   }
@@ -644,7 +620,7 @@ export function AppShell(): JSX.Element {
             stashPendingOAuth(null);
             setPendingOAuth(null);
             setAuthHint(null);
-            setView('oauth');
+            setView('welcome');
           }}
           style={{ padding: '8px 16px', borderRadius: 10, background: '#007aff', color: '#fff', border: 'none', cursor: 'pointer' }}
         >
@@ -711,7 +687,7 @@ export function AppShell(): JSX.Element {
       <RestoreFromZipScreen
         db={db}
         expectedVaultId={vaultId ?? undefined}
-        onBack={() => setView(tokenStore ? 'plan' : 'login')}
+        onBack={() => setView(tokenStore ? 'plan' : 'welcome')}
         onRestored={() => setView('unlocked')}
       />
     );

@@ -5,9 +5,10 @@
 @import './tokens.css';
 @import './base.css';
 @import './typography.css';
+@import './welcome.css';
 
-/* Legacy auth/settings/sync-status styles — used by LoginScreen, OAuthScreen,
- * SettingsScreen, RSConfirmation, SyncStatus, DeviceLimitScreen, PinSetupScreen.
- * Kept until those screens are restyled in a follow-up; the prototype design
- * system above takes precedence for the post-unlock surface. */
+/* Legacy auth/settings/sync-status styles — used by SettingsScreen,
+ * SyncStatus, DeviceLimitScreen, PinSetupScreen. The pre-unlock surface
+ * (welcome wizard) is now in welcome.css; these legacy rules cover the
+ * settings/error surfaces still using the old style language. */
 @import './legacy.css';

@@ -1,0 +1,627 @@
+/* Welcome onboarding wizard — the prototype's design language, applied to
+ * the React components under src/components/welcome/. All values are
+ * tokens; raw hex literals here are a design-system violation.
+ *
+ * Visual contract: onboarding-ui-prototype/prototype.html. */
+
+/* ── Stage ── */
+.welcome-stage {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  padding: clamp(20px, 6vw, 32px) clamp(16px, 5vw, 28px) 48px;
+  overflow-x: hidden;
+}
+.welcome-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 40% at 0% 0%, var(--stage-gradient-1), transparent 70%),
+    radial-gradient(60% 40% at 100% 100%, var(--stage-gradient-2), transparent 70%);
+  z-index: 0;
+}
+.welcome-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Brand wordmark ── */
+.welcome-brand {
+  margin: 8px auto 8px;
+  text-align: center;
+  position: relative;
+}
+.welcome-brand-wordmark {
+  display: inline-block;
+  position: relative;
+  padding-right: 38px;
+}
+.welcome-brand-name {
+  font-family: 'Fraunces', 'Iowan Old Style', 'Charter', 'Georgia', serif;
+  font-variation-settings: 'opsz' 36;
+  font-weight: 500;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.welcome-brand-suffix {
+  position: absolute;
+  left: calc(100% - 38px + 4px);
+  top: 5px;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+.welcome-subtitle {
+  margin: 8px 0 24px;
+  text-align: center;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 16px;
+  color: var(--ink-3);
+  letter-spacing: 0.005em;
+}
+
+/* ── Step cards ── */
+.welcome-steps {
+  display: grid;
+  gap: 14px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.step-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  transition:
+    opacity var(--t-base),
+    background-color var(--t-base),
+    border-color var(--t-base),
+    box-shadow var(--t-base);
+  scroll-margin-top: 80px;
+}
+.step-card[data-state='locked'] {
+  opacity: 0.62;
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+.step-card[data-state='active'] {
+  opacity: 1;
+  background: var(--surface);
+  border: 1px solid var(--copper-border);
+  box-shadow: var(--card-shadow);
+}
+.step-card[data-state='done'] {
+  opacity: 0.5;
+  background: var(--surface-2);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.step-card__header {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 30px;
+}
+.step-card__marker {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--copper-border);
+  color: var(--copper-mid);
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.step-card[data-state='locked'] .step-card__marker {
+  border-color: var(--line);
+  color: var(--ink-4);
+}
+.step-card[data-state='done'] .step-card__marker {
+  border-color: var(--copper-border);
+  color: var(--copper);
+}
+.step-card__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.step-card__kicker {
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--copper);
+  line-height: 1;
+}
+.step-card[data-state='locked'] .step-card__kicker {
+  color: var(--ink-4);
+}
+.step-card__title {
+  font-family: 'Fraunces', 'Iowan Old Style', 'Charter', 'Georgia', serif;
+  font-variation-settings: 'opsz' 22;
+  font-weight: 500;
+  font-size: 20px;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0;
+}
+.step-card__header-right {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 30px;
+}
+.step-card[data-state='active'] .step-card__lock,
+.step-card[data-state='done'] .step-card__lock {
+  display: none;
+}
+.step-card__back {
+  background: transparent;
+  border: none;
+  color: var(--copper);
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 4px;
+  min-height: 44px;
+  min-width: 44px;
+}
+.step-card__back:focus-visible {
+  outline: 2px solid var(--copper);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+.step-card__check {
+  color: var(--copper);
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
+
+/* Step body collapses on locked/done. */
+.step-card__body {
+  display: none;
+  margin-top: 14px;
+}
+.step-card[data-state='active'] .step-card__body {
+  display: block;
+}
+
+/* ── Step 1 install timeline ── */
+.install-timeline {
+  position: relative;
+  padding: 8px 0 4px 6px;
+  display: grid;
+  gap: 14px;
+}
+.install-timeline::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 14px;
+  bottom: 18px;
+  width: 1px;
+  background: var(--copper-border);
+  opacity: 0.4;
+}
+.install-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding-left: 0;
+}
+.install-row__dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border: 1.5px solid var(--copper);
+  background: var(--bg);
+  z-index: 1;
+}
+.install-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.install-row__label {
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.install-row__label svg {
+  vertical-align: -3px;
+  margin: 0 2px;
+  color: var(--ink-2);
+}
+.install-row__hint {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: var(--radius-btn);
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color var(--t-base), border-color var(--t-base), color var(--t-base);
+  min-height: 44px;
+  min-width: 44px;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--copper);
+  outline-offset: 1px;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn--primary {
+  background: linear-gradient(160deg, var(--teal), var(--teal-strong));
+  color: #FDFAF3;
+  border-color: transparent;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 1px 2px rgba(14, 76, 94, 0.18),
+    0 8px 16px -8px rgba(14, 76, 94, 0.32);
+}
+.btn--primary:hover {
+  filter: brightness(1.04);
+}
+.btn--secondary {
+  background: var(--copper-tint);
+  color: var(--copper-mid);
+  border: 1px solid var(--copper-border);
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--copper);
+  border: none;
+  min-height: 44px;
+}
+
+/* Block button (full width). */
+.btn--block {
+  width: 100%;
+}
+
+/* ── Step 2 OAuth ── */
+.oauth-buttons {
+  display: grid;
+  gap: 12px;
+}
+.oauth-btn {
+  width: 100%;
+  height: 56px;
+  border-radius: var(--radius-btn);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter var(--t-base);
+  border: 1px solid var(--line);
+}
+.oauth-btn:focus-visible {
+  outline: 2px solid var(--copper);
+  outline-offset: 1px;
+}
+.oauth-btn:hover {
+  filter: brightness(1.03);
+}
+.oauth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.oauth-btn--apple {
+  background: var(--ink-espresso);
+  color: var(--bg);
+  border-color: var(--ink-espresso);
+}
+.oauth-btn--google {
+  background: var(--surface);
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+.oauth-btn__logo {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  flex: 0 0 20px;
+}
+.oauth-footer {
+  margin-top: 14px;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* ── Step 3 QR card ── */
+.qr-card {
+  background: var(--surface);
+  border: 1px solid var(--copper-border);
+  border-radius: var(--radius-card);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+.qr-warning {
+  font-family: 'Caveat', 'Comic Sans MS', cursive;
+  font-size: 18px;
+  color: var(--amber);
+  line-height: 1.2;
+  text-align: center;
+}
+.qr-canvas {
+  width: 152px;
+  height: 152px;
+  display: block;
+  margin: 0 auto;
+  background: #FFFFFE;
+  border-radius: 8px;
+  padding: 8px;
+}
+[data-theme="dark"] .qr-canvas {
+  /* Pure white background even in dark mode for QR scannability. */
+  background: #FFFFFE;
+}
+.qr-fingerprint {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  text-align: center;
+}
+.qr-fingerprint__last4 {
+  color: var(--copper-mid);
+  font-weight: 700;
+}
+.qr-fingerprint__label {
+  color: var(--ink-3);
+  margin-right: 6px;
+}
+.qr-actions {
+  display: grid;
+  gap: 10px;
+}
+.qr-ios-hint {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Verify substep: action rows + last4 input. */
+.action-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color var(--t-base), background-color var(--t-base);
+  min-height: 44px;
+}
+.action-row:hover,
+.action-row:focus-within {
+  border-color: var(--copper-border);
+  background: var(--copper-tint);
+}
+.action-row__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--copper-mid);
+  background: var(--copper-tint);
+  border: 1px solid var(--copper-border);
+}
+.action-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.action-row__title {
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+  line-height: 1.3;
+}
+.action-row__sub {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.action-row--primary {
+  border-color: var(--copper-border);
+  background: var(--copper-tint);
+}
+.action-row__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--ink-4);
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.section-label {
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+
+.last4-input {
+  width: 100%;
+  height: 56px;
+  padding: 0 16px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-btn);
+  background: var(--surface);
+  color: var(--ink);
+}
+.last4-input:focus-visible {
+  outline: none;
+  border-color: var(--copper);
+}
+.last4-input[aria-invalid='true'] {
+  border-color: var(--amber);
+}
+
+.manual-rs-input {
+  width: 100%;
+  min-height: 96px;
+  padding: 12px 14px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-btn);
+  background: var(--surface);
+  color: var(--ink);
+  resize: vertical;
+}
+.manual-rs-input:focus-visible {
+  outline: none;
+  border-color: var(--copper);
+}
+.manual-rs-input[aria-invalid='true'] {
+  border-color: var(--amber);
+}
+
+.input-error {
+  margin-top: 8px;
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 13px;
+  color: var(--amber);
+}
+
+.success-note {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 16px;
+  color: var(--ink-2);
+  line-height: 1.4;
+  text-align: left;
+  margin: 0 0 14px;
+}
+
+.aria-live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ── Final card ── */
+.welcome-final {
+  max-width: 420px;
+  margin: 60px auto 0;
+  padding: 32px 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--copper-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+}
+.welcome-final__welcome {
+  font-family: 'Caveat', 'Comic Sans MS', cursive;
+  font-weight: 600;
+  font-size: 28px;
+  color: var(--copper);
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+.welcome-final__sub {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  font-size: 16px;
+  color: var(--ink-3);
+  margin: 0 0 22px;
+}
+.welcome-final__cta {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-card,
+  .btn,
+  .oauth-btn,
+  .action-row {
+    transition: none !important;
+  }
+}

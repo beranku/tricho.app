@@ -491,6 +491,79 @@ export function decodeRsFromInput(input: string): Uint8Array {
 }
 
 // ============================================================================
+// QR-encoded RS exchange (welcome wizard)
+// ============================================================================
+
+/**
+ * QR payload prefix that anchors the format and pins the version. A scanner
+ * that reads a non-tricho QR (vCard, Wi-Fi, plain URL) will fail the prefix
+ * check before any Base32 decoding is attempted.
+ */
+const QR_PAYLOAD_PREFIX = 'TRICHO-RS-V1:';
+
+/**
+ * Generic failure message for `fromQrPayload`. Intentionally does not reveal
+ * which character mismatched, which characters are invalid, or how long the
+ * decoded string was — those would help an attacker probe the QR space.
+ */
+const QR_DECODE_FAILURE_REASON = 'invalid recovery key';
+
+export type QrPayloadDecodeResult =
+  | { ok: true; rs: RecoverySecretResult }
+  | { ok: false; reason: typeof QR_DECODE_FAILURE_REASON };
+
+/**
+ * Encodes a Recovery Secret as the QR payload string.
+ *
+ * The payload contains the Base32 *body* of the RS (i.e., the same string
+ * `generateRecoverySecret().encoded` returns) prefixed by `TRICHO-RS-V1:`.
+ * The 4-character checksum is the last 4 chars of the body, so the receiver
+ * can recompute and re-validate it on decode.
+ */
+export function toQrPayload(rs: RecoverySecretResult): string {
+  return `${QR_PAYLOAD_PREFIX}${rs.encoded}`;
+}
+
+/**
+ * Decodes a QR payload back into a `RecoverySecretResult`. Returns
+ * `{ ok: false, reason }` for any malformed input — the `reason` is
+ * deliberately generic so a developer cannot accidentally surface
+ * "wrong character at position 7" to a UI.
+ */
+export function fromQrPayload(payload: string): QrPayloadDecodeResult {
+  if (typeof payload !== 'string') return fail();
+  if (!payload.startsWith(QR_PAYLOAD_PREFIX)) return fail();
+
+  const body = payload.slice(QR_PAYLOAD_PREFIX.length).trim();
+  if (!isValidRsFormat(body)) return fail();
+
+  let raw: Uint8Array;
+  try {
+    raw = decodeBase32(body);
+  } catch {
+    return fail();
+  }
+  if (raw.length !== RS_LENGTH_BYTES) return fail();
+
+  // The Base32 body of 32 random bytes round-trips to 52 chars
+  // (256 bits / 5 bits per char rounded up). Re-encoding and comparing
+  // catches any pathological encoding that decodes to 32 bytes but doesn't
+  // re-encode to the same string the user scanned.
+  const reEncoded = encodeBase32(raw);
+  if (reEncoded.toUpperCase() !== body.toUpperCase()) return fail();
+
+  const checksum = generateRSChecksum(reEncoded);
+  return {
+    ok: true,
+    rs: { raw, encoded: reEncoded, checksum },
+  };
+}
+
+function fail(): QrPayloadDecodeResult {
+  return { ok: false, reason: QR_DECODE_FAILURE_REASON };
+}
+
+// ============================================================================
 // RS Rotation
 // ============================================================================
 
