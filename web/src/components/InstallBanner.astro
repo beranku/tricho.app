@@ -1,0 +1,20 @@
+---
+// Hidden by default. Revealed by an inline script in Base.astro when the
+// visitor is on iOS Safari, not in standalone mode, and hasn't dismissed
+// the banner before. Dismissal persists in localStorage.
+---
+
+<div class="install-banner" data-install-banner hidden role="region" aria-label="Návod k instalaci">
+  <span>
+    Nainstaluj si Tricho jako aplikaci: klepni na <strong>Sdílet</strong> a vyber <strong>Přidat na plochu</strong>.
+  </span>
+  <button type="button" aria-label="Zavřít návod" data-install-banner-close>×</button>
+</div>
+
+<script is:inline>
+  document.querySelector('[data-install-banner-close]')?.addEventListener('click', function () {
+    var b = document.querySelector('[data-install-banner]');
+    if (b) b.setAttribute('hidden', '');
+    try { localStorage.setItem('install-banner-dismissed', '1'); } catch (_) {}
+  });
+</script>

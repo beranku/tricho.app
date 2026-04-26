@@ -1,0 +1,51 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+---
+
+<Base
+  title="O nás — Tricho"
+  description="Tricho je projekt jednoho člověka, který chtěl mít diář klientů, jenž si nemůže přečíst nikdo jiný. Tady je proč."
+>
+  <SiteHeader />
+
+  <main>
+    <h1>O Tricho</h1>
+    <p class="subhead">Krátká verze: chtěli jsme diář, který nikdo jiný nepřečte.</p>
+
+    <h2>Proč existujeme</h2>
+    <p>
+      Většina CRM nástrojů pro malé živnostníky nahrává všechno do cloudu, kde
+      to vidí provozovatel, kdokoli, kdo se k němu dostane, a obvykle i pár
+      „partnerů na analytiku“. Pro hairdressery, trichology a podobné profese,
+      které pracují s citlivými daty (alergie, zdravotní informace, fotografie
+      pokožky), je to nefér ke klientovi.
+    </p>
+    <p>
+      Tricho je opačná architektura: data se šifrují přímo v zařízení, klíč
+      odvozený od tvé biometrie nebo Recovery Secretu nikdy nedostane server.
+      Server vidí jen šifrovaný binární proud. Je to tzv. <em>zero-knowledge</em>
+      služba — nemůžeme tvoje data přečíst ani kdybychom chtěli.
+    </p>
+
+    <h2>Co to znamená v praxi</h2>
+    <ul>
+      <li>Pokud zapomeneš svůj Recovery Secret a ztratíš všechna zařízení, ani my ti data neobnovíme. Nemáme klíč.</li>
+      <li>Záloha do ZIPu je šifrovaná stejným klíčem. Bez Recovery Secretu se z ní nedostaneš.</li>
+      <li>Žádný „reset hesla na e-mail“. Místo hesla je biometrie + Recovery Secret.</li>
+    </ul>
+
+    <h2>Tým</h2>
+    <p>
+      Tricho dělá Honza Beránek (<a href="mailto:info@tricho.app">info@tricho.app</a>) z Prahy.
+      Backend i frontend, kód i copy.
+    </p>
+
+    <p>
+      <a href="/" class="btn btn--ghost">← Zpět na úvod</a>
+    </p>
+  </main>
+
+  <SiteFooter />
+</Base>

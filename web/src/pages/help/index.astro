@@ -1,0 +1,43 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const articles = (await getCollection('help')).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+
+const byCategory = articles.reduce<Record<string, typeof articles>>((acc, a) => {
+  (acc[a.data.category] ??= []).push(a);
+  return acc;
+}, {});
+---
+
+<Base
+  title="Nápověda — Tricho"
+  description="Návody, jak Tricho používat. Instalace, první vault, druhé zařízení, obnovení ze zálohy."
+>
+  <SiteHeader />
+
+  <main>
+    <h1>Nápověda</h1>
+    <p class="subhead">Návody pro běžné scénáře. Něco chybí? <a href="mailto:info@tricho.app">Napiš nám</a>.</p>
+
+    {Object.entries(byCategory).map(([category, items]) => (
+      <section>
+        <h2 style="text-transform: capitalize;">{category}</h2>
+        <ul class="post-list">
+          {items.map((a) => (
+            <li>
+              <h3><a href={`/help/${a.slug}`}>{a.data.title}</a></h3>
+              <p>{a.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </main>
+
+  <SiteFooter />
+</Base>

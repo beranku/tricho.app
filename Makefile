@@ -62,11 +62,11 @@ logs: ## Tail logs of the running stack
 
 .PHONY: test-smoke
 test-smoke: ## Run the infra smoke suite (compose config, secrets lint, healthcheck declaration)
-	@bash scripts/smoke/run-all.sh
+	@bash app/scripts/smoke/run-all.sh
 
 .PHONY: test-all
 test-all: test-smoke ## Run every test tier (unit + component + backend unit + integration + smoke + e2e)
-	@npm run test:all
+	@cd app && npm run test:all
 
 .PHONY: e2e
 e2e: _check-prereqs ## Run Playwright end-to-end suite against the ci profile stack
@@ -93,9 +93,9 @@ e2e: _check-prereqs ## Run Playwright end-to-end suite against the ci profile st
 		[ $$i -eq 30 ] && { echo "stack never became healthy"; $(COMPOSE) -p $$project logs --tail=200; exit 1; }; \
 		sleep 2; \
 	done; \
-	if [ ! -d node_modules/@playwright ]; then npm ci; fi; \
-	npx playwright install chromium >/dev/null 2>&1 || true; \
-	npx playwright test
+	if [ ! -d app/node_modules/@playwright ]; then cd app && npm ci && cd ..; fi; \
+	cd app && npx playwright install chromium >/dev/null 2>&1 || true; \
+	cd app && npx playwright test
 
 .PHONY: secrets-edit
 secrets-edit: ## Edit secrets/$(PROFILE).sops.yaml with sops (wired in section 5)

@@ -1,0 +1,28 @@
+---
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+---
+
+<Base
+  title="GDPR — Tricho"
+  description="Zpracování osobních údajů a tvá práva podle GDPR."
+  noIndex={true}
+>
+  <SiteHeader />
+
+  <main>
+    <h1>GDPR</h1>
+    <p style="background: var(--copper-tint); border: 1px solid var(--copper-border); padding: 16px; border-radius: var(--radius-card);">
+      <strong>Pracujeme na finální verzi.</strong> Pro detaily o tom, jak Tricho
+      zpracovává osobní údaje, napiš na <a href="mailto:info@tricho.app">info@tricho.app</a>.
+    </p>
+
+    <h2>Krátká verze</h2>
+    <p>Šifrování end-to-end znamená, že na serveru nejsou žádné osobní
+    údaje tvých klientů — všechno je šifrované klíčem, který máš jenom ty.
+    Z pohledu GDPR je server zpracovatel ciphertextu, ne plaintextu.</p>
+  </main>
+
+  <SiteFooter />
+</Base>

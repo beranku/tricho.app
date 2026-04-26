@@ -1,0 +1,33 @@
+---
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+---
+
+<Base
+  title="Zásady ochrany soukromí — Tricho"
+  description="Jak Tricho zachází s tvými daty. Krátká verze: nikam neodejdou."
+  noIndex={true}
+>
+  <SiteHeader />
+
+  <main>
+    <h1>Zásady ochrany soukromí</h1>
+    <p style="background: var(--copper-tint); border: 1px solid var(--copper-border); padding: 16px; border-radius: var(--radius-card);">
+      <strong>Pracujeme na finální verzi tohoto dokumentu.</strong> Pokud potřebuješ
+      detaily, napiš na <a href="mailto:info@tricho.app">info@tricho.app</a>.
+    </p>
+
+    <h2>Krátká verze</h2>
+    <ul>
+      <li>Tvoje diáře, klienti, fotografie a poznámky jsou šifrované klíčem,
+      který nikdy nedostaneme.</li>
+      <li>Server vidí jen šifrovaný binární proud + tvůj e-mail z OAuth providera
+      (Apple/Google).</li>
+      <li>E-mail používáme jen ke kontaktu o předplatném — žádný marketing.</li>
+      <li>Žádné cookies třetích stran. Žádné Google Analytics. Žádný Facebook Pixel.</li>
+    </ul>
+  </main>
+
+  <SiteFooter />
+</Base>

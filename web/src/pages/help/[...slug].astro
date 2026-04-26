@@ -1,0 +1,35 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+export async function getStaticPaths() {
+  const articles = await getCollection('help');
+  return articles.map((article) => ({ params: { slug: article.slug }, props: { article } }));
+}
+
+interface Props { article: CollectionEntry<'help'>; }
+const { article } = Astro.props;
+const { Content } = await article.render();
+---
+
+<Base
+  title={`${article.data.title} — Nápověda Tricho`}
+  description={article.data.description}
+>
+  <SiteHeader />
+
+  <main>
+    <article>
+      <h1>{article.data.title}</h1>
+      <Content />
+    </article>
+
+    <p style="margin-top: 48px;">
+      <a href="/help" class="btn btn--ghost">← Všechna témata</a>
+    </p>
+  </main>
+
+  <SiteFooter />
+</Base>

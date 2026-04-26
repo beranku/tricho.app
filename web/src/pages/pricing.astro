@@ -1,0 +1,120 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+
+// Plans mirror billing-plans capability. Authoritative source is the running
+// /auth/plans endpoint; this page renders the editorial summary, not the
+// dynamic catalog. Operators update prices here when they ship a billing
+// change. Default amounts match the spec defaults.
+const plans = [
+  {
+    name: 'Free',
+    price: 'Zdarma',
+    period: 'navždy',
+    features: [
+      '1 zařízení (iPad nebo telefon)',
+      'Šifrování end-to-end',
+      'Funguje offline',
+      'Záloha do ZIPu (manuální)',
+      'Bez cloudové synchronizace',
+    ],
+    cta: { label: 'Začít zdarma', href: '/app/' },
+    primary: false,
+  },
+  {
+    name: 'Pro',
+    price: '99 Kč',
+    period: 'měsíčně · nebo 990 Kč/rok',
+    features: [
+      '2 zařízení',
+      'Cloudová synchronizace mezi nimi',
+      'Šifrované zálohy v cloudu (12 měsíců historie)',
+      'Šifrování end-to-end',
+      'Funguje offline',
+      'E-mailová podpora',
+    ],
+    cta: { label: 'Vyzkoušet Pro', href: '/app/?intent=upgrade&plan=pro-monthly' },
+    primary: true,
+  },
+  {
+    name: 'Max',
+    price: '249 Kč',
+    period: 'měsíčně · nebo 2490 Kč/rok',
+    features: [
+      '5 zařízení',
+      'Cloudová synchronizace mezi všemi',
+      'Šifrované zálohy v cloudu (60 měsíců historie)',
+      'Šifrování end-to-end',
+      'Funguje offline',
+      'Prioritní podpora',
+    ],
+    cta: { label: 'Vyzkoušet Max', href: '/app/?intent=upgrade&plan=max-monthly' },
+    primary: false,
+  },
+];
+
+const softwareJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Tricho',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  offers: plans
+    .filter((p) => p.name !== 'Free')
+    .map((p) => ({
+      '@type': 'Offer',
+      name: p.name,
+      price: p.price.replace(/[^\d]/g, ''),
+      priceCurrency: 'CZK',
+    }))
+    .concat([{ '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'CZK' }]),
+};
+---
+
+<Base
+  title="Cena — Tricho"
+  description="Pro jeden iPad zdarma navždy. Pro 2 zařízení a cloud sync 99 Kč měsíčně. Pro 5 zařízení 249 Kč měsíčně. Bez závazků."
+  jsonLd={[softwareJsonLd]}
+>
+  <SiteHeader />
+
+  <main>
+    <h1>Cena</h1>
+    <p class="subhead">Pro jeden iPad zdarma. Cloudová synchronizace stojí.</p>
+
+    <div class="pricing-grid">
+      {plans.map((plan) => (
+        <div class="pricing-card">
+          <h3>{plan.name}</h3>
+          <div class="price">{plan.price}</div>
+          <p style="color: var(--ink-3); font-size: 14px; margin-top: -8px;">{plan.period}</p>
+          <ul>
+            {plan.features.map((f) => <li>· {f}</li>)}
+          </ul>
+          <a href={plan.cta.href} class={`btn ${plan.primary ? 'btn--primary' : 'btn--ghost'}`}>
+            {plan.cta.label}
+          </a>
+        </div>
+      ))}
+    </div>
+
+    <h2>Časté otázky</h2>
+    <h3>Co znamená „end-to-end šifrované"?</h3>
+    <p>Tvůj klíč se odvozuje v zařízení z biometrie nebo Recovery Secretu a nikdy
+    se nedostane na server. Server vidí jen šifrovaný binární proud — nemůžeme
+    tvoje data přečíst ani kdybychom chtěli. <a href="/about">Více tady</a>.</p>
+
+    <h3>Mohu zrušit kdykoli?</h3>
+    <p>Ano. Předplatné se nepřevrací automaticky proti tvé vůli; ke konci
+    období dostaneš upozornění. Po vypršení Pro/Max platí 7denní grace
+    perioda, během níž synchronizace ještě běží.</p>
+
+    <h3>Co se stane s daty po zrušení?</h3>
+    <p>Lokální data zůstávají v zařízení (a fungují offline) i po pádu na
+    Free plán. Z cloudu se po vypršení grace synchronizace přestane —
+    šifrovaný snapshot ale na serveru zůstane, dokud nezrušíš účet.</p>
+  </main>
+
+  <SiteFooter />
+</Base>

@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+---
+
+<Base
+  title="Stránka nenalezena — Tricho"
+  description="Hledaná stránka neexistuje. Vrať se na úvod nebo otevři aplikaci."
+  noIndex={true}
+>
+  <SiteHeader />
+
+  <main style="text-align: center; padding-top: 80px;">
+    <h1>404</h1>
+    <p class="subhead">Tahle stránka neexistuje.</p>
+    <p>Možná jsi sem přišel/přišla ze starého odkazu, nebo se v URL vloudila chyba.</p>
+    <div class="hero-cta">
+      <a href="/" class="btn btn--primary">Zpět na úvod</a>
+      <a href="/app/" class="btn btn--ghost">Otevřít aplikaci</a>
+    </div>
+  </main>
+
+  <SiteFooter />
+</Base>

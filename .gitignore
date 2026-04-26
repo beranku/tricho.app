@@ -1,11 +1,17 @@
 # build output
 dist/
+app/dist/
+web/dist/
 # generated types
 .astro/
+app/.astro/
+web/.astro/
 # Paraglide JS compiler output (regenerated via Vite plugin)
 src/paraglide/
+app/src/paraglide/
 # Inlang plugin cache (regenerated on demand)
 project.inlang/cache/
+app/project.inlang/cache/
 
 # dependencies
 node_modules/
@@ -30,11 +36,15 @@ infrastructure/.env
 
 # Playwright run artifacts
 playwright-report/
+app/playwright-report/
 test-results/
+app/test-results/
 test-results-ui/
+app/test-results-ui/
 
 # Coverage output (per-tier summaries — committed baseline is coverage-baseline.json)
 /coverage/
+app/coverage/
 
 # Infrastructure secrets
 infrastructure/traefik/acme.json

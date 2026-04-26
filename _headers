@@ -1,0 +1,81 @@
+# Cloudflare Pages per-route response headers.
+#
+# Cache-Control strategy: hashed assets are immutable for a year; HTML and
+# both service workers are no-cache so launches propagate within the next
+# request. Manifest sits in the middle (1 hour) so name/icon updates land
+# without an aggressive bust.
+#
+# Service-Worker-Allowed lets a SW claim a wider scope than its filesystem
+# location implies; we set it explicitly on both SW paths.
+#
+# Security headers apply globally; the CSP is scoped to /app/* (the app
+# shell handles plaintext in memory and is the surface where XSS would
+# leak the in-memory DEK). Marketing pages are static HTML+CSS with no
+# sensitive surface, so a tighter CSP than the global headers there isn't
+# necessary.
+
+# ── Service workers ──────────────────────────────────────────────────────────
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+/app/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /app/
+
+# ── Web App Manifest ─────────────────────────────────────────────────────────
+/manifest.webmanifest
+  Cache-Control: public, max-age=3600
+  Content-Type: application/manifest+json
+
+# ── Hashed, content-addressed assets — immutable ─────────────────────────────
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/app/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/app/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/og/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/app/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── HTML — short cache, must revalidate ──────────────────────────────────────
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/app/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+# ── Global security headers ──────────────────────────────────────────────────
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+
+# ── Stricter CSP for the PWA shell ───────────────────────────────────────────
+# Derived from the app's observed network surface: same-origin for everything
+# except the OAuth redirects (which leave the page entirely — connect-src
+# does not gate top-level navigation), and Stripe Checkout / Customer Portal
+# (top-level navigation again). 'wasm-unsafe-eval' covers any future Workbox
+# precaching of WASM. 'unsafe-inline' on style-src is required because the
+# React tree uses inline style attributes for design-token-driven dynamics
+# (e.g. color computed from a copper token + opacity); a strict-dynamic /
+# nonce migration is a follow-up.
+/app/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

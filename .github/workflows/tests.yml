@@ -28,30 +28,30 @@ jobs:
         with:
           filters: |
             src:
-              - 'src/**'
-              - 'package.json'
-              - 'package-lock.json'
-              - 'vitest.config.*.ts'
+              - 'app/src/**'
+              - 'app/package.json'
+              - 'app/package-lock.json'
+              - 'app/vitest.config.*.ts'
             components:
-              - 'src/components/**'
-              - 'src/test/**'
-              - 'package.json'
-              - 'vitest.config.component.ts'
+              - 'app/src/components/**'
+              - 'app/src/test/**'
+              - 'app/package.json'
+              - 'app/vitest.config.component.ts'
             backend:
               - 'infrastructure/couchdb/tricho-auth/**'
               - 'infrastructure/mock-oidc/**'
-              - 'vitest.config.backend.ts'
-              - 'vitest.config.integration.ts'
+              - 'app/vitest.config.backend.ts'
+              - 'app/vitest.config.integration.ts'
             infra:
               - 'compose.yml'
               - 'infrastructure/**'
               - 'secrets/**'
               - '.sops.yaml'
-              - 'scripts/smoke/**'
+              - 'app/scripts/smoke/**'
               - 'Makefile'
             tests:
-              - 'tests/e2e/**'
-              - 'playwright.config.ts'
+              - 'app/tests/e2e/**'
+              - 'app/playwright.config.ts'
 
   # ── Tier 0: smoke (always runs — catches broken compose / secrets lint) ──
   smoke:
@@ -67,7 +67,7 @@ jobs:
       - name: Install PyYAML for healthcheck-declared
         run: pip install --user pyyaml
       - name: Run smoke suite
-        run: bash scripts/smoke/run-all.sh
+        run: bash app/scripts/smoke/run-all.sh
 
   # ── Tier 1: pure unit ────────────────────────────────────────────────────
   unit:
@@ -75,19 +75,23 @@ jobs:
     if: needs.changes.outputs.src == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
       - name: Run unit tier with coverage
         run: npx vitest run --config vitest.config.unit.ts --coverage
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-unit
-          path: coverage/unit/coverage-summary.json
+          path: app/coverage/unit/coverage-summary.json
           retention-days: 14
 
   # ── Tier 2: component (RTL + jsdom) ──────────────────────────────────────
@@ -96,19 +100,23 @@ jobs:
     if: needs.changes.outputs.components == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
       - name: Run component tier with coverage
         run: npx vitest run --config vitest.config.component.ts --coverage
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-component
-          path: coverage/component/coverage-summary.json
+          path: app/coverage/component/coverage-summary.json
           retention-days: 14
 
   # ── Tier 3: backend unit (Node) ──────────────────────────────────────────
@@ -123,7 +131,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
+        working-directory: app
       - name: Install tricho-auth deps
         working-directory: infrastructure/couchdb/tricho-auth
         run: npm ci
@@ -131,11 +141,12 @@ jobs:
         working-directory: infrastructure/mock-oidc
         run: npm install
       - name: Run backend unit tier with coverage
+        working-directory: app
         run: npx vitest run --config vitest.config.backend.ts --coverage
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-backend
-          path: coverage/backend/coverage-summary.json
+          path: app/coverage/backend/coverage-summary.json
           retention-days: 14
 
   # ── Tier 4: backend integration (real CouchDB via testcontainers) ────────
@@ -153,11 +164,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm ci
+        working-directory: app
       - name: Install tricho-auth deps
         working-directory: infrastructure/couchdb/tricho-auth
         run: npm ci
       - name: Run backend integration tier
+        working-directory: app
         run: npx vitest run --config vitest.config.integration.ts
 
   # ── Tier 5: E2E (Playwright against the ci compose profile) ──────────────
@@ -179,6 +193,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: app/package-lock.json
       - name: Install SOPS + age + jq
         run: |
           set -eu
@@ -193,11 +208,13 @@ jobs:
       - name: Map tricho.test to localhost
         run: echo '127.0.0.1 tricho.test' | sudo tee -a /etc/hosts
       - run: npm ci
+        working-directory: app
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
       - run: npx playwright install --with-deps chromium
+        working-directory: app
       - name: Decrypt CI secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
@@ -260,6 +277,7 @@ jobs:
           docker compose -p $COMPOSE_PROJECT_NAME logs --tail=200
           exit 1
       - name: Run Playwright
+        working-directory: app
         env:
           COMPOSE_PROJECT_NAME: tricho-e2e-${{ github.run_id }}
           E2E_BASE_URL: https://tricho.test
@@ -278,8 +296,8 @@ jobs:
         with:
           name: playwright-report
           path: |
-            playwright-report/
-            test-results/
+            app/playwright-report/
+            app/test-results/
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -308,19 +326,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-unit
-          path: coverage/unit
+          path: app/coverage/unit
         continue-on-error: true
       - name: Download component coverage
         uses: actions/download-artifact@v4
         with:
           name: coverage-component
-          path: coverage/component
+          path: app/coverage/component
         continue-on-error: true
       - name: Download backend coverage
         uses: actions/download-artifact@v4
         with:
           name: coverage-backend
-          path: coverage/backend
+          path: app/coverage/backend
         continue-on-error: true
       - name: Diff vs committed baseline
+        working-directory: app
         run: node scripts/coverage/diff-vs-baseline.mjs
