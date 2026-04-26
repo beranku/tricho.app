@@ -1,0 +1,117 @@
+---
+interface Props {
+  title?: string;
+}
+
+const { title = 'TrichoApp' } = Astro.props;
+// Shared manifest + icons live at the apex (/manifest.webmanifest, /icons/*)
+// per the marketing-site-and-pwa-split topology — they are owned by /shared/
+// and copied at merge time, not produced by the app build. Reference them at
+// absolute apex paths so the link is correct from /app/* URLs.
+---
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>{title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#FDFAF3" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#211A15" media="(prefers-color-scheme: dark)" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+
+  <!-- Manual SW registration — `injectRegister: false` in astro.config.mjs.
+       Scope is /app/ so the SW only controls the PWA shell, never the
+       marketing surface at the apex. -->
+  <script is:inline>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker
+          .register('/app/sw.js', { scope: '/app/' })
+          .then(function (reg) {
+            // Surface a waiting SW to the React tree via a window event so
+            // the in-app UpdateBanner (subscribed via app/src/lib/sw-update)
+            // can render without polling registration state.
+            function fireWaitingChange() {
+              window.dispatchEvent(
+                new CustomEvent('sw-waiting-change', { detail: { waiting: !!reg.waiting } })
+              );
+            }
+            fireWaitingChange();
+            reg.addEventListener('updatefound', function () {
+              var sw = reg.installing;
+              if (sw) sw.addEventListener('statechange', fireWaitingChange);
+            });
+          })
+          .catch(function () { /* SW unavailable — app still works online */ });
+      });
+    }
+  </script>
+
+
+  <!-- Anti-flash bootstrap. Reads `_local/theme` and `_local/locale` from
+       the PouchDB IndexedDB store and applies `data-theme` + `lang` before
+       paint. Falls back to `prefers-color-scheme` (theme) and a region-
+       stripped `navigator.language` matched against the registered locale
+       set (locale). Inlined and self-contained — must not import modules. -->
+  <script is:inline>
+    (function () {
+      var SUPPORTED = ['en', 'cs'];
+      var DEFAULT_LOCALE = 'en';
+
+      function pickHostLocale() {
+        var nav = (navigator && navigator.language) || '';
+        var bare = nav.split('-')[0].toLowerCase();
+        return SUPPORTED.indexOf(bare) >= 0 ? bare : DEFAULT_LOCALE;
+      }
+      // Synchronous default: host language so `<html lang>` is set before
+      // paint even if IndexedDB is slow.
+      document.documentElement.setAttribute('lang', pickHostLocale());
+
+      try {
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) document.documentElement.dataset.theme = 'dark';
+
+        // PouchDB stores its DB under '_pouch_<name>'; we look up both
+        // _local/theme and _local/locale and replace defaults if present.
+        var req = indexedDB.open('_pouch_tricho_app_prefs');
+        req.onsuccess = function (ev) {
+          var db = ev.target.result;
+          if (!db.objectStoreNames.contains('document-store')) { db.close(); return; }
+          var tx = db.transaction('document-store', 'readonly');
+          var store = tx.objectStore('document-store');
+
+          var themeReq = store.get('_local/theme');
+          themeReq.onsuccess = function () {
+            var doc = themeReq.result && themeReq.result.data;
+            if (doc && doc.theme === 'dark') {
+              document.documentElement.dataset.theme = 'dark';
+            } else if (doc && doc.theme === 'light') {
+              delete document.documentElement.dataset.theme;
+            }
+          };
+
+          var localeReq = store.get('_local/locale');
+          localeReq.onsuccess = function () {
+            var doc = localeReq.result && localeReq.result.data;
+            if (doc && doc.locale && SUPPORTED.indexOf(doc.locale) >= 0) {
+              document.documentElement.setAttribute('lang', doc.locale);
+            }
+          };
+
+          tx.oncomplete = function () { db.close(); };
+        };
+      } catch (_) { /* fall back to defaults already applied */ }
+    })();
+  </script>
+</head>
+<body>
+  <div class="paper-grain"></div>
+  <slot />
+</body>
+</html>
+
+<style is:global>
+  @import '../styles/global.css';
+</style>

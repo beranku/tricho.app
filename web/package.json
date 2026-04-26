@@ -1,0 +1,28 @@
+{
+  "name": "tricho-web",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Tricho.app marketing site — landing, blog, help, pricing. Static Astro output served at the apex; the PWA shell lives at /app/.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "lint": "astro check",
+    "typecheck": "astro check && tsc --noEmit"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^4.0.0",
+    "@astrojs/rss": "^4.0.0",
+    "@astrojs/sitemap": "^3.2.0",
+    "astro": "^5.16.5",
+    "satori": "^0.12.0",
+    "satori-html": "^0.3.2",
+    "sharp": "^0.33.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.8",
+    "typescript": "^5.6.0"
+  }
+}

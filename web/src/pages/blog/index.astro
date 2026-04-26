@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+const fmt = (d: Date) => new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'long' }).format(d);
+---
+
+<Base
+  title="Blog — Tricho"
+  description="Zápisky o tom, co se v Tricho děje. Nové funkce, technické rozbory, příběhy zezdola."
+>
+  <SiteHeader />
+
+  <main>
+    <h1>Blog</h1>
+    <p class="subhead">Co se v Tricho děje. <a href="/blog/rss.xml">RSS</a>.</p>
+
+    {posts.length === 0 ? (
+      <p>Zatím žádné posty. Sleduj <a href="/blog/rss.xml">RSS</a>.</p>
+    ) : (
+      <ul class="post-list">
+        {posts.map((post) => (
+          <li>
+            <h3><a href={`/blog/${post.slug}`}>{post.data.title}</a></h3>
+            <time datetime={post.data.date.toISOString()}>{fmt(post.data.date)}</time>
+            <p>{post.data.description}</p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+
+  <SiteFooter />
+</Base>

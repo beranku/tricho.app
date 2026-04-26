@@ -1,0 +1,21 @@
+{
+  "name": "Tricho",
+  "short_name": "Tricho",
+  "description": "Šifrovaný zápisník a CRM pro trichology — funguje offline, data zůstávají u tebe.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FDFAF3",
+  "theme_color": "#FDFAF3",
+  "categories": ["productivity", "medical", "business"],
+  "lang": "cs",
+  "dir": "ltr",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

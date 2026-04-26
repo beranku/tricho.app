@@ -1,0 +1,51 @@
+name: Release PWA
+
+on:
+  push:
+    tags:
+      - 'app-v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#app-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes from app/-scoped commits
+        id: notes
+        run: |
+          set -eu
+          PREV_TAG="$(git tag --list 'app-v*' --sort=-v:refname | sed -n '2p' || true)"
+          if [ -z "${PREV_TAG:-}" ]; then
+            NOTES="$(git log --pretty=format:'- %s' -- app/)"
+          else
+            NOTES="$(git log --pretty=format:'- %s' "${PREV_TAG}..HEAD" -- app/)"
+          fi
+          {
+            echo 'notes<<NOTES_EOF'
+            if [ -z "$NOTES" ]; then
+              echo '_(no app/-scoped commits since previous tag)_'
+            else
+              echo "$NOTES"
+            fi
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: PWA v${{ steps.version.outputs.version }}
+          body: |
+            ## What's new in v${{ steps.version.outputs.version }}
+
+            ${{ steps.notes.outputs.notes }}
+          draft: false
+          prerelease: false

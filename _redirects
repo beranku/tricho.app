@@ -1,0 +1,18 @@
+# Cloudflare Pages routing.
+#
+# 200 = rewrite (URL stays in the address bar; Cloudflare serves the named file).
+# 301 = redirect (browser navigates to the new URL).
+#
+# Order matters: more specific rules first.
+
+# Trailing-slash normalization for the PWA scope. The manifest's start_url
+# is '/app/' (with slash); without this redirect, a bare '/app' visit would
+# be served as a 404 by Cloudflare's static layer (no exact file match).
+/app    /app/            301
+
+# SPA fallback: any /app/* URL not matching a real file in dist/app/ serves
+# the app's index.html so client-side routing works after deep-linking and
+# reloads. Real assets under /app/_astro/*, /app/sw.js, /app/manifest.* etc.
+# match files first and are served directly; the rewrite only fires for
+# URLs the static layer couldn't resolve.
+/app/*  /app/index.html  200

@@ -1,0 +1,129 @@
+/* Tricho design tokens — light + dark.
+ * See ui-prototype/tricho-north-star.md §3 for the rules.
+ * Components MUST consume tokens (var(--ink), var(--surface), …);
+ * raw hex literals outside this file are a design-system violation.
+ */
+
+:root {
+  /* Backgrounds & paper */
+  --stage: #F3EDE0;
+  --bg: #FDFAF3;
+  --surface: #FFFFFE;
+  --surface-2: #FAF5EC;
+  --line: #EBE4D5;
+  --line-soft: #F2ECE0;
+
+  /* Ink */
+  --ink: #1C1917;
+  --ink-espresso: #2A231B;
+  --ink-2: #44403C;
+  --ink-3: #736D64;
+  --ink-4: #9F9990;
+
+  /* State (cool) */
+  --teal: #0E7490;
+  --teal-strong: #134E5E;
+  --teal-tint: rgba(14, 116, 144, 0.06);
+  --teal-border: rgba(14, 116, 144, 0.22);
+
+  /* Annotation (warm) */
+  --copper: #B06E52;
+  --copper-mid: #9A5E44;
+  --copper-tint: rgba(176, 110, 82, 0.08);
+  --copper-border: rgba(176, 110, 82, 0.32);
+  --amber: #B97940;
+
+  /* Phone frame */
+  --phone-frame: #F8F2E4;
+  --phone-frame-border: #D9D2C3;
+  --phone-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 0 0 1px var(--phone-frame-border),
+    0 2px 4px rgba(69, 48, 28, 0.04),
+    0 24px 48px -12px rgba(69, 48, 28, 0.12),
+    0 40px 80px -20px rgba(14, 116, 144, 0.08);
+
+  /* Effects */
+  --card-shadow:
+    0 1px 2px rgba(69, 48, 28, 0.03),
+    0 4px 12px -4px rgba(69, 48, 28, 0.04);
+  --sheet-shadow: 0 -8px 24px -4px rgba(42, 35, 27, 0.12);
+  --backdrop: rgba(28, 25, 23, 0.32);
+
+  /* Stage gradient */
+  --stage-gradient-1: rgba(176, 110, 82, 0.10);
+  --stage-gradient-2: rgba(14, 116, 144, 0.08);
+
+  /* Paper grain — see base.css for the SVG data URI */
+  --paper-blend: multiply;
+  --paper-opacity: 0.5;
+
+  /* Radii */
+  --radius-chip: 10px;
+  --radius-card: 14px;
+  --radius-panel: 20px;
+  --radius-btn: 12px;
+  --radius-fab: 22px;
+
+  /* Transitions */
+  --t-base: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --t-sheet: 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  --t-hover: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Z scale (see north-star §6.5) */
+  --z-dv-a: 10;
+  --z-top-chrome: 15;
+  --z-chrome-buttons: 16;
+  --z-fab: 25;
+  --z-status-bar: 28;
+  --z-island: 30;
+  --z-backdrop: 40;
+  --z-sheet: 50;
+}
+
+:root[data-theme="dark"] {
+  --stage: #17120E;
+  --bg: #211A15;
+  --surface: #29211B;
+  --surface-2: #32281F;
+  --line: #3E3228;
+  --line-soft: #332921;
+
+  --ink: #F5EDE0;
+  --ink-espresso: #F5EDE0;
+  --ink-2: #D4C8B8;
+  --ink-3: #9D9385;
+  --ink-4: #6F665C;
+
+  --teal: #2494B2;
+  --teal-strong: #5FAFC5;
+  --teal-tint: rgba(36, 148, 178, 0.14);
+  --teal-border: rgba(36, 148, 178, 0.34);
+
+  --copper: #C48867;
+  --copper-mid: #B37959;
+  --copper-tint: rgba(196, 136, 103, 0.10);
+  --copper-border: rgba(196, 136, 103, 0.38);
+  --amber: #D09860;
+
+  --phone-frame: #100C09;
+  --phone-frame-border: #2A211B;
+  --phone-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 0 0 1px var(--phone-frame-border),
+    0 2px 4px rgba(0, 0, 0, 0.20),
+    0 24px 48px -12px rgba(0, 0, 0, 0.40),
+    0 40px 80px -20px rgba(0, 0, 0, 0.30);
+
+  --card-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 4px 12px -4px rgba(0, 0, 0, 0.28);
+  --sheet-shadow: 0 -8px 24px -4px rgba(0, 0, 0, 0.40);
+  --backdrop: rgba(0, 0, 0, 0.50);
+
+  --stage-gradient-1: rgba(212, 147, 113, 0.06);
+  --stage-gradient-2: rgba(90, 184, 212, 0.05);
+
+  --paper-blend: screen;
+  --paper-opacity: 0.45;
+}

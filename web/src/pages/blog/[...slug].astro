@@ -1,0 +1,57 @@
+---
+import { getCollection, type CollectionEntry } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  return posts.map((post) => ({ params: { slug: post.slug }, props: { post } }));
+}
+
+interface Props { post: CollectionEntry<'blog'>; }
+const { post } = Astro.props;
+const { Content } = await post.render();
+
+const fmt = (d: Date) => new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'long' }).format(d);
+
+const articleJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.date.toISOString(),
+  dateModified: (post.data.updated ?? post.data.date).toISOString(),
+  author: { '@type': 'Organization', name: 'Tricho' },
+  image: post.data.ogImage
+    ? `https://tricho.app${post.data.ogImage}`
+    : `https://tricho.app/og/blog/${post.slug}.png`,
+};
+---
+
+<Base
+  title={`${post.data.title} — Tricho`}
+  description={post.data.description}
+  ogType="article"
+  ogImage={post.data.ogImage ?? `/og/blog/${post.slug}.png`}
+  jsonLd={[articleJsonLd]}
+>
+  <SiteHeader />
+
+  <main>
+    <article>
+      <h1>{post.data.title}</h1>
+      <p class="subhead">
+        <time datetime={post.data.date.toISOString()}>{fmt(post.data.date)}</time>
+        {post.data.tags.length > 0 && <span> · {post.data.tags.join(' · ')}</span>}
+      </p>
+      <Content />
+    </article>
+
+    <p style="margin-top: 48px;">
+      <a href="/blog" class="btn btn--ghost">← Všechny posty</a>
+    </p>
+  </main>
+
+  <SiteFooter />
+</Base>

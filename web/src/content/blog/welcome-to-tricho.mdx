@@ -1,0 +1,47 @@
+---
+title: "Vítej v Tricho"
+description: "Krátký úvod do toho, co Tricho je a jak ti pomůže vést diář klientů, který nikdo jiný nepřečte."
+date: 2026-04-26
+tags: ["úvod", "diář"]
+---
+
+Tricho je šifrovaný diář a CRM pro lidi, kteří se starají o vlasy a pokožku
+hlavy klientů. Trichology, kadeřníky, pokožkové specialisty. Profese, ve
+kterých se sbírají citlivé poznámky a fotografie a kde je férové vůči
+klientovi, aby tato data nikam jinam neutekla.
+
+## Co je tady jiné než u běžných CRM
+
+Většina cloudových CRM nahrává všechno na server v plain textu. Provozovatel
+to vidí. Provider databáze to vidí. Když se k těm databázím dostane někdo,
+kdo neměl, vidí to taky. „Šifrované" obvykle znamená „šifrované při přenosu" —
+ne „šifrované tak, že to ani my nepřečteme".
+
+Tricho je opačné: data se šifrují **přímo v zařízení** klíčem, který nikdy
+neopustí tvůj prohlížeč. Server vidí jen šifrovaný binární proud. To se
+běžně označuje jako **zero-knowledge** architektura.
+
+## Co to znamená v praxi
+
+- Při prvním otevření si **uložíš Recovery Secret** — 12-znakový klíč v
+  podobě QR kódu. Tenhle klíč je jediná cesta zpět, pokud ztratíš všechna
+  zařízení a zapomeneš biometrii.
+- Druhé zařízení přidáš jednoduše — nascanuješ ten samý QR kód a další
+  iPad nebo telefon ti začne sám stahovat data.
+- Záloha je jeden ZIP soubor. Šifrovaný stejným klíčem. Ulož ho na
+  externí disk, do iCloudu, do trezoru — kamkoli ti to dává smysl.
+
+## Co Tricho neumí (a nikdy nebude)
+
+- **Sdílet data s kýmkoli jiným.** Tricho je osobní diář. Pokud potřebuješ
+  sdílení s týmem, není to pro tebe.
+- **„Reset hesla na e-mail."** Žádné heslo neexistuje. Je biometrie nebo
+  Recovery Secret.
+- **Posílat statistiky tvého chování kamkoli.** Stránka, kterou právě
+  čteš, neví, kdo jsi.
+
+## Kde začít
+
+[Otevři aplikaci](/app/) a projdi tří-krokovým průvodcem. Trvá to čtyři
+minuty a po dokončení máš diář, který funguje offline a nikdo jiný do něj
+nemá přístup.
