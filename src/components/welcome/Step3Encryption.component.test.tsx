@@ -70,7 +70,7 @@ describe('Step3Encryption — new flow', () => {
   function renderNew(substep: 'qr' | 'verify' | 'webauthn', overrides: Partial<Parameters<typeof Step3Encryption>[0]> = {}) {
     const onAdvanceSubstep = vi.fn();
     const onCreateVault = vi.fn().mockResolvedValue({ vaultId: 'vault-x' });
-    const onRegisterPasskey = vi.fn().mockResolvedValue(undefined);
+    const onRegisterPasskey = vi.fn().mockResolvedValue({ prfSupported: true });
     const onCompleted = vi.fn();
     const setGeneratedRs = vi.fn();
     const result = render(
@@ -82,6 +82,8 @@ describe('Step3Encryption — new flow', () => {
         onAdvanceSubstep={onAdvanceSubstep}
         onCreateVault={onCreateVault}
         onRegisterPasskey={onRegisterPasskey}
+        onSetupPin={vi.fn().mockResolvedValue(undefined)}
+        onAdvanceToPinSetup={vi.fn()}
         onJoinWithRs={vi.fn()}
         onCompleted={onCompleted}
         {...overrides}
@@ -145,7 +147,7 @@ describe('Step3Encryption — existing flow', () => {
   ) {
     const onAdvanceSubstep = vi.fn();
     const onJoinWithRs = vi.fn().mockResolvedValue({ ok: true, vaultId: 'vault-y' });
-    const onRegisterPasskey = vi.fn().mockResolvedValue(undefined);
+    const onRegisterPasskey = vi.fn().mockResolvedValue({ prfSupported: true });
     const onCompleted = vi.fn();
     const setGeneratedRs = vi.fn();
     const result = render(
@@ -158,6 +160,8 @@ describe('Step3Encryption — existing flow', () => {
         onJoinWithRs={onJoinWithRs}
         onCreateVault={vi.fn()}
         onRegisterPasskey={onRegisterPasskey}
+        onSetupPin={vi.fn().mockResolvedValue(undefined)}
+        onAdvanceToPinSetup={vi.fn()}
         onCompleted={onCompleted}
         {...overrides}
       />,
@@ -218,6 +222,51 @@ describe('Step3Encryption — existing flow', () => {
     renderExisting('webauthn');
     expect(screen.getByText(/Klíč rozpoznán/)).toBeInTheDocument();
     expect(screen.getByTestId('wizard-webauthn-activate')).toBeInTheDocument();
+  });
+});
+
+describe('Step3Encryption — restore-zip flow', () => {
+  function renderRestoreZip(
+    substep: 'pick-zip' | 'verify-rs' | 'webauthn',
+    overrides: Partial<Parameters<typeof Step3Encryption>[0]> = {},
+  ) {
+    const onAdvanceSubstep = vi.fn();
+    const onRestoreFromZip = vi.fn();
+    const onRegisterPasskey = vi.fn().mockResolvedValue({ prfSupported: true });
+    const onCompleted = vi.fn();
+    const result = render(
+      <Step3Encryption
+        flow="restore-zip"
+        substep={substep}
+        generatedRs={null}
+        setGeneratedRs={vi.fn()}
+        onAdvanceSubstep={onAdvanceSubstep}
+        onJoinWithRs={vi.fn()}
+        onCreateVault={vi.fn()}
+        onRegisterPasskey={onRegisterPasskey}
+        onSetupPin={vi.fn().mockResolvedValue(undefined)}
+        onAdvanceToPinSetup={vi.fn()}
+        onRestoreFromZip={onRestoreFromZip}
+        onCompleted={onCompleted}
+        {...overrides}
+      />,
+    );
+    return { ...result, onAdvanceSubstep, onRestoreFromZip, onRegisterPasskey, onCompleted };
+  }
+
+  it('pick-zip substep renders file input with hint when no files chosen', () => {
+    renderRestoreZip('pick-zip');
+    expect(screen.getByTestId('wizard-restore-pick-zip')).toBeInTheDocument();
+    expect(screen.getByTestId('wizard-restore-pick-input')).toBeInTheDocument();
+    expect(screen.getByTestId('wizard-restore-pick-hint')).toBeInTheDocument();
+    const continueBtn = screen.getByTestId('wizard-restore-pick-continue') as HTMLButtonElement;
+    expect(continueBtn.disabled).toBe(true);
+  });
+
+  it('verify-rs substep renders RS textarea + submit', () => {
+    renderRestoreZip('verify-rs');
+    expect(screen.getByTestId('wizard-restore-verify-rs')).toBeInTheDocument();
+    expect(screen.getByTestId('wizard-restore-verify-input')).toBeInTheDocument();
   });
 });
 

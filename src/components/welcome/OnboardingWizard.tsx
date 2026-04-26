@@ -18,6 +18,7 @@ import { Step1Install } from './Step1Install';
 import { Step2SignIn } from './Step2SignIn';
 import { Step3Encryption } from './Step3Encryption';
 import { FinalCard } from './FinalCard';
+import { PlanPreviewCard } from './PlanPreviewCard';
 import type { RecoverySecretResult } from '../../auth/recovery';
 
 export interface OnboardingWizardProps {
@@ -33,7 +34,25 @@ export interface OnboardingWizardProps {
   onJoinWithRs: (
     rs: RecoverySecretResult,
   ) => Promise<{ ok: true; vaultId: string } | { ok: false; reason: 'wrong-key' | 'invalid' }>;
-  onRegisterPasskey: (vaultId: string) => Promise<void>;
+  /** Returns `prfSupported` so the wizard can decide between completing
+   *  Step 3 (PRF biometric path) or routing to the `pin-setup` substep
+   *  (non-PRF authenticator). */
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+  /** Wraps the in-memory DEK under a PIN-derived KEK and persists
+   *  `wrappedDekPin` + `pinSalt` on the local vault-state record. Called
+   *  from the `pin-setup` substep. */
+  onSetupPin: (vaultId: string, pin: string) => Promise<void>;
+  /** Restore-zip flow callback: takes picked ZIP files + the user's RS,
+   *  creates a local vault from the ZIP's vaultId, applies bytes, and
+   *  returns the new vaultId on success. Optional — when absent, the
+   *  "Mám zálohovací ZIP" affordance is hidden. */
+  onRestoreFromZip?: (
+    files: File[],
+    rs: Uint8Array,
+  ) => Promise<{ ok: true; vaultId: string } | { ok: false; reason: string }>;
+  /** Inline OAuth error to surface on Step 2. Set when the OAuth callback
+   *  returned `OAuthResult.error`. */
+  oauthError?: 'provider-cancelled' | 'provider-error' | 'device-blocked' | null;
   /** Final-state CTA: AppShell transitions to the unlocked app. */
   onUnlocked: () => void;
 
@@ -54,6 +73,9 @@ export function OnboardingWizard({
   onCreateVault,
   onJoinWithRs,
   onRegisterPasskey,
+  onSetupPin,
+  onRestoreFromZip,
+  oauthError,
   onUnlocked,
   detectLaunchModeOverride,
   detectBrowserOverride,
@@ -164,6 +186,7 @@ export function OnboardingWizard({
   return (
     <div className="welcome-stage" data-launch-mode={state.launchMode}>
       <Brand />
+      <PlanPreviewCard />
       <div
         className="aria-live-region"
         role="status"
@@ -194,7 +217,9 @@ export function OnboardingWizard({
           kicker={m.wizard_step2_kicker()}
           title={m.wizard_step2_title()}
         >
-          {!isBrowser && state.currentStep === 2 && <Step2SignIn />}
+          {!isBrowser && state.currentStep === 2 && (
+            <Step2SignIn oauthError={oauthError ?? null} />
+          )}
         </StepCard>
 
         <StepCard
@@ -216,6 +241,14 @@ export function OnboardingWizard({
               onJoinWithRs={onJoinWithRs}
               onCreateVault={onCreateVault}
               onRegisterPasskey={onRegisterPasskey}
+              onSetupPin={onSetupPin}
+              onAdvanceToPinSetup={() => dispatch({ type: 'ADVANCE_TO_PIN_SETUP' })}
+              onSwitchToRestoreZip={
+                onRestoreFromZip
+                  ? () => dispatch({ type: 'SET_FLOW', flow: 'restore-zip' })
+                  : undefined
+              }
+              onRestoreFromZip={onRestoreFromZip}
               onCompleted={() => dispatch({ type: 'COMPLETE_STEP_3' })}
             />
           )}

@@ -17,8 +17,8 @@
 import type { LaunchMode } from '../../lib/launch-mode';
 
 export type WizardCurrentStep = 1 | 2 | 3 | 'final';
-export type Flow = 'new' | 'existing';
-export type Substep = 'qr' | 'verify' | 'webauthn';
+export type Flow = 'new' | 'existing' | 'restore-zip';
+export type Substep = 'qr' | 'verify' | 'webauthn' | 'pin-setup' | 'pick-zip' | 'verify-rs';
 export type Provider = 'apple' | 'google';
 
 export interface WizardState {
@@ -40,6 +40,7 @@ export type WizardAction =
   | { type: 'SET_FLOW'; flow: Flow }
   | { type: 'ADVANCE_SUBSTEP'; substep: Substep }
   | { type: 'BACK_SUBSTEP'; target: Substep }
+  | { type: 'ADVANCE_TO_PIN_SETUP' }
   | { type: 'COMPLETE_STEP_3' }
   | { type: 'RESET' };
 
@@ -101,15 +102,28 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     }
 
     case 'SET_FLOW': {
-      // Flow is auto-selected once when entering Step 3. Subsequent
-      // SET_FLOW actions are ignored to prevent UI from overriding the
-      // server-probe-based decision.
+      // Flow is auto-selected when entering Step 3 (`new` vs `existing` from
+      // the server probe). The user MAY also switch from `existing` to
+      // `restore-zip` via a quiet linked-text affordance. Other switches
+      // (e.g. trying to reset back to `new` after auto-selecting `existing`)
+      // are ignored — the dispatcher trusts the server probe.
       if (state.currentStep !== 3) return state;
       if (state.step3.flow === action.flow) return state;
-      // Reset substep to 'qr' on flow change so the user starts fresh.
+      const isInitialFromNewToExisting =
+        state.step3.flow === 'new' && action.flow === 'existing';
+      const isExistingToRestore =
+        state.step3.flow === 'existing' && action.flow === 'restore-zip';
+      if (!isInitialFromNewToExisting && !isExistingToRestore) return state;
+      // Reset substep to the entry point of the new flow.
+      const entrySubstep: Substep = action.flow === 'restore-zip' ? 'pick-zip' : 'qr';
       return {
         ...state,
-        step3: { ...state.step3, flow: action.flow, substep: 'qr', completed: false },
+        step3: {
+          ...state.step3,
+          flow: action.flow,
+          substep: entrySubstep,
+          completed: false,
+        },
       };
     }
 
@@ -138,12 +152,27 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       };
     }
 
+    case 'ADVANCE_TO_PIN_SETUP': {
+      // Reachable only from webauthn substep, after registerPasskey reports
+      // `prfSupported: false`. Adds a terminal PIN-setup substep before the
+      // wizard moves on to the final card.
+      if (state.launchMode === 'browser') return state;
+      if (state.currentStep !== 3) return state;
+      if (state.step3.substep !== 'webauthn') return state;
+      return {
+        ...state,
+        step3: { ...state.step3, substep: 'pin-setup' },
+      };
+    }
+
     case 'COMPLETE_STEP_3': {
       if (state.launchMode === 'browser') return state;
       if (state.currentStep !== 3) return state;
-      // The webauthn substep is the only place this action can fire from
-      // (both flows). Anything else is a programmer error.
-      if (state.step3.substep !== 'webauthn') return state;
+      // Allowed terminal substeps: `webauthn` (PRF-capable authenticator) or
+      // `pin-setup` (non-PRF authenticator that fell through to PIN).
+      if (state.step3.substep !== 'webauthn' && state.step3.substep !== 'pin-setup') {
+        return state;
+      }
       return {
         ...state,
         step3: { ...state.step3, completed: true },
@@ -163,6 +192,12 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 function isValidForwardTransition(flow: Flow, from: Substep, to: Substep): boolean {
   if (flow === 'new') {
     return (from === 'qr' && to === 'verify') || (from === 'verify' && to === 'webauthn');
+  }
+  if (flow === 'restore-zip') {
+    return (
+      (from === 'pick-zip' && to === 'verify-rs') ||
+      (from === 'verify-rs' && to === 'webauthn')
+    );
   }
   // existing-flow: qr → webauthn directly (no verify substep).
   return from === 'qr' && to === 'webauthn';

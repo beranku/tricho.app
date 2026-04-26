@@ -220,6 +220,78 @@ describe('RESET', () => {
   });
 });
 
+describe('Step 3 — restore-zip flow', () => {
+  it('does not auto-select; requires explicit SET_FLOW from existing', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    expect(s.step3.flow).toBe('new');
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'existing' });
+    expect(s.step3.flow).toBe('existing');
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'restore-zip' });
+    expect(s.step3.flow).toBe('restore-zip');
+    expect(s.step3.substep).toBe('pick-zip');
+  });
+
+  it('does not allow new → restore-zip directly', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'restore-zip' });
+    expect(s.step3.flow).toBe('new');
+  });
+
+  it('advances pick-zip → verify-rs → webauthn', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'existing' });
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'restore-zip' });
+    s = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'verify-rs' });
+    expect(s.step3.substep).toBe('verify-rs');
+    s = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'webauthn' });
+    expect(s.step3.substep).toBe('webauthn');
+  });
+
+  it('rejects pick-zip → webauthn (must go through verify-rs)', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'existing' });
+    s = wizardReducer(s, { type: 'SET_FLOW', flow: 'restore-zip' });
+    const next = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'webauthn' });
+    expect(next.step3.substep).toBe('pick-zip');
+  });
+});
+
+describe('ADVANCE_TO_PIN_SETUP — non-PRF terminal substep', () => {
+  it('advances from webauthn to pin-setup', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    s = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'verify' });
+    s = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'webauthn' });
+    s = wizardReducer(s, { type: 'ADVANCE_TO_PIN_SETUP' });
+    expect(s.step3.substep).toBe('pin-setup');
+    expect(s.currentStep).toBe(3);
+    expect(s.step3.completed).toBe(false);
+  });
+
+  it('rejects ADVANCE_TO_PIN_SETUP from non-webauthn substeps', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    // qr substep
+    const next = wizardReducer(s, { type: 'ADVANCE_TO_PIN_SETUP' });
+    expect(next.step3.substep).toBe('qr');
+  });
+
+  it('COMPLETE_STEP_3 fires from pin-setup terminal substep', () => {
+    let s = pwa();
+    s = wizardReducer(s, { type: 'AUTHENTICATE', provider: 'apple' });
+    s = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'verify' });
+    s = wizardReducer(s, { type: 'ADVANCE_SUBSTEP', substep: 'webauthn' });
+    s = wizardReducer(s, { type: 'ADVANCE_TO_PIN_SETUP' });
+    s = wizardReducer(s, { type: 'COMPLETE_STEP_3' });
+    expect(s.currentStep).toBe('final');
+    expect(s.step3.completed).toBe(true);
+  });
+});
+
 describe('Browser-mode floor (the PWA-storage-origin invariant)', () => {
   it('no action chain advances currentStep past 1 in browser mode', () => {
     let s = browser();

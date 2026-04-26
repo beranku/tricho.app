@@ -6,7 +6,8 @@ import { OnboardingWizard, type OnboardingWizardProps } from './OnboardingWizard
 const noop = (() => {}) as () => void;
 const noopAsync = vi.fn().mockResolvedValue({ vaultId: 'vault-test' });
 const noopJoin = vi.fn().mockResolvedValue({ ok: true, vaultId: 'vault-test' });
-const noopRegister = vi.fn().mockResolvedValue(undefined);
+const noopRegister = vi.fn().mockResolvedValue({ prfSupported: true });
+const noopSetupPin = vi.fn().mockResolvedValue(undefined);
 
 function renderWizard(overrides: Partial<OnboardingWizardProps> = {}) {
   const props: OnboardingWizardProps = {
@@ -15,6 +16,7 @@ function renderWizard(overrides: Partial<OnboardingWizardProps> = {}) {
     onCreateVault: noopAsync,
     onJoinWithRs: noopJoin,
     onRegisterPasskey: noopRegister,
+    onSetupPin: noopSetupPin,
     onUnlocked: noop,
     detectLaunchModeOverride: () => 'pwa',
     detectBrowserOverride: () => 'ios',
@@ -213,7 +215,8 @@ describe('Final card', () => {
         hasServerVaultState={false}
         onCreateVault={vi.fn().mockResolvedValue({ vaultId: 'v' })}
         onJoinWithRs={vi.fn().mockResolvedValue({ ok: true, vaultId: 'v' })}
-        onRegisterPasskey={vi.fn().mockResolvedValue(undefined)}
+        onRegisterPasskey={vi.fn().mockResolvedValue({ prfSupported: true })}
+        onSetupPin={vi.fn().mockResolvedValue(undefined)}
         onUnlocked={onUnlocked}
         detectLaunchModeOverride={() => 'pwa'}
         detectBrowserOverride={() => 'ios'}

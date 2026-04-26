@@ -14,8 +14,8 @@ interface StepCardProps {
   /** Body content; only rendered while `state === 'active'`. */
   children?: React.ReactNode;
   /** data-* attributes for CSS-driven flow / substep styling. */
-  flow?: 'new' | 'existing';
-  substep?: 'qr' | 'verify' | 'webauthn';
+  flow?: 'new' | 'existing' | 'restore-zip';
+  substep?: 'qr' | 'verify' | 'webauthn' | 'pin-setup' | 'pick-zip' | 'verify-rs';
 }
 
 /**

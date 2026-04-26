@@ -81,6 +81,10 @@ export interface OAuthResult {
     refreshToken: string;
     refreshTokenExp: number;
   } | null;
+  /** Optional error class set by the auth-proxy callback when OAuth didn't
+   *  succeed cleanly. The wizard surfaces a humanised message inline on
+   *  Step 2 instead of silently routing back to Step 1. */
+  error?: 'provider-cancelled' | 'provider-error' | 'device-blocked';
 }
 
 export function getAuthOrigin(): string {
@@ -125,6 +129,42 @@ export async function logout(refreshToken?: string): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ refreshToken: refreshToken ?? null }),
   }).catch(() => void 0);
+}
+
+/**
+ * Two-step account deletion. Step 1: confirm — server returns a single-use
+ * token. Step 2: delete — server revokes refresh tokens, deletes the
+ * per-user CouchDB account, deletes the subscription doc.
+ *
+ * Both calls require a JWT with `iat` within the last 5 minutes; older
+ * JWTs are rejected with 401 `stale_jwt`. Idempotent on the server side.
+ */
+export interface DeleteAccountResult {
+  ok: boolean;
+  reason?: 'stale_jwt' | 'not_found' | 'server_error';
+}
+
+export async function deleteAccount(jwt: string): Promise<DeleteAccountResult> {
+  try {
+    const confirm = await fetch(`${AUTH_ORIGIN}/auth/account/delete-confirm`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    if (confirm.status === 401) return { ok: false, reason: 'stale_jwt' };
+    if (!confirm.ok) return { ok: false, reason: 'server_error' };
+    const { token } = (await confirm.json()) as { token: string };
+    const del = await fetch(`${AUTH_ORIGIN}/auth/account/delete`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (del.status === 401) return { ok: false, reason: 'stale_jwt' };
+    if (!del.ok) return { ok: false, reason: 'server_error' };
+    return { ok: true };
+  } catch (err) {
+    console.error('[oauth.deleteAccount] failed', err);
+    return { ok: false, reason: 'server_error' };
+  }
 }
 
 export async function refreshTokens(refreshToken: string, deviceId: string): Promise<{

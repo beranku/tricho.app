@@ -9,6 +9,7 @@ import {
 import { Step3DownloadQr } from './Step3DownloadQr';
 import { Step3VerifyInput } from './Step3VerifyInput';
 import { Step3QrDecoder } from './Step3QrDecoder';
+import { PinSetupScreen } from '../PinSetupScreen';
 import type { Flow, Substep } from './wizard-state';
 import { m } from '../../i18n';
 
@@ -29,8 +30,27 @@ interface Step3EncryptionProps {
   /** New-flow webauthn step: create the local vault from RS, return vaultId. */
   onCreateVault: (rs: Uint8Array) => Promise<{ vaultId: string }>;
 
-  /** Both flows: register the passkey on the vault. */
-  onRegisterPasskey: (vaultId: string) => Promise<void>;
+  /** Both flows: register the passkey on the vault. Returns the registration
+   *  result so the wizard can branch on PRF support. */
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+
+  /** PIN-setup substep: wraps the in-memory DEK with a PBKDF2-derived KEK
+   *  and persists `wrappedDekPin` + `pinSalt`. */
+  onSetupPin: (vaultId: string, pin: string) => Promise<void>;
+
+  /** Called when registration succeeded but PRF is not supported — wizard
+   *  routes through the `pin-setup` substep before completing. */
+  onAdvanceToPinSetup: () => void;
+
+  /** Existing flow only: switch the user from the RS-typed branch to the
+   *  ZIP-restore branch. The wizard dispatches `SET_FLOW: 'restore-zip'`. */
+  onSwitchToRestoreZip?: () => void;
+
+  /** Restore-zip flow callbacks. */
+  onRestoreFromZip?: (
+    files: File[],
+    rs: Uint8Array,
+  ) => Promise<{ ok: true; vaultId: string } | { ok: false; reason: string }>;
 
   /** Called once everything is wired and the wizard should advance to final. */
   onCompleted: () => void;
@@ -45,6 +65,10 @@ export function Step3Encryption({
   onJoinWithRs,
   onCreateVault,
   onRegisterPasskey,
+  onSetupPin,
+  onAdvanceToPinSetup,
+  onSwitchToRestoreZip,
+  onRestoreFromZip,
   onCompleted,
 }: Step3EncryptionProps): JSX.Element {
   // For the new flow we generate the RS exactly once when the substep
@@ -67,7 +91,24 @@ export function Step3Encryption({
         onAdvanceSubstep={onAdvanceSubstep}
         onCreateVault={onCreateVault}
         onRegisterPasskey={onRegisterPasskey}
+        onSetupPin={onSetupPin}
+        onAdvanceToPinSetup={onAdvanceToPinSetup}
         onCompleted={onCompleted}
+      />
+    );
+  }
+  if (flow === 'restore-zip') {
+    return (
+      <RestoreZipFlow
+        substep={substep}
+        onAdvanceSubstep={onAdvanceSubstep}
+        onRestoreFromZip={onRestoreFromZip}
+        onRegisterPasskey={onRegisterPasskey}
+        onSetupPin={onSetupPin}
+        onAdvanceToPinSetup={onAdvanceToPinSetup}
+        onCompleted={onCompleted}
+        joinedVaultId={joinedVaultId}
+        setJoinedVaultId={setJoinedVaultId}
       />
     );
   }
@@ -77,9 +118,12 @@ export function Step3Encryption({
       onAdvanceSubstep={onAdvanceSubstep}
       onJoinWithRs={onJoinWithRs}
       onRegisterPasskey={onRegisterPasskey}
+      onSetupPin={onSetupPin}
+      onAdvanceToPinSetup={onAdvanceToPinSetup}
       onCompleted={onCompleted}
       joinedVaultId={joinedVaultId}
       setJoinedVaultId={setJoinedVaultId}
+      onSwitchToRestoreZip={onSwitchToRestoreZip}
     />
   );
 }
@@ -91,7 +135,9 @@ interface NewFlowProps {
   generatedRs: RecoverySecretResult | null;
   onAdvanceSubstep: (substep: Substep) => void;
   onCreateVault: (rs: Uint8Array) => Promise<{ vaultId: string }>;
-  onRegisterPasskey: (vaultId: string) => Promise<void>;
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+  onSetupPin: (vaultId: string, pin: string) => Promise<void>;
+  onAdvanceToPinSetup: () => void;
   onCompleted: () => void;
 }
 
@@ -101,8 +147,14 @@ function NewFlow({
   onAdvanceSubstep,
   onCreateVault,
   onRegisterPasskey,
+  onSetupPin,
+  onAdvanceToPinSetup,
   onCompleted,
 }: NewFlowProps): JSX.Element {
+  // The webauthn substep records the registered vaultId so the optional
+  // pin-setup substep can wrap the DEK against that vault.
+  const [registeredVaultId, setRegisteredVaultId] = useState<string | null>(null);
+
   if (!generatedRs) {
     // Brief flash before the useEffect generates the RS — render nothing
     // rather than a placeholder.
@@ -119,12 +171,24 @@ function NewFlow({
     return <NewFlowVerify rs={generatedRs} onAdvanceSubstep={onAdvanceSubstep} />;
   }
 
+  if (substep === 'pin-setup') {
+    return (
+      <PinSetupTerminal
+        vaultId={registeredVaultId}
+        onSetupPin={onSetupPin}
+        onCompleted={onCompleted}
+      />
+    );
+  }
+
   return (
     <NewFlowWebAuthn
       rs={generatedRs}
       onCreateVault={onCreateVault}
       onRegisterPasskey={onRegisterPasskey}
+      onAdvanceToPinSetup={onAdvanceToPinSetup}
       onCompleted={onCompleted}
+      onRegistered={setRegisteredVaultId}
     />
   );
 }
@@ -173,15 +237,19 @@ function NewFlowVerify({ rs, onAdvanceSubstep }: NewFlowVerifyProps): JSX.Elemen
 interface NewFlowWebAuthnProps {
   rs: RecoverySecretResult;
   onCreateVault: (rs: Uint8Array) => Promise<{ vaultId: string }>;
-  onRegisterPasskey: (vaultId: string) => Promise<void>;
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+  onAdvanceToPinSetup: () => void;
   onCompleted: () => void;
+  onRegistered: (vaultId: string) => void;
 }
 
 function NewFlowWebAuthn({
   rs,
   onCreateVault,
   onRegisterPasskey,
+  onAdvanceToPinSetup,
   onCompleted,
+  onRegistered,
 }: NewFlowWebAuthnProps): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,15 +259,20 @@ function NewFlowWebAuthn({
     setError(null);
     try {
       const { vaultId } = await onCreateVault(rs.raw);
-      await onRegisterPasskey(vaultId);
-      onCompleted();
+      const { prfSupported } = await onRegisterPasskey(vaultId);
+      onRegistered(vaultId);
+      if (prfSupported) {
+        onCompleted();
+      } else {
+        onAdvanceToPinSetup();
+      }
     } catch (err) {
       console.error('[Step3 new webauthn] failed', err);
       setError(m.wizard_step3_new_webauthn_failed());
     } finally {
       setBusy(false);
     }
-  }, [rs, onCreateVault, onRegisterPasskey, onCompleted]);
+  }, [rs, onCreateVault, onRegisterPasskey, onAdvanceToPinSetup, onCompleted, onRegistered]);
 
   return (
     <div>
@@ -228,10 +301,13 @@ interface ExistingFlowProps {
   substep: Substep;
   onAdvanceSubstep: (substep: Substep) => void;
   onJoinWithRs: (rs: RecoverySecretResult) => Promise<{ ok: true; vaultId: string } | { ok: false; reason: 'wrong-key' | 'invalid' }>;
-  onRegisterPasskey: (vaultId: string) => Promise<void>;
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+  onSetupPin: (vaultId: string, pin: string) => Promise<void>;
+  onAdvanceToPinSetup: () => void;
   onCompleted: () => void;
   joinedVaultId: string | null;
   setJoinedVaultId: (id: string) => void;
+  onSwitchToRestoreZip?: () => void;
 }
 
 function ExistingFlow({
@@ -239,9 +315,12 @@ function ExistingFlow({
   onAdvanceSubstep,
   onJoinWithRs,
   onRegisterPasskey,
+  onSetupPin,
+  onAdvanceToPinSetup,
   onCompleted,
   joinedVaultId,
   setJoinedVaultId,
+  onSwitchToRestoreZip,
 }: ExistingFlowProps): JSX.Element {
   if (substep === 'qr') {
     return (
@@ -249,6 +328,17 @@ function ExistingFlow({
         onAdvanceSubstep={onAdvanceSubstep}
         onJoinWithRs={onJoinWithRs}
         setJoinedVaultId={setJoinedVaultId}
+        onSwitchToRestoreZip={onSwitchToRestoreZip}
+      />
+    );
+  }
+
+  if (substep === 'pin-setup') {
+    return (
+      <PinSetupTerminal
+        vaultId={joinedVaultId}
+        onSetupPin={onSetupPin}
+        onCompleted={onCompleted}
       />
     );
   }
@@ -257,6 +347,7 @@ function ExistingFlow({
     <ExistingFlowWebAuthn
       vaultId={joinedVaultId}
       onRegisterPasskey={onRegisterPasskey}
+      onAdvanceToPinSetup={onAdvanceToPinSetup}
       onCompleted={onCompleted}
     />
   );
@@ -266,12 +357,14 @@ interface ExistingFlowQrProps {
   onAdvanceSubstep: (substep: Substep) => void;
   onJoinWithRs: ExistingFlowProps['onJoinWithRs'];
   setJoinedVaultId: (id: string) => void;
+  onSwitchToRestoreZip?: () => void;
 }
 
 function ExistingFlowQr({
   onAdvanceSubstep,
   onJoinWithRs,
   setJoinedVaultId,
+  onSwitchToRestoreZip,
 }: ExistingFlowQrProps): JSX.Element {
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
@@ -359,19 +452,32 @@ function ExistingFlowQr({
       >
         {m.wizard_step3_existing_qr_submit()}
       </button>
+      {onSwitchToRestoreZip && !manual.trim() && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--block"
+          style={{ marginTop: 8, fontSize: 13 }}
+          onClick={onSwitchToRestoreZip}
+          data-testid="wizard-existing-switch-to-zip"
+        >
+          {m.wizard_step3_existing_haveZip()}
+        </button>
+      )}
     </div>
   );
 }
 
 interface ExistingFlowWebAuthnProps {
   vaultId: string | null;
-  onRegisterPasskey: (vaultId: string) => Promise<void>;
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+  onAdvanceToPinSetup: () => void;
   onCompleted: () => void;
 }
 
 function ExistingFlowWebAuthn({
   vaultId,
   onRegisterPasskey,
+  onAdvanceToPinSetup,
   onCompleted,
 }: ExistingFlowWebAuthnProps): JSX.Element {
   const [busy, setBusy] = useState(false);
@@ -385,15 +491,19 @@ function ExistingFlowWebAuthn({
     setBusy(true);
     setError(null);
     try {
-      await onRegisterPasskey(vaultId);
-      onCompleted();
+      const { prfSupported } = await onRegisterPasskey(vaultId);
+      if (prfSupported) {
+        onCompleted();
+      } else {
+        onAdvanceToPinSetup();
+      }
     } catch (err) {
       console.error('[Step3 existing webauthn] failed', err);
       setError(m.wizard_step3_existing_webauthn_failed());
     } finally {
       setBusy(false);
     }
-  }, [vaultId, onRegisterPasskey, onCompleted]);
+  }, [vaultId, onRegisterPasskey, onAdvanceToPinSetup, onCompleted]);
 
   return (
     <div>
@@ -415,6 +525,257 @@ function ExistingFlowWebAuthn({
         </p>
       )}
     </div>
+  );
+}
+
+/* ── Restore-from-ZIP flow ─────────────────────────────────────────── */
+
+interface RestoreZipFlowProps {
+  substep: Substep;
+  onAdvanceSubstep: (substep: Substep) => void;
+  onRestoreFromZip?: (
+    files: File[],
+    rs: Uint8Array,
+  ) => Promise<{ ok: true; vaultId: string } | { ok: false; reason: string }>;
+  onRegisterPasskey: (vaultId: string) => Promise<{ prfSupported: boolean }>;
+  onSetupPin: (vaultId: string, pin: string) => Promise<void>;
+  onAdvanceToPinSetup: () => void;
+  onCompleted: () => void;
+  joinedVaultId: string | null;
+  setJoinedVaultId: (id: string) => void;
+}
+
+function RestoreZipFlow({
+  substep,
+  onAdvanceSubstep,
+  onRestoreFromZip,
+  onRegisterPasskey,
+  onSetupPin,
+  onAdvanceToPinSetup,
+  onCompleted,
+  joinedVaultId,
+  setJoinedVaultId,
+}: RestoreZipFlowProps): JSX.Element {
+  const [files, setFiles] = useState<File[]>([]);
+
+  if (substep === 'pick-zip') {
+    return (
+      <PickZipPanel
+        files={files}
+        setFiles={setFiles}
+        onContinue={() => onAdvanceSubstep('verify-rs')}
+      />
+    );
+  }
+
+  if (substep === 'verify-rs') {
+    return (
+      <VerifyRsForZipPanel
+        files={files}
+        onRestoreFromZip={onRestoreFromZip}
+        onRestored={(vaultId) => {
+          setJoinedVaultId(vaultId);
+          onAdvanceSubstep('webauthn');
+        }}
+      />
+    );
+  }
+
+  if (substep === 'pin-setup') {
+    return (
+      <PinSetupTerminal
+        vaultId={joinedVaultId}
+        onSetupPin={onSetupPin}
+        onCompleted={onCompleted}
+      />
+    );
+  }
+
+  return (
+    <ExistingFlowWebAuthn
+      vaultId={joinedVaultId}
+      onRegisterPasskey={onRegisterPasskey}
+      onAdvanceToPinSetup={onAdvanceToPinSetup}
+      onCompleted={onCompleted}
+    />
+  );
+}
+
+interface PickZipPanelProps {
+  files: File[];
+  setFiles: (files: File[]) => void;
+  onContinue: () => void;
+}
+
+function PickZipPanel({ files, setFiles, onContinue }: PickZipPanelProps): JSX.Element {
+  const onPick = useCallback(
+    (chosen: FileList | null) => {
+      if (!chosen) return;
+      const arr = Array.from(chosen).filter(
+        (f) => f.name.endsWith('.zip') || f.name.endsWith('.tricho-backup.zip'),
+      );
+      // Sort by filename — typically YYYY-MM.tricho-backup.zip — for chronological order.
+      arr.sort((a, b) => a.name.localeCompare(b.name));
+      setFiles(arr);
+    },
+    [setFiles],
+  );
+
+  return (
+    <div data-testid="wizard-restore-pick-zip">
+      <p className="section-label">{m.wizard_step3_restoreZip_pick_title()}</p>
+      <p style={{ fontSize: 13, color: 'var(--ink-2, rgb(85,85,85))', margin: '0 0 12px' }}>
+        {m.wizard_step3_restoreZip_pick_blurb()}
+      </p>
+      <input
+        type="file"
+        accept=".zip,application/zip"
+        multiple
+        onChange={(e) => onPick(e.target.files)}
+        aria-label={m.wizard_step3_restoreZip_pick_aria()}
+        data-testid="wizard-restore-pick-input"
+      />
+      {files.length === 0 ? (
+        <p style={{ fontSize: 13, color: 'var(--ink-3, rgb(136,136,136))', marginTop: 8 }} data-testid="wizard-restore-pick-hint">
+          {m.wizard_step3_restoreZip_pick_hint()}
+        </p>
+      ) : (
+        <ul style={{ margin: '12px 0 0', paddingLeft: 18, fontSize: 13, color: 'var(--ink-2, rgb(85,85,85))' }} data-testid="wizard-restore-pick-list">
+          {files.map((f) => (
+            <li key={f.name}>
+              {f.name} · {Math.round(f.size / 1024)} kB
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        className="btn btn--primary btn--block"
+        style={{ marginTop: 16 }}
+        onClick={onContinue}
+        disabled={files.length === 0}
+        data-testid="wizard-restore-pick-continue"
+      >
+        {m.wizard_step3_restoreZip_pick_continue()}
+      </button>
+    </div>
+  );
+}
+
+interface VerifyRsForZipPanelProps {
+  files: File[];
+  onRestoreFromZip?: RestoreZipFlowProps['onRestoreFromZip'];
+  onRestored: (vaultId: string) => void;
+}
+
+function VerifyRsForZipPanel({
+  files,
+  onRestoreFromZip,
+  onRestored,
+}: VerifyRsForZipPanelProps): JSX.Element {
+  const [manual, setManual] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onSubmit = useCallback(async () => {
+    if (!onRestoreFromZip) {
+      setError(m.wizard_step3_restoreZip_verify_unavailable());
+      return;
+    }
+    const normalized = parseRsInput(manual);
+    if (!isValidRsFormat(normalized)) {
+      setError(m.wizard_step3_existing_qr_invalidFormat());
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const raw = decodeRsFromInput(manual);
+      const result = await onRestoreFromZip(files, raw);
+      if (result.ok) {
+        onRestored(result.vaultId);
+        return;
+      }
+      setError(result.reason || m.wizard_step3_existing_qr_unwrapFailed());
+    } catch (err) {
+      console.error('[wizard restore-zip] failed', err);
+      setError(m.wizard_step3_existing_qr_invalidFormat());
+    } finally {
+      setBusy(false);
+    }
+  }, [manual, files, onRestoreFromZip, onRestored]);
+
+  return (
+    <div data-testid="wizard-restore-verify-rs">
+      <p className="section-label">{m.wizard_step3_restoreZip_verify_title()}</p>
+      <p style={{ fontSize: 13, color: 'var(--ink-2, rgb(85,85,85))', margin: '0 0 12px' }}>
+        {m.wizard_step3_restoreZip_verify_blurb()}
+      </p>
+      <textarea
+        className="manual-rs-input"
+        value={manual}
+        onChange={(e) => {
+          setManual(e.target.value);
+          setError(null);
+        }}
+        placeholder={m.wizard_step3_existing_qr_manual_placeholder()}
+        spellCheck={false}
+        autoComplete="off"
+        autoCapitalize="characters"
+        disabled={busy}
+        data-testid="wizard-restore-verify-input"
+      />
+      {error && (
+        <p className="input-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        className="btn btn--primary btn--block"
+        style={{ marginTop: 12 }}
+        onClick={onSubmit}
+        disabled={busy || !manual.trim() || files.length === 0}
+        data-testid="wizard-restore-verify-submit"
+      >
+        {busy ? m.lock_busy() : m.wizard_step3_restoreZip_verify_submit()}
+      </button>
+    </div>
+  );
+}
+
+/* ── PIN setup terminal substep ────────────────────────────────────── */
+
+interface PinSetupTerminalProps {
+  vaultId: string | null;
+  onSetupPin: (vaultId: string, pin: string) => Promise<void>;
+  onCompleted: () => void;
+}
+
+function PinSetupTerminal({
+  vaultId,
+  onSetupPin,
+  onCompleted,
+}: PinSetupTerminalProps): JSX.Element {
+  const [error, setError] = useState<string | null>(null);
+  const onSubmit = useCallback(
+    async (pin: string) => {
+      if (!vaultId) {
+        setError(m.wizard_step3_existing_webauthn_failed());
+        return;
+      }
+      try {
+        await onSetupPin(vaultId, pin);
+        onCompleted();
+      } catch (err) {
+        console.error('[Step3 pin-setup] failed', err);
+        setError(m.wizard_step3_existing_webauthn_failed());
+      }
+    },
+    [vaultId, onSetupPin, onCompleted],
+  );
+  return (
+    <PinSetupScreen mode="setup" onSubmit={onSubmit} error={error} />
   );
 }
 

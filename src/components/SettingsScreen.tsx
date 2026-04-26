@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import type { WrappedKeyData } from '../db/keystore';
+import { getVaultState } from '../db/keystore';
 import { startSync, stopSync, isSyncing, getSyncState, subscribeSyncEvents, type SyncState } from '../sync/couch';
 import type { VaultDb } from '../db/pouch';
 import { SyncStatus } from './SyncStatus';
 import type { TokenStore } from '../auth/token-store';
 import { fetchDevices, revokeDevice, type DeviceListEntry, type OAuthSubscription } from '../auth/oauth';
 import { localeStore, m } from '../i18n';
+import { PinSetupScreen } from './PinSetupScreen';
+import { RotateRecoverySecret } from './RotateRecoverySecret';
+import { ShowRecoverySecret } from './ShowRecoverySecret';
+import { DeleteAccountModal } from './DeleteAccountModal';
 
 export type WrapDekWithRsHandler = (rs: Uint8Array) => Promise<WrappedKeyData>;
 
@@ -15,10 +20,29 @@ export interface SettingsScreenProps {
   db: VaultDb;
   username: string;
   onWrapDekWithRs: WrapDekWithRsHandler;
+  /** Wraps the in-memory DEK under a PBKDF2-derived KEK and persists
+   *  `wrappedDekPin` + `pinSalt`. Only relevant on non-PRF authenticators. */
+  onSetupPin?: (vaultId: string, pin: string) => Promise<void>;
+  /** Verifier for the "Show Recovery Secret" surface. Returns true iff the
+   *  given RS bytes unwrap the local `wrappedDekRs`. */
+  onVerifyRs?: (rs: Uint8Array) => Promise<boolean>;
+  /** Opens the restore-from-ZIP surface. */
+  onOpenRestoreZip?: () => void;
+  /** Called after successful account deletion (server delete + local wipe).
+   *  The caller MUST route to the welcome view. */
+  onAccountDeleted?: () => Promise<void>;
+  /** Called when account deletion needs a re-auth (stale JWT). The caller
+   *  routes through the OAuth provider. */
+  onNeedsReauth?: () => void;
   tokenStore?: TokenStore;
   onClose?: () => void;
   onOpenPlan?: () => void;
   className?: string;
+}
+
+interface PinAvailability {
+  hasPrf: boolean;
+  hasPin: boolean;
 }
 
 export function SettingsScreen({
@@ -26,6 +50,11 @@ export function SettingsScreen({
   db,
   username,
   onWrapDekWithRs,
+  onSetupPin,
+  onVerifyRs,
+  onOpenRestoreZip,
+  onAccountDeleted,
+  onNeedsReauth,
   tokenStore,
   onClose,
   onOpenPlan,
@@ -34,13 +63,41 @@ export function SettingsScreen({
   useStore(localeStore);
   const [syncOn, setSyncOn] = useState<boolean>(isSyncing);
   const [syncState, setSyncState] = useState<SyncState>(getSyncState);
-  const [rotationBusy, setRotationBusy] = useState(false);
   const [rotationError, setRotationError] = useState<string | null>(null);
   const [lastRotation, setLastRotation] = useState<number | null>(null);
 
   const [devices, setDevices] = useState<DeviceListEntry[] | null>(null);
   const [subscription, setSubscription] = useState<OAuthSubscription | null>(null);
   const [devicesError, setDevicesError] = useState<string | null>(null);
+
+  const [pinAvail, setPinAvail] = useState<PinAvailability | null>(null);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  const reloadPinAvail = useCallback(async () => {
+    const v = await getVaultState(vaultId);
+    if (!v) return;
+    setPinAvail({
+      hasPrf: Boolean(v.wrappedDekPrf && v.credentialId),
+      hasPin: Boolean(v.wrappedDekPin && v.pinSalt),
+    });
+  }, [vaultId]);
+
+  useEffect(() => {
+    void reloadPinAvail();
+  }, [reloadPinAvail]);
+
+  const onPinSubmit = useCallback(async (pin: string) => {
+    if (!onSetupPin) return;
+    setPinError(null);
+    try {
+      await onSetupPin(vaultId, pin);
+      setPinModalOpen(false);
+      await reloadPinAvail();
+    } catch (err) {
+      setPinError((err as Error).message);
+    }
+  }, [onSetupPin, vaultId, reloadPinAvail]);
 
   useEffect(() => subscribeSyncEvents(setSyncState), []);
 
@@ -68,20 +125,24 @@ export function SettingsScreen({
     }
   }, [db, username, tokenStore]);
 
-  const rotateRs = useCallback(async () => {
-    setRotationBusy(true);
-    setRotationError(null);
-    try {
-      const freshRs = new Uint8Array(32);
-      crypto.getRandomValues(freshRs);
-      await onWrapDekWithRs(freshRs);
-      setLastRotation(Date.now());
-    } catch (err) {
-      setRotationError((err as Error).message);
-    } finally {
-      setRotationBusy(false);
-    }
-  }, [onWrapDekWithRs]);
+  const [rotateModalOpen, setRotateModalOpen] = useState(false);
+  const [showRsModalOpen, setShowRsModalOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+
+  const onCommitRotation = useCallback(
+    async (newRs: Uint8Array) => {
+      setRotationError(null);
+      try {
+        const wrapped = await onWrapDekWithRs(newRs);
+        setLastRotation(Date.now());
+        return wrapped;
+      } catch (err) {
+        setRotationError((err as Error).message);
+        throw err;
+      }
+    },
+    [onWrapDekWithRs],
+  );
 
   const onRevoke = useCallback(async (deviceId: string) => {
     if (!tokenStore) return;
@@ -206,14 +267,132 @@ export function SettingsScreen({
         </section>
       )}
 
+      {/*
+        PIN setup is only relevant on non-PRF authenticators. When a passkey
+        already provides PRF (the daily-unlock biometric path), an extra PIN
+        is friction without security gain — the section is hidden.
+      */}
+      {pinAvail && !pinAvail.hasPrf && onSetupPin && (
+        <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(0,0,0,0.06)' }} data-testid="settings-pin-section">
+          <h3 style={{ margin: '0 0 8px' }}>{m.settings_pinTitle()}</h3>
+          <p style={{ margin: '0 0 12px', color: '#555', fontSize: 14 }}>
+            {pinAvail.hasPin ? m.settings_pinChangeDescription() : m.settings_pinSetupDescription()}
+          </p>
+          <button
+            onClick={() => { setPinError(null); setPinModalOpen(true); }}
+            style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}
+            data-testid="settings-pin-cta"
+          >
+            {pinAvail.hasPin ? m.settings_pinChangeButton() : m.settings_pinSetupButton()}
+          </button>
+        </section>
+      )}
+
+      {pinModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.4)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 50,
+          }}
+          data-testid="settings-pin-modal"
+        >
+          <div style={{ background: '#fff', borderRadius: 16, maxWidth: 420, width: '90%' }}>
+            <PinSetupScreen
+              mode="setup"
+              onSubmit={onPinSubmit}
+              onCancel={() => setPinModalOpen(false)}
+              error={pinError}
+            />
+          </div>
+        </div>
+      )}
+
+      {onOpenRestoreZip && (
+        <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <h3 style={{ margin: '0 0 8px' }}>{m.settings_restoreZipTitle()}</h3>
+          <p style={{ margin: '0 0 12px', color: '#555', fontSize: 14 }}>
+            {m.settings_restoreZipDescription()}
+          </p>
+          <button
+            onClick={onOpenRestoreZip}
+            style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.1)', background: 'rgba(255,255,255,0.85)', color: '#000', cursor: 'pointer' }}
+            data-testid="settings-restore-zip-cta"
+          >
+            {m.settings_restoreZipButton()}
+          </button>
+        </section>
+      )}
+
+      {onVerifyRs && (
+        <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <h3 style={{ margin: '0 0 8px' }}>{m.settings_showRsTitle()}</h3>
+          <p style={{ margin: '0 0 12px', color: '#555', fontSize: 14 }}>
+            {m.settings_showRsDescription()}
+          </p>
+          <button
+            onClick={() => setShowRsModalOpen(true)}
+            style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#007aff', color: '#fff', cursor: 'pointer' }}
+            data-testid="settings-show-rs-cta"
+          >
+            {m.settings_showRsButton()}
+          </button>
+        </section>
+      )}
+
+      {showRsModalOpen && onVerifyRs && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.5)',
+            overflow: 'auto',
+            zIndex: 60,
+          }}
+          data-testid="settings-show-rs-modal"
+        >
+          <div style={{ background: '#fff', borderRadius: 16, maxWidth: 480, width: '92%', margin: '40px auto' }}>
+            <ShowRecoverySecret onVerify={onVerifyRs} onClose={() => setShowRsModalOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {rotateModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.5)',
+            overflow: 'auto',
+            zIndex: 60,
+          }}
+          data-testid="settings-rotate-rs-modal"
+        >
+          <div style={{ background: '#fff', borderRadius: 16, maxWidth: 480, width: '92%', margin: '40px auto' }}>
+            <RotateRecoverySecret
+              onCommit={onCommitRotation}
+              onClose={() => setRotateModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(0,0,0,0.06)' }}>
         <h3 style={{ margin: '0 0 8px' }}>{m.settings_rsRotationTitle()}</h3>
         <p style={{ margin: '0 0 12px', color: '#555', fontSize: 14 }}>
           {m.settings_rsRotationDescription()}
         </p>
         <button
-          onClick={rotateRs}
-          disabled={rotationBusy}
+          onClick={() => { setRotationError(null); setRotateModalOpen(true); }}
           style={{
             padding: '8px 16px',
             borderRadius: 10,
@@ -221,10 +400,10 @@ export function SettingsScreen({
             background: '#007aff',
             color: '#fff',
             cursor: 'pointer',
-            opacity: rotationBusy ? 0.6 : 1,
           }}
+          data-testid="settings-rs-rotate-cta"
         >
-          {rotationBusy ? m.settings_rsRotationBusy() : m.settings_rsRotationButton()}
+          {m.settings_rsRotationButton()}
         </button>
         {lastRotation && (
           <div style={{ marginTop: 8, fontSize: 13, color: '#34c759' }}>
@@ -237,6 +416,45 @@ export function SettingsScreen({
           </div>
         )}
       </section>
+
+      {tokenStore && onAccountDeleted && (
+        <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,59,48,0.04)', border: '1px solid rgba(255,59,48,0.2)' }} data-testid="settings-delete-account-section">
+          <h3 style={{ margin: '0 0 8px', color: '#7a1f1f' }}>{m.settings_deleteAccountTitle()}</h3>
+          <p style={{ margin: '0 0 12px', color: '#555', fontSize: 14 }}>
+            {m.settings_deleteAccountDescription()}
+          </p>
+          <button
+            onClick={() => setDeleteAccountOpen(true)}
+            data-testid="settings-delete-account-cta"
+            style={{
+              padding: '8px 16px',
+              borderRadius: 10,
+              border: '1px solid rgba(255,59,48,0.4)',
+              background: 'transparent',
+              color: '#ff3b30',
+              cursor: 'pointer',
+              fontSize: 14,
+            }}
+          >
+            {m.settings_deleteAccountButton()}
+          </button>
+        </section>
+      )}
+
+      {deleteAccountOpen && tokenStore && onAccountDeleted && (
+        <DeleteAccountModal
+          tokenStore={tokenStore}
+          onCanceled={() => setDeleteAccountOpen(false)}
+          onDeleted={async () => {
+            setDeleteAccountOpen(false);
+            await onAccountDeleted();
+          }}
+          onNeedsReauth={() => {
+            setDeleteAccountOpen(false);
+            onNeedsReauth?.();
+          }}
+        />
+      )}
 
       <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(0,0,0,0.06)', fontSize: 12, color: '#666' }}>
         <div>vault: <code>{vaultId}</code></div>

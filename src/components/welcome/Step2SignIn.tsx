@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { startProviderLogin, type OAuthProvider } from '../../auth/oauth';
 import { AppleLogo, GoogleLogo } from './icons';
+import { OAuthErrorCard } from './OAuthErrorCard';
 import { m } from '../../i18n';
 
 interface Step2SignInProps {
   /** Override for tests — defaults to `startProviderLogin`. */
   onStart?: (provider: OAuthProvider) => void;
+  /** Inline error from a previous OAuth callback (e.g. user cancelled in
+   *  the provider sheet). The wizard surfaces it here instead of silently
+   *  bouncing back to Step 1. */
+  oauthError?: 'provider-cancelled' | 'provider-error' | 'device-blocked' | null;
 }
 
-export function Step2SignIn({ onStart }: Step2SignInProps): JSX.Element {
+export function Step2SignIn({ onStart, oauthError }: Step2SignInProps): JSX.Element {
   const [busy, setBusy] = useState<OAuthProvider | null>(null);
   const start = onStart ?? startProviderLogin;
 
@@ -42,6 +47,7 @@ export function Step2SignIn({ onStart }: Step2SignInProps): JSX.Element {
           <span>{busy === 'google' ? m.wizard_step2_redirecting() : m.wizard_step2_continueGoogle()}</span>
         </button>
       </div>
+      {oauthError && <OAuthErrorCard errorClass={oauthError} />}
       <p className="oauth-footer">{m.wizard_step2_footer()}</p>
     </div>
   );

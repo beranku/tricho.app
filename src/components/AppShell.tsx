@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { WelcomeScreen } from './welcome/WelcomeScreen';
-import { UnlockGate } from './welcome/UnlockGate';
+import { LockedScreen } from './LockedScreen';
+import { RenewBanner } from './RenewBanner';
+import { GatedSheet } from './GatedSheet';
 import type { RecoverySecretResult } from '../auth/recovery';
 import { SettingsScreen } from './SettingsScreen';
 import { DeviceLimitScreen } from './DeviceLimitScreen';
@@ -28,6 +30,7 @@ import {
   createWrappedKeyData,
   updateWrappedDekRs,
   updateWrappedDekPrf,
+  updateWrappedDekPin,
   updateCredentialId,
   listVaultStates,
   getVaultState,
@@ -43,6 +46,7 @@ import {
   importAesGcmKey,
 } from '../crypto/envelope';
 import { registerPasskey, getPrfOutput, isWebAuthnAvailable } from '../auth/webauthn';
+import { deriveKekFromPin, generatePinSalt } from '../auth/local-pin';
 import { openVaultDb, closeVaultDb, putEncrypted, getDecrypted, queryDecrypted, getVaultDb, type VaultDb } from '../db/pouch';
 import { DOC_TYPES, type CustomerData } from '../db/types';
 import { userDbUrlFor } from '../sync/couch-auth';
@@ -60,10 +64,14 @@ import {
 } from '../auth/oauth';
 import { TokenStore } from '../auth/token-store';
 import { IdleLock } from '../sync/idle-lock';
+import { wipeSession } from '../lib/lifecycle';
+import { unpackBackupZip } from '../backup/zip-pack';
+import { restoreFromZipBytes } from '../backup/local-zip-restore';
 
 type View =
   | 'loading'
   | 'welcome'
+  | 'locked'
   | 'unlocked'
   | 'settings'
   | 'device-limit'
@@ -158,6 +166,8 @@ export function AppShell(): JSX.Element {
   const [bankIntentId, setBankIntentId] = useState<string | null>(null);
   const [vaultId, setVaultId] = useState<string | null>(null);
   const [hasExistingVault, setHasExistingVault] = useState(false);
+  const [lockedScreenHasPasskey, setLockedScreenHasPasskey] = useState(false);
+  const [lockedScreenHasPin, setLockedScreenHasPin] = useState(false);
   const [dek, setDek] = useState<Uint8Array | null>(null);
   const [db, setDb] = useState<VaultDb | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -165,6 +175,7 @@ export function AppShell(): JSX.Element {
   const [pendingOAuth, setPendingOAuth] = useState<OAuthResult | null>(() => readPendingOAuth());
   const [authHint, setAuthHint] = useState<string | null>(null);
   const [serverVaultState, setServerVaultState] = useState<VaultStateDoc | null>(null);
+  const [syncGateState, setSyncGateState] = useState<{ gated: boolean }>({ gated: false });
   const routedOnceRef = useRef(false);
 
   // On mount: probe local state, pick up any OAuth callback result, route.
@@ -188,6 +199,10 @@ export function AppShell(): JSX.Element {
       if (hasVault) {
         setHasExistingVault(true);
         setVaultId(vaults[0].vaultId);
+        setLockedScreenHasPasskey(
+          Boolean(vaults[0].wrappedDekPrf && vaults[0].credentialId),
+        );
+        setLockedScreenHasPin(Boolean(vaults[0].wrappedDekPin && vaults[0].pinSalt));
       }
 
       const incoming = fresh ?? pendingOAuth;
@@ -254,9 +269,9 @@ export function AppShell(): JSX.Element {
     return { vaultId: newVaultId };
   }, [pendingOAuth]);
 
-  const onRegisterPasskey = useCallback(async (vId: string): Promise<void> => {
-    if (!isWebAuthnAvailable()) return;
-    if (!dek) return;
+  const onRegisterPasskey = useCallback(async (vId: string): Promise<{ prfSupported: boolean }> => {
+    if (!isWebAuthnAvailable()) return { prfSupported: false };
+    if (!dek) return { prfSupported: false };
     const vault = await getVaultState(vId);
     if (!vault) throw new Error(`Vault ${vId} not found in keystore.`);
 
@@ -269,6 +284,15 @@ export function AppShell(): JSX.Element {
       const wrapped = await wrapDekWithKek(dek, prfKek);
       await updateWrappedDekPrf(vId, wrapped);
     }
+    return { prfSupported: reg.prfSupported };
+  }, [dek]);
+
+  const onSetupPin = useCallback(async (vId: string, pin: string): Promise<void> => {
+    if (!dek) throw new Error('Vault not unlocked.');
+    const pinSalt = generatePinSalt();
+    const kek = await deriveKekFromPin(pin, pinSalt);
+    const wrapped = await wrapDekWithKek(dek, kek);
+    await updateWrappedDekPin(vId, wrapped, encodeBase64url(pinSalt));
   }, [dek]);
 
   const onUnlockWithPasskey = useCallback(async (): Promise<void> => {
@@ -300,6 +324,20 @@ export function AppShell(): JSX.Element {
     const deviceSalt = decodeBase64url(vault.deviceSalt);
     const kek = await deriveKekFromRs(rs, deviceSalt);
     const unwrapped = await unwrapDekWithKek(vault.wrappedDekRs, kek);
+    setDek(unwrapped);
+    setVaultId(vault.vaultId);
+  }, []);
+
+  const onUnlockWithPin = useCallback(async (pin: string): Promise<void> => {
+    const vaults = await listVaultStates();
+    const vault = vaults[0];
+    if (!vault) throw new Error('No vault found on this device.');
+    if (!vault.wrappedDekPin || !vault.pinSalt) {
+      throw new Error('Vault has no PIN wrap.');
+    }
+    const pinSalt = decodeBase64url(vault.pinSalt);
+    const kek = await deriveKekFromPin(pin, pinSalt);
+    const unwrapped = await unwrapDekWithKek(vault.wrappedDekPin, kek);
     setDek(unwrapped);
     setVaultId(vault.vaultId);
   }, []);
@@ -358,6 +396,87 @@ export function AppShell(): JSX.Element {
       }
     },
     [hasExistingVault, serverVaultState, onUnlockWithRS, onJoinVault],
+  );
+
+  /**
+   * Restore from one or more `.tricho-backup.zip` files. Reads the manifest +
+   * vault-state from the first file, verifies the user's RS unwraps the
+   * `wrappedDekRs` it carries, materialises a local vault-state record at the
+   * same `vaultId`, opens PouchDB at that id, and applies all picked ZIPs in
+   * filename order. Returns the new vaultId on success.
+   */
+  const onRestoreFromZip = useCallback(
+    async (
+      files: File[],
+      rs: Uint8Array,
+    ): Promise<{ ok: true; vaultId: string } | { ok: false; reason: string }> => {
+      if (files.length === 0) {
+        return { ok: false, reason: 'no-files' };
+      }
+      try {
+        const firstBytes = new Uint8Array(await files[0]!.arrayBuffer());
+        const unpacked = await unpackBackupZip(firstBytes);
+        if (!unpacked.vaultState) {
+          return { ok: false, reason: 'missing-vault-state' };
+        }
+        const zipVaultId = unpacked.vaultState.vaultId;
+        const zipDeviceSalt = String(unpacked.vaultState.deviceSalt);
+        const zipWrappedDekRsRaw = unpacked.vaultState.wrappedDekRs as
+          | { ct: string; iv: string; version?: number }
+          | undefined;
+        if (!zipWrappedDekRsRaw || !zipWrappedDekRsRaw.ct || !zipWrappedDekRsRaw.iv) {
+          return { ok: false, reason: 'missing-wrapped-dek' };
+        }
+        const zipWrappedDekRs: WrappedKeyData = createWrappedKeyData(
+          zipWrappedDekRsRaw.ct,
+          zipWrappedDekRsRaw.iv,
+          zipWrappedDekRsRaw.version ?? 1,
+        );
+        const deviceSalt = decodeBase64url(zipDeviceSalt);
+        const kek = await deriveKekFromRs(rs, deviceSalt);
+        let unwrapped: Uint8Array;
+        try {
+          unwrapped = await unwrapDekWithKek(zipWrappedDekRs, kek);
+        } catch {
+          return { ok: false, reason: 'wrong-key' };
+        }
+
+        const oauth = pendingOAuth ?? readPendingOAuth();
+        const userId = oauth?.couchdbUsername ?? `local-${zipVaultId}`;
+        const local: VaultState = {
+          vaultId: zipVaultId,
+          deviceSalt: zipDeviceSalt,
+          wrappedDekPrf: null,
+          wrappedDekRs: zipWrappedDekRs,
+          credentialId: null,
+          userId,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          rsConfirmed: true,
+          metadata: createDefaultMetadata(),
+        };
+        await createVaultState(local);
+
+        const dekKey = await importAesGcmKey(unwrapped, false, ['encrypt', 'decrypt']);
+        const opened = await openVaultDb(zipVaultId, dekKey);
+
+        // Apply all picked files in filename order.
+        for (const file of files) {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          await restoreFromZipBytes({ db: opened, bytes, expectedVaultId: zipVaultId });
+        }
+
+        setVaultId(zipVaultId);
+        setDek(unwrapped);
+        setDb(opened);
+        setHasExistingVault(true);
+        return { ok: true, vaultId: zipVaultId };
+      } catch (err) {
+        console.error('[AppShell] onRestoreFromZip failed', err);
+        return { ok: false, reason: (err as Error).message ?? 'unknown' };
+      }
+    },
+    [pendingOAuth],
   );
 
   /**
@@ -435,13 +554,17 @@ export function AppShell(): JSX.Element {
     };
   }, [tokenStore]);
 
-  // Watch sync state — when a 402 has gated us, surface the Plan screen so
-  // the user can renew. Re-fetch the subscription so the screen has fresh state.
+  // Watch sync state — when a 402 has gated us, raise a non-blocking flag
+  // for the unlocked shell to render a `GatedSheet`. The user can keep
+  // working offline; the sheet auto-reopens on the next launch if the gate
+  // is still active. We DO NOT switch view to `plan` automatically anymore.
   useEffect(() => {
     return subscribeSyncEvents((s) => {
       if (s.status === 'gated') {
         if (tokenStore) void loadSubscription(tokenStore.jwt());
-        setView((current) => (current === 'plan' || current === 'bank-transfer' ? current : 'plan'));
+        setSyncGateState({ gated: true });
+      } else {
+        setSyncGateState({ gated: false });
       }
     });
   }, [tokenStore]);
@@ -521,12 +644,12 @@ export function AppShell(): JSX.Element {
     if (view !== 'unlocked') return;
     const lock = new IdleLock({
       onLock: () => {
-        stopSync();
-        setDek(null);
-        if (tokenStore) void tokenStore.clear().catch(() => null);
-        setDb(null);
-        setTokenStore(null);
-        setView('welcome');
+        void wipeSession({ tokenStore }).finally(() => {
+          setDek(null);
+          setDb(null);
+          setTokenStore(null);
+          setView('locked');
+        });
       },
     });
     lock.start();
@@ -546,6 +669,20 @@ export function AppShell(): JSX.Element {
       window.removeEventListener('online', onOnline);
     };
   }, [tokenStore]);
+
+  const onVerifyRs = useCallback(async (rs: Uint8Array): Promise<boolean> => {
+    if (!vaultId) return false;
+    const vault = await getVaultState(vaultId);
+    if (!vault?.wrappedDekRs) return false;
+    try {
+      const deviceSalt = decodeBase64url(vault.deviceSalt);
+      const kek = await deriveKekFromRs(rs, deviceSalt);
+      await unwrapDekWithKek(vault.wrappedDekRs, kek);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [vaultId]);
 
   const onWrapDekWithRs = useCallback(async (newRs: Uint8Array): Promise<WrappedKeyData> => {
     if (!dek || !vaultId) throw new Error('Vault not unlocked.');
@@ -575,20 +712,20 @@ export function AppShell(): JSX.Element {
     return <div style={{ padding: 32 }}>Loading keystore…</div>;
   }
 
+  if (view === 'locked' || (view === 'welcome' && hasExistingVault && dek === null)) {
+    return (
+      <LockedScreen
+        hasPasskey={Boolean(vaultId) && lockedScreenHasPasskey}
+        hasPin={lockedScreenHasPin}
+        onUnlockWithPasskey={onUnlockWithPasskey}
+        onUnlockWithPin={onUnlockWithPin}
+        onUnlockWithRs={onUnlockWithRS}
+        onUnlocked={onUnlocked}
+      />
+    );
+  }
+
   if (view === 'welcome') {
-    if (hasExistingVault) {
-      // Daily-unlock path: vault already exists on this device. Render
-      // the small UnlockGate (passkey + RS fallback) instead of the
-      // onboarding wizard.
-      return (
-        <UnlockGate
-          hasPasskey={Boolean(vaultId)}
-          onUnlockWithPasskey={onUnlockWithPasskey}
-          onUnlockWithRs={onUnlockWithRS}
-          onUnlocked={onUnlocked}
-        />
-      );
-    }
     const oauth = pendingOAuth ?? readPendingOAuth();
     return (
       <WelcomeScreen
@@ -597,36 +734,38 @@ export function AppShell(): JSX.Element {
         onCreateVault={onCreateVault}
         onJoinWithRs={onJoinWithRs}
         onRegisterPasskey={onRegisterPasskey}
+        onSetupPin={onSetupPin}
+        onRestoreFromZip={onRestoreFromZip}
+        oauthError={oauth?.error ?? null}
         onUnlocked={onUnlocked}
       />
     );
   }
 
   if (view === 'device-limit') {
-    // When the server refused a new device, we don't yet have a TokenStore
-    // (no vault is open). Render a minimal explanation + the option to
-    // re-sign-in; revocation UX requires an existing unlocked vault.
+    // The full DeviceLimitScreen — pre-unlock variant uses the OAuth-bound
+    // JWT directly; the user can revoke another device or upgrade their
+    // plan, then sign in again.
+    const oauth = pendingOAuth ?? readPendingOAuth();
+    const oauthJwt = oauth?.tokens?.jwt;
     return (
-      <div style={{ maxWidth: 520, margin: '80px auto', padding: 32, borderRadius: 20, background: 'rgba(255,255,255,0.9)', boxShadow: '0 18px 40px rgba(15,23,42,0.18)' }}>
-        <h2 style={{ marginTop: 0 }}>{m.deviceLimit_title()}</h2>
-        <p style={{ color: '#555', fontSize: 14 }}>
-          {authHint ?? m.appShell_deviceLimitFallback()}
-        </p>
-        <p style={{ color: '#555', fontSize: 13 }}>
-          {m.appShell_deviceLimitInstructions()}
-        </p>
-        <button
-          onClick={() => {
-            stashPendingOAuth(null);
-            setPendingOAuth(null);
-            setAuthHint(null);
-            setView('welcome');
-          }}
-          style={{ padding: '8px 16px', borderRadius: 10, background: '#007aff', color: '#fff', border: 'none', cursor: 'pointer' }}
-        >
-          {m.appShell_signInAgain()}
-        </button>
-      </div>
+      <DeviceLimitScreen
+        oauthJwt={oauthJwt}
+        localDeviceId={oauth?.deviceId ?? null}
+        onDeviceFreed={() => {
+          stashPendingOAuth(null);
+          setPendingOAuth(null);
+          setAuthHint(null);
+          setView('welcome');
+        }}
+        onCancel={() => {
+          stashPendingOAuth(null);
+          setPendingOAuth(null);
+          setAuthHint(null);
+          setView('welcome');
+        }}
+        onUpgrade={BILLING_UI_ENABLED ? () => setView('plan') : undefined}
+      />
     );
   }
 
@@ -638,6 +777,41 @@ export function AppShell(): JSX.Element {
         username={username}
         tokenStore={tokenStore}
         onWrapDekWithRs={onWrapDekWithRs}
+        onSetupPin={onSetupPin}
+        onVerifyRs={onVerifyRs}
+        onOpenRestoreZip={() => setView('restore-zip')}
+        onAccountDeleted={async () => {
+          // Wipe local IndexedDB databases and route to welcome.
+          try {
+            indexedDB.deleteDatabase('tricho-keystore');
+            indexedDB.deleteDatabase('tricho_meta');
+            if (vaultId) {
+              indexedDB.deleteDatabase(`_pouch_${vaultId}`);
+            }
+          } catch (err) {
+            console.warn('[AppShell] indexedDB.deleteDatabase failed', err);
+          }
+          await wipeSession({ tokenStore });
+          setDek(null);
+          setVaultId(null);
+          setDb(null);
+          setTokenStore(null);
+          setPendingOAuth(null);
+          setServerVaultState(null);
+          setHasExistingVault(false);
+          setView('welcome');
+        }}
+        onNeedsReauth={() => {
+          // Stale JWT; route through OAuth again. wipeSession then welcome.
+          void (async () => {
+            await wipeSession({ tokenStore });
+            setDek(null);
+            setDb(null);
+            setTokenStore(null);
+            setPendingOAuth(null);
+            setView('welcome');
+          })();
+        }}
         onClose={() => setView('unlocked')}
         onOpenPlan={BILLING_UI_ENABLED ? () => setView('plan') : undefined}
       />
@@ -693,16 +867,39 @@ export function AppShell(): JSX.Element {
     );
   }
 
-  return <UnlockedShell db={db} vaultId={vaultId} onSettings={() => setView('settings')} />;
+  const onLogout = useCallback(async () => {
+    await wipeSession({ tokenStore });
+    setDek(null);
+    setVaultId(null);
+    setDb(null);
+    setTokenStore(null);
+    setPendingOAuth(null);
+    setServerVaultState(null);
+    setView('welcome');
+  }, [tokenStore]);
+
+  return (
+    <UnlockedShell
+      db={db}
+      vaultId={vaultId}
+      onSettings={() => setView('settings')}
+      onLogout={onLogout}
+      onOpenPlan={BILLING_UI_ENABLED ? () => setView('plan') : undefined}
+      gated={syncGateState.gated}
+    />
+  );
 }
 
 interface UnlockedShellProps {
   db: VaultDb | null;
   vaultId: string | null;
   onSettings: () => void;
+  onLogout: () => void | Promise<void>;
+  onOpenPlan?: () => void;
+  gated: boolean;
 }
 
-function UnlockedShell({ db, vaultId, onSettings }: UnlockedShellProps): JSX.Element {
+function UnlockedShell({ db, vaultId, onSettings, onLogout, onOpenPlan, gated }: UnlockedShellProps): JSX.Element {
   // Hash-based router: '#/clients/<id>' opens the client detail. Hash routing
   // keeps the app a single Astro static page (no per-id [id].astro needed)
   // and works on any static host without server-side rewrites.
@@ -730,10 +927,16 @@ function UnlockedShell({ db, vaultId, onSettings }: UnlockedShellProps): JSX.Ele
     <div className="phone phone--viewport">
       <div className="phone-inner">
         <ChromeButtons variant={variant} backHref="#/" />
+        {onOpenPlan && (
+          <RenewBanner onTap={onOpenPlan} />
+        )}
         {customerId ? (
           <ClientDetail db={db} vaultId={vaultId} customerId={customerId} />
         ) : (
           <DailySchedule db={db} />
+        )}
+        {gated && onOpenPlan && (
+          <GatedSheet onRenew={onOpenPlan} />
         )}
         <BottomSheet
           renderers={{
@@ -745,8 +948,7 @@ function UnlockedShell({ db, vaultId, onSettings }: UnlockedShellProps): JSX.Ele
                 }}
                 onLogout={() => {
                   closeSheet();
-                  // Reload to reset auth state — IdleLock-style wipe.
-                  window.location.reload();
+                  void onLogout();
                 }}
               />
             ),
@@ -759,7 +961,7 @@ function UnlockedShell({ db, vaultId, onSettings }: UnlockedShellProps): JSX.Ele
                 }}
                 onLogout={() => {
                   closeSheet();
-                  window.location.reload();
+                  void onLogout();
                 }}
               />
             ),
