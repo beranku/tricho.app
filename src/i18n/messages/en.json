@@ -384,5 +384,13 @@
   "oauthError_providerCancelled": "Sign-in was cancelled. Try again or pick another provider.",
   "oauthError_providerError": "The provider returned an error. Try again in a moment.",
   "oauthError_deviceBlocked": "The server refused this session. Try signing in again.",
-  "oauthError_unknown": "Something didn't go right. Try again in a moment."
+  "oauthError_unknown": "Something didn't go right. Try again in a moment.",
+  "syncStatus_errorReason_network": "no connection",
+  "syncStatus_errorReason_auth": "session expired",
+  "syncStatus_errorReason_vaultMismatch": "vault out of sync",
+  "syncStatus_errorReason_unknown": "something didn't fit",
+  "syncStatus_retry": "Retry",
+  "syncStatus_retrying": "Retrying…",
+  "settings_lastBackup_label": "Last backed up {days} days ago",
+  "settings_lastBackup_never": "Never backed up locally"
 }

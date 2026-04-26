@@ -71,6 +71,22 @@ export function BackupExportScreen({ db, vaultId, onBack }: BackupExportScreenPr
     try {
       const result = await generateLocalBackupZip({ db, vaultId, monthKey: selected });
       triggerBlobDownload(result.blob, result.filename);
+      // Stash the timestamp so Settings can show "Last backed up X days ago".
+      // `_local/` doc, not replicated, plaintext (timestamp is not sensitive).
+      try {
+        const existing = (await db.pouch
+          .get('_local/last-backup')
+          .catch(() => null)) as { _rev?: string } | null;
+        const next: { _id: string; _rev?: string; at: number; monthKey: string } = {
+          _id: '_local/last-backup',
+          at: Date.now(),
+          monthKey: selected,
+        };
+        if (existing?._rev) next._rev = existing._rev;
+        await db.pouch.put(next as never);
+      } catch (err) {
+        console.warn('[BackupExportScreen] failed to stash _local/last-backup', err);
+      }
       setDone(true);
     } catch (err) {
       setError(String(err));

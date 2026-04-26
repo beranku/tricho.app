@@ -817,6 +817,109 @@ A: Share your recovery QR code (carefully!) to let someone else access the accou
 
 ---
 
+## Lifecycle flows (new)
+
+The post-onboarding surfaces below are part of the `lifecycle-flows-ux`
+release. Some references earlier in this guide describe the legacy
+3-screen onboarding; the canonical flow is now the single PWA-first
+welcome wizard, plus the surfaces below.
+
+### Locked screen
+
+When you leave the app idle long enough, your in-memory keys are wiped
+and you land on a dedicated **locked screen** — the brand wordmark stays,
+but you'll see a single primary unlock button. The button is whichever
+unlock path is most likely to succeed for your vault, in priority order:
+
+1. **Passkey** (Face ID / fingerprint with PRF-capable authenticator)
+2. **PIN** (set during onboarding on devices without PRF support)
+3. **Recovery Secret** (Base32 you saved at vault creation)
+
+Fallbacks appear as quiet ghost-styled links below the primary action.
+The Recovery Secret link is always available, no matter which unlock
+path is primary.
+
+**PIN attempt limit.** Five wrong PINs in any rolling 60-second window
+locks the input for 30 seconds with a visible countdown. The lockout
+survives an app reload — but the Recovery Secret link stays active
+during the lockout, so you're never fully shut out.
+
+### Show Recovery Secret (re-display the QR)
+
+Settings → **Show Recovery Secret** lets you re-display the QR you
+generated at onboarding so you can save it again to a new password
+manager or printer.
+
+For privacy reasons, the RS itself is never stored on the device — only
+the wrap derived from it. To re-display, type your current Recovery
+Secret once; the app verifies it locally (by attempting to unwrap your
+on-disk DEK) and renders the QR + Base32 fingerprint identical to the
+welcome wizard surface. Nothing leaves the device.
+
+### Rotate Recovery Secret (the right way)
+
+Settings → **Rotate Recovery Secret** generates a new Recovery Secret
+and walks you through the same `display → verify → commit` flow as
+initial onboarding. The on-disk wrap is replaced **only** after you've
+confirmed the new RS via QR scan or last-4 checksum. If you cancel at
+any point, the old RS keeps working.
+
+> **Warning:** Once you confirm the new RS, the old one stops working
+> immediately. Save the new QR before continuing.
+
+### Restore from a `.tricho-backup.zip`
+
+Two ways in:
+
+1. **From the welcome wizard** — when adding a new device with no
+   working Recovery Secret, tap "Mám zálohovací ZIP" on the existing-flow
+   QR substep. Pick one or more `.tricho-backup.zip` files (one per
+   month is typical), type your Recovery Secret to verify it unwraps the
+   vault key, and the docs apply in chronological order.
+2. **From Settings → Obnovit ze zálohy** — useful when you already have
+   the vault open but want to load older months.
+
+The pre-unlock path creates a fresh local vault at the ZIP's `vaultId`,
+unwraps the DEK, then applies the backup bytes-as-is (no decryption on
+the wire, ever). The Recovery Secret is the only material that proves
+you own the vault.
+
+### Plan renewal banner + gated sheet
+
+- A **renewal banner** appears in the schedule header during the last
+  7 days before your subscription expires, and through the grace
+  window. Tap to open the plan picker.
+- When sync gets gated mid-task (subscription expired past grace), a
+  **non-blocking sheet** appears at the bottom: "Renew" or "Continue
+  offline". Your data stays on the device — you can keep working
+  through the appointment. The sheet auto-reopens on the next launch
+  if the gate is still active.
+
+### Account deletion
+
+Settings → **Trvale smazat účet** is a real, permanent operation:
+
+1. The destructive button is disabled until you type the literal word
+   `SMAZAT` (case-sensitive).
+2. The server revokes every refresh token, deletes your per-user
+   CouchDB account, deletes the subscription doc.
+3. The local IndexedDB databases (`tricho-keystore`, `tricho_meta`,
+   the per-vault PouchDB) are wiped.
+
+If your sign-in session is more than 5 minutes old, the app will route
+you through the OAuth provider for a fresh JWT before showing the
+typed-confirmation modal — so accidental deletion is essentially
+impossible.
+
+### Logout (no reload)
+
+The Settings logout flow now closes the vault DB, disposes the token
+store, and routes back to the welcome surface — without a full page
+reload. Your local data stays on the device; the next entry needs
+unlock again.
+
+---
+
 **Remember:** Your Recovery QR code is the key to your data. Keep it safe!
 
 *TrichoApp - Your customers' data, encrypted and secure.*

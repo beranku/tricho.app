@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getSyncState, isSyncing, stopSync, subscribeSyncEvents } from './couch';
+import { classifySyncError, getSyncState, isSyncing, stopSync, subscribeSyncEvents } from './couch';
 
 // startSync + the deterministic conflict resolver exercise PouchDB's
 // replicator loop, which is integration territory (real CouchDB). These
@@ -20,6 +20,7 @@ describe('getSyncState', () => {
     expect(s.pulled).toBe(0);
     expect(s.username).toBeNull();
     expect(s.error).toBeNull();
+    expect(s.errorClass).toBeNull();
   });
 });
 
@@ -81,5 +82,44 @@ describe('stopSync idempotence', () => {
       stopSync();
     }).not.toThrow();
     expect(getSyncState().status).toBe('idle');
+  });
+});
+
+describe('classifySyncError', () => {
+  it('classifies 401/403 as auth', () => {
+    expect(classifySyncError({ status: 401 })).toBe('auth');
+    expect(classifySyncError({ status: 403 })).toBe('auth');
+  });
+
+  it('classifies 412/409 as vault-mismatch', () => {
+    expect(classifySyncError({ status: 412 })).toBe('vault-mismatch');
+    expect(classifySyncError({ status: 409 })).toBe('vault-mismatch');
+  });
+
+  it('classifies network-y errors by name and message keywords', () => {
+    expect(classifySyncError({ name: 'NetworkError' })).toBe('network');
+    expect(classifySyncError({ name: 'AbortError' })).toBe('network');
+    expect(classifySyncError({ name: 'TypeError', message: 'Failed to fetch' })).toBe('network');
+    expect(classifySyncError({ message: 'CORS policy blocked' })).toBe('network');
+    expect(classifySyncError({ message: 'TLS handshake' })).toBe('network');
+  });
+
+  it('classifies auth-ish messages without status code', () => {
+    expect(classifySyncError({ message: 'unauthorized' })).toBe('auth');
+    expect(classifySyncError({ message: 'token expired' })).toBe('auth');
+    expect(classifySyncError({ message: 'forbidden access' })).toBe('auth');
+  });
+
+  it('falls back to unknown', () => {
+    expect(classifySyncError({ message: 'something broke' })).toBe('unknown');
+    expect(classifySyncError({})).toBe('unknown');
+    expect(classifySyncError(null)).toBe('unknown');
+    expect(classifySyncError(undefined)).toBe('unknown');
+  });
+
+  it('HTTP status takes precedence over message keyword heuristics', () => {
+    // A 412 with the word "unauthorized" in the message is still a vault
+    // mismatch — status wins.
+    expect(classifySyncError({ status: 412, message: 'unauthorized' })).toBe('vault-mismatch');
   });
 });

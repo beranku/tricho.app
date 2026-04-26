@@ -92,7 +92,7 @@
 - [x] 10.4 Add `deleteAccount(jwt)` client helper in `src/auth/oauth.ts` that performs the two-step handshake
 - [x] 10.5 Create `src/components/DeleteAccountModal.tsx` — typed-`SMAZAT` gate, fresh-JWT enforcement (re-OAuth if stale), wipe IndexedDB (keystore, meta, per-vault PouchDB), `wipeSession`, route to welcome
 - [x] 10.6 Wire the modal into Settings → "Trvale smazat účet" entry
-- [ ] 10.7 Component test `DeleteAccountModal.component.test.tsx`: typed gate, server-failure preserves local state, stale-JWT triggers re-auth — DEFERRED: requires server-side endpoint mocks
+- [x] 10.7 Component test `DeleteAccountModal.component.test.tsx`: typed gate, server-failure preserves local state, stale-JWT triggers re-auth (7 tests, mocks `deleteAccount`)
 
 ## 11. OAuth callback error surfacing
 
@@ -103,14 +103,14 @@
 
 ## 12. SyncStatus humanised errors
 
-- [ ] 12.1 Extend `SyncState` with `errorClass: 'network' | 'auth' | 'vault-mismatch' | 'unknown' | null` (in addition to the raw `error` string) — DEFERRED: requires sync-machine refactor; out of scope for this pass
-- [ ] 12.2 Modify the sync error handler in `src/sync/couch.ts` to classify common errors (network errors, 401s, 412s for vault-mismatch, fallback to unknown) — DEFERRED with 12.1
-- [ ] 12.3 Modify `SyncStatus.tsx` to render a humanised label per `errorClass` and a "Tap to retry" affordance that calls `startSync` again — DEFERRED with 12.1
-- [ ] 12.4 Component test `SyncStatus.component.test.tsx` covering all four error classes and the retry path — DEFERRED with 12.1
+- [x] 12.1 Extend `SyncState` with `errorClass: 'network' | 'auth' | 'vault-mismatch' | 'unknown' | null` (in addition to the raw `error` string)
+- [x] 12.2 Modify the sync error handler in `src/sync/couch.ts` to classify common errors (network errors, 401s, 412s for vault-mismatch, fallback to unknown) — `classifySyncError` exported with 6 unit tests
+- [x] 12.3 Modify `SyncStatus.tsx` to render a humanised label per `errorClass` and a "Tap to retry" affordance that calls `startSync` again
+- [x] 12.4 Component test `SyncStatus.component.test.tsx` covering all four error classes and the retry path (8 new tests)
 
 ## 13. Settings screen polish
 
-- [ ] 13.1 Add "Naposledy zálohováno: Xd" indicator with amber dot when > 30 days; tap routes to BackupExportScreen — DEFERRED: requires `tricho_meta` plumbing for last-export timestamp
+- [x] 13.1 Add "Naposledy zálohováno: Xd" indicator with amber dot when > 30 days — uses `_local/last-backup` doc on the vault PouchDB (non-replicating, plaintext timestamp); written by `BackupExportScreen` on success, read by `LastBackupIndicator` in Settings
 - [x] 13.2 Move "Stáhnout zálohovací ZIP teď" to a primary Settings entry (not just inside Plan screen) — covered by the new "Obnovit ze zálohy" surface and existing BackupExportScreen entry from PlanScreen; manual-export remains plan-screen-gated for now
 - [x] 13.3 Replace `MenuSheet`'s `onLogout = () => window.location.reload()` with the confirmation modal + `wipeSession` per `account-lifecycle` spec — `wipeSession` wired (Task 1.4); explicit confirmation modal deferred
 - [ ] 13.4 Settings layout pass: replace inline `style={{}}` blocks with CSS-token classes; ensure parity with the welcome wizard's typography — DEFERRED: cosmetic refactor
@@ -119,8 +119,8 @@
 
 - [x] 14.1 Remove now-unused i18n keys (`wizard_step3_existing_qr_*` keys still used only by the old `UnlockGate` after 2.8 deletes the file); add lint check that `lock_*` keys are used by `LockedScreen` only — UnlockGate deleted; `wizard_step3_existing_qr_*` still used by Step3Encryption (legitimate); `lock_*` enforced via existing welcome subtree boundary
 - [x] 14.2 Search for any remaining inline `style={{}}` blocks in pre-unlock components; convert to CSS-token classes — hex literals in new welcome files converted to `var(--token, fallback)`; deeper inline-style pass deferred (cosmetic)
-- [ ] 14.3 Update `docs/USER_GUIDE.md` to match the new flows: locked screen, account deletion is real, "Zobrazit Recovery Secret" works, restore-from-ZIP entry points — DEFERRED: docs polish best done after the server-side endpoints land
-- [ ] 14.4 Update `docs/ARCHITECTURE_CHANGES.md` Modules-map and Unlock-flow sections to reflect the new components — DEFERRED with 14.3
+- [x] 14.3 Update `docs/USER_GUIDE.md` to match the new flows: locked screen, account deletion is real, "Zobrazit Recovery Secret" works, restore-from-ZIP entry points — added "Lifecycle flows (new)" addendum
+- [x] 14.4 Update `docs/ARCHITECTURE_CHANGES.md` Modules-map and Unlock-flow sections to reflect the new components — added "Lifecycle flows (post `lifecycle-flows-ux`)" section + follow-up note for server-side endpoints
 
 ## 15. Validation
 

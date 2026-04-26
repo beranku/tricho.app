@@ -30,9 +30,22 @@ async function getPouch(): Promise<PouchConstructor> {
 
 export type SyncStatus = 'idle' | 'connecting' | 'syncing' | 'paused' | 'error' | 'gated';
 
+/**
+ * Coarse classification of a sync error. The UI uses this to render a
+ * humanised message; the raw `error` string is kept for diagnostics.
+ *
+ * - `network`: transport-level failure (offline, CORS, DNS, TLS).
+ * - `auth`: server returned 401 (refresh token rotated, signed out).
+ * - `vault-mismatch`: server refused our payload (412, 409 on vault-state).
+ * - `unknown`: anything we couldn't classify.
+ */
+export type SyncErrorClass = 'network' | 'auth' | 'vault-mismatch' | 'unknown';
+
 export interface SyncState {
   status: SyncStatus;
   error: string | null;
+  /** Set whenever `status === 'error'`; null otherwise. */
+  errorClass: SyncErrorClass | null;
   lastEventAt: number | null;
   pushed: number;
   pulled: number;
@@ -49,6 +62,7 @@ const listeners = new Set<SyncListener>();
 let state: SyncState = {
   status: 'idle',
   error: null,
+  errorClass: null,
   lastEventAt: null,
   pushed: 0,
   pulled: 0,
@@ -125,7 +139,7 @@ export async function startSync(db: VaultDb, opts: StartSyncOpts): Promise<void>
     fetch: opts.fetch ?? defaultFetch,
   });
 
-  emit({ status: 'connecting', error: null, username: opts.username, pushed: 0, pulled: 0 });
+  emit({ status: 'connecting', error: null, errorClass: null, username: opts.username, pushed: 0, pulled: 0 });
 
   active = db.pouch
     .sync(remote, { live: true, retry: true })
@@ -149,23 +163,65 @@ export async function startSync(db: VaultDb, opts: StartSyncOpts): Promise<void>
         gateOnPlanExpired(err);
         return;
       }
-      emit({ status: err ? 'paused' : 'paused', error: err ? String(err) : null });
+      emit({
+        status: err ? 'paused' : 'paused',
+        error: err ? String(err) : null,
+        errorClass: err ? classifySyncError(err) : null,
+      });
     })
-    .on('active', () => emit({ status: 'syncing', error: null }))
+    .on('active', () => emit({ status: 'syncing', error: null, errorClass: null }))
     .on('denied', (err) => {
       if (isPlanExpiredErr(err)) {
         gateOnPlanExpired(err);
         return;
       }
-      emit({ status: 'error', error: `denied: ${String(err)}` });
+      emit({
+        status: 'error',
+        error: `denied: ${String(err)}`,
+        errorClass: classifySyncError(err),
+      });
     })
     .on('error', (err) => {
       if (isPlanExpiredErr(err)) {
         gateOnPlanExpired(err);
         return;
       }
-      emit({ status: 'error', error: String(err) });
+      emit({
+        status: 'error',
+        error: String(err),
+        errorClass: classifySyncError(err),
+      });
     });
+}
+
+/**
+ * Classify a sync error from the PouchDB replication stream into one of
+ * four buckets the UI can render a humanised label for. Pattern-matches on
+ * the error's `status` (HTTP) when present, falling back to keyword
+ * heuristics on `name` and `message`.
+ */
+export function classifySyncError(err: unknown): SyncErrorClass {
+  if (!err) return 'unknown';
+  const e = err as { status?: number; name?: string; message?: string };
+  // HTTP status takes precedence when PouchDB surfaces it.
+  if (e.status === 401 || e.status === 403) return 'auth';
+  if (e.status === 412 || e.status === 409) return 'vault-mismatch';
+  // Transport-level: offline, network failure, fetch errors.
+  const msg = (e.message ?? '').toLowerCase();
+  const name = (e.name ?? '').toLowerCase();
+  if (
+    name === 'networkerror' ||
+    name === 'aborterror' ||
+    name === 'typeerror' ||
+    /failed to fetch|networkerror|offline|cors|dns|tls|certificate/.test(msg)
+  ) {
+    return 'network';
+  }
+  // Auth-ish error strings (token expired, unauthorized).
+  if (/unauthor(i|i)zed|forbidden|token|signature/.test(msg)) {
+    return 'auth';
+  }
+  return 'unknown';
 }
 
 function isPlanExpiredErr(err: unknown): boolean {
@@ -183,6 +239,7 @@ function gateOnPlanExpired(err: unknown): void {
   emit({
     status: 'gated',
     error: null,
+    errorClass: null,
     gatedPaidUntil: e.paidUntil ?? null,
     gatedReason: e.reason ?? 'plan_expired',
   });
@@ -194,7 +251,7 @@ export function stopSync(): void {
     active = null;
   }
   currentDb = null;
-  emit({ status: 'idle', error: null, username: null });
+  emit({ status: 'idle', error: null, errorClass: null, username: null });
 }
 
 export function isSyncing(): boolean {

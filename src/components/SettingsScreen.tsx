@@ -74,6 +74,8 @@ export function SettingsScreen({
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
 
+  const [lastBackupAt, setLastBackupAt] = useState<number | null>(null);
+
   const reloadPinAvail = useCallback(async () => {
     const v = await getVaultState(vaultId);
     if (!v) return;
@@ -86,6 +88,24 @@ export function SettingsScreen({
   useEffect(() => {
     void reloadPinAvail();
   }, [reloadPinAvail]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const doc = (await db.pouch.get('_local/last-backup').catch(() => null)) as
+          | { at?: number }
+          | null;
+        if (cancelled) return;
+        setLastBackupAt(typeof doc?.at === 'number' ? doc.at : null);
+      } catch {
+        if (!cancelled) setLastBackupAt(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
 
   const onPinSubmit = useCallback(async (pin: string) => {
     if (!onSetupPin) return;
@@ -221,7 +241,12 @@ export function SettingsScreen({
           >
             {syncOn ? m.settings_syncStop() : m.settings_syncStart()}
           </button>
-          <SyncStatus variant="compact" />
+          <SyncStatus
+            variant="compact"
+            db={db}
+            username={username}
+            fetchOverride={tokenStore?.bearerFetch}
+          />
         </div>
       </section>
 
@@ -312,6 +337,8 @@ export function SettingsScreen({
           </div>
         </div>
       )}
+
+      <LastBackupIndicator at={lastBackupAt} />
 
       {onOpenRestoreZip && (
         <section style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(0,0,0,0.06)' }}>
@@ -462,6 +489,49 @@ export function SettingsScreen({
         <div>status: <code>{syncState.status}</code></div>
       </section>
     </div>
+  );
+}
+
+const STALE_BACKUP_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+
+function LastBackupIndicator({ at }: { at: number | null }): JSX.Element | null {
+  if (at == null) {
+    return (
+      <p
+        style={{
+          fontSize: 12,
+          color: 'var(--ink-3, rgb(136,136,136))',
+          margin: '0 0 4px',
+        }}
+        data-testid="last-backup-never"
+      >
+        {m.settings_lastBackup_never()}
+      </p>
+    );
+  }
+  const ageMs = Date.now() - at;
+  const days = Math.max(0, Math.floor(ageMs / (24 * 60 * 60 * 1000)));
+  const stale = ageMs > STALE_BACKUP_THRESHOLD_MS;
+  return (
+    <p
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 12,
+        color: stale ? '#a8590f' : 'var(--ink-3, rgb(136,136,136))',
+        margin: '0 0 4px',
+      }}
+      data-testid={stale ? 'last-backup-stale' : 'last-backup-fresh'}
+    >
+      {stale && (
+        <span
+          aria-hidden
+          style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff9500' }}
+        />
+      )}
+      {m.settings_lastBackup_label({ days })}
+    </p>
   );
 }
 

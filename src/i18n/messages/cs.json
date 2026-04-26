@@ -384,5 +384,13 @@
   "oauthError_providerCancelled": "Přihlášení jsi přerušil/a. Zkus to znovu nebo zvol jiného poskytovatele.",
   "oauthError_providerError": "Poskytovatel hlásí chybu. Zkus to za chvíli.",
   "oauthError_deviceBlocked": "Server tuhle relaci odmítl. Zkus znovu.",
-  "oauthError_unknown": "Něco se nepovedlo. Zkus to za chvíli."
+  "oauthError_unknown": "Něco se nepovedlo. Zkus to za chvíli.",
+  "syncStatus_errorReason_network": "bez připojení",
+  "syncStatus_errorReason_auth": "platnost relace vypršela",
+  "syncStatus_errorReason_vaultMismatch": "trezor není synchronizovaný",
+  "syncStatus_errorReason_unknown": "něco se neshodlo",
+  "syncStatus_retry": "Zkusit znovu",
+  "syncStatus_retrying": "Pracuji…",
+  "settings_lastBackup_label": "Naposledy zálohováno před {days} dny",
+  "settings_lastBackup_never": "Lokálně zatím nezálohováno"
 }

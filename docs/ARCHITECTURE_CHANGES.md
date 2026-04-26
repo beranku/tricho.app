@@ -124,8 +124,34 @@ The post-unlock surface is split into pure Astro components (zero-JS, SSR'd) and
 
 `appointment.startAt` is sensitive plaintext that lives only inside the encrypted `payload` — it is **not** on the wire and cannot be indexed. Schedule queries scan all `appointment` docs by type via the existing `[type, updatedAt]` index, decrypt each row, then filter by `startAt` client-side. Trading a O(log N + k) range query for O(N_appointments) decrypts is acceptable for a single-user practice and preserves the zero-knowledge invariant.
 
+## Lifecycle flows (post `lifecycle-flows-ux`)
+
+The post-onboarding surface gained five new top-level capabilities. The
+zero-knowledge invariants are unchanged — none of these add plaintext on
+the wire.
+
+| Surface | Module | Purpose |
+|---|---|---|
+| Locked screen | `src/components/LockedScreen.tsx` | Daily-unlock UI mounted on `view: 'locked'`. Single primary action (PRF passkey > PIN > RS) with ghost-styled fallbacks; PIN attempt rate limit (5/60s, 30s lockout) backed by `sessionStorage` so it survives reload. Replaces the legacy `UnlockGate` (deleted). |
+| Restore from ZIP (pre-unlock) | `src/components/welcome/Step3Encryption.tsx` (`RestoreZipFlow`) + `src/components/AppShell.tsx` (`onRestoreFromZip`) | Welcome wizard `flow="restore-zip"`: pick `.tricho-backup.zip` → verify RS unwraps `wrappedDekRs` from the ZIP's `vault-state.json` → materialise local vault at ZIP's `vaultId` → apply bytes via `restoreFromZipBytes`. |
+| Restore from ZIP (post-unlock) | Settings → `view: 'restore-zip'` → `RestoreFromZipScreen` | Same `restoreFromZipBytes` for already-open vaults. |
+| RS rotation (correctness fix) | `src/components/RotateRecoverySecret.tsx` | Replaces the silent rotation that left users locked out. Reuses `Step3DownloadQr` + `Step3VerifyInput` panels: generate → display → checksum-confirm → commit. Old wrap stays on disk until commit succeeds. |
+| Show RS | `src/components/ShowRecoverySecret.tsx` | Re-displays the existing RS as a QR. RS is never stored — user types it once, the app verifies it unwraps `wrappedDekRs`, then renders the canvas. |
+| Account deletion | `src/components/DeleteAccountModal.tsx` + `src/auth/oauth.ts` `deleteAccount(jwt)` | Two-step server handshake (`POST /auth/account/delete-confirm` → `POST /auth/account/delete`), typed-`SMAZAT` gate, fresh-JWT requirement (re-OAuth if >5 min old), local IndexedDB wipe. Server endpoints are deferred to a tricho-auth follow-up. |
+| Plan renewal | `RenewBanner` in `UnlockedShell`; `GatedSheet` for mid-flight `gated`; `PlanPreviewCard` above Step 1 of the wizard | The gated sheet replaces the previous forced `setView('plan')` so practitioners can keep working offline mid-appointment. |
+| Locked-screen i18n | `lock_*` keys in `src/i18n/messages/{cs,en}.json` | Independent from `wizard_step3_existing_qr_*` (semantics drifted). |
+| Sync error humanisation | `classifySyncError` in `src/sync/couch.ts` + `SyncStatus.tsx` retry affordance | `errorClass: 'network' \| 'auth' \| 'vault-mismatch' \| 'unknown'` rendered as a one-line label; raw error string no longer leaks into the UI. |
+| Last-backup indicator | `_local/last-backup` doc on the vault PouchDB (non-replicating, plaintext timestamp) | Settings shows "Last backed up X days ago" with an amber dot when >30 days. |
+| `wipeSession` primitive | `src/lib/lifecycle.ts` | Single source of truth for clean shutdown — replaces scattered `window.location.reload()` calls. Used by logout, idle lock, and the local half of account deletion. |
+
+**Threat-model delta:** none. The `_local/last-backup` doc is a plaintext
+timestamp; it does not replicate (the `_local/` prefix prevents that).
+Device names (when the auth-proxy adds the field — see follow-ups) are
+plaintext on the device list, same trust level as `lastSeenAt`.
+
 ## Known follow-ups
 
 - Social login (Google/Apple) is not wired — account identity is just a per-vault CouchDB credential. A JWT bridge through the auth-proxy could be added later.
 - Photos are attachments on their meta doc; if a practice accumulates thousands of large photos, move to an S3-backed attachment proxy.
 - Appointment editing flow, statistics page, archive page, full settings, calendar date-picker, weather data — deferred from `prototype-ui-integration` to a follow-up change.
+- **Server-side endpoints for `lifecycle-flows-ux`:** `POST /auth/account/delete-confirm` + `POST /auth/account/delete` (idempotent, fresh-JWT-gated); device-name persistence on `POST /auth/devices/register` and a PATCH for renames; `?with-progress=1` on the changes-feed proxy for second-device join progress UI. The client-side surfaces are wired and tested; they degrade gracefully when the endpoints are not yet present.
