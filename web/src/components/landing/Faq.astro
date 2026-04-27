@@ -1,0 +1,38 @@
+---
+import SectionHead from '../ui/SectionHead.astro';
+import FaqItem from '../ui/FaqItem.astro';
+import { faq } from '../../content/landing';
+---
+
+<section class="landing-section">
+  <div class="page">
+    <SectionHead num={faq.num} titleHtml={faq.titleHtml} sub={faq.sub} />
+
+    <div class="faq-list">
+      {faq.items.map((item) => (
+        <FaqItem question={item.question} answerHtml={item.answerHtml} />
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq-list {
+    display: flex;
+    flex-direction: column;
+    max-width: 760px;
+  }
+</style>
+
+<script>
+  // Single-open accordion. Native <details> does the keyboard handling;
+  // this listener just closes siblings when one item opens.
+  document.querySelectorAll<HTMLDetailsElement>('.faq-item').forEach((item) => {
+    item.addEventListener('toggle', () => {
+      if (!item.open) return;
+      document.querySelectorAll<HTMLDetailsElement>('.faq-item').forEach((other) => {
+        if (other !== item && other.open) other.removeAttribute('open');
+      });
+    });
+  });
+</script>

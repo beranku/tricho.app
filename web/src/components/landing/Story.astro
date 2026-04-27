@@ -1,0 +1,218 @@
+---
+import SectionHead from '../ui/SectionHead.astro';
+import { story } from '../../content/landing';
+---
+
+<section class="story landing-section">
+  <div class="page">
+    <SectionHead num={story.num} titleHtml={story.titleHtml} sub={story.sub} />
+    <div class="story-grid">
+      <div class="story-quote-block">
+        {story.quotes.map((q) => (
+          <p class="story-quote" set:html={q} />
+        ))}
+        <div class="story-author">
+          <div class="story-author-name">{story.authorName}</div>
+          <div class="story-author-role">{story.authorRole}</div>
+        </div>
+      </div>
+      <div class="story-video">
+        <div class="video-placeholder" data-tag={story.videoPlaceholderTag}>
+          <button class="video-play" aria-label={story.videoAriaPlay} type="button">
+            <svg width="20" height="22" viewBox="0 0 20 22" fill="currentColor" aria-hidden="true">
+              <path d="M2 1.5 L18 11 L2 20.5 Z" stroke="currentColor" stroke-width="1" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <div class="video-meta">
+            <div class="video-label">{story.videoLabel}</div>
+            <div class="video-duration">{story.videoDuration}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="manifesto">
+      <p set:html={story.manifestoHtml} />
+    </div>
+  </div>
+</section>
+
+<style>
+  .story-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 64px;
+    align-items: center;
+    margin-bottom: 56px;
+  }
+  @media (max-width: 800px) {
+    .story-grid { grid-template-columns: 1fr; gap: 40px; }
+  }
+  .story-quote-block { max-width: 44ch; }
+  .story-quote {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 300;
+    font-size: clamp(20px, 2.4vw, 26px);
+    line-height: 1.45;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin: 0 0 18px;
+  }
+  .story-quote :global(em) {
+    font-style: italic;
+    color: var(--teal-700);
+    font-weight: 300;
+  }
+  .story-quote::before {
+    content: '\201E';
+    color: var(--copper);
+    font-size: 1.2em;
+    line-height: 0;
+    vertical-align: -0.4em;
+    margin-right: 0.05em;
+  }
+  .story-quote:last-of-type::after {
+    content: '\201C';
+    color: var(--copper);
+    font-size: 1.2em;
+    line-height: 0;
+    vertical-align: -0.4em;
+    margin-left: 0.05em;
+  }
+  .story-author {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .story-author-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .story-author-role {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .story-video {
+    position: relative;
+    aspect-ratio: 4/5;
+    max-width: 380px;
+    width: 100%;
+    margin-left: auto;
+  }
+  @media (max-width: 800px) {
+    .story-video { margin: 0 auto; }
+  }
+  .video-placeholder {
+    width: 100%;
+    height: 100%;
+    background:
+      linear-gradient(135deg, var(--cream) 0%, var(--copper-soft) 100%),
+      var(--cream);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.25s ease;
+  }
+  .video-placeholder::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--paper-grain);
+    background-size: 200px 200px;
+    mix-blend-mode: var(--paper-blend);
+    opacity: var(--paper-opacity);
+    pointer-events: none;
+  }
+  .video-placeholder::after {
+    content: attr(data-tag);
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--copper-deep);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.5;
+  }
+  .video-placeholder:hover { transform: translateY(-2px); }
+  .video-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--ink-espresso);
+    color: var(--bg);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 24px -8px rgba(28, 25, 23, 0.4);
+    padding-left: 6px;
+    transition: transform 0.2s;
+  }
+  .video-play:hover { transform: translate(-50%, -50%) scale(1.05); }
+  .video-play:focus-visible {
+    outline: 2px solid var(--bg);
+    outline-offset: 4px;
+  }
+  :global(:root[data-theme='dark']) .video-play {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .video-meta {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .video-label {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  .video-duration {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .manifesto {
+    border-top: 1px solid var(--line);
+    padding-top: 40px;
+    max-width: 64ch;
+  }
+  .manifesto p {
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--ink-2);
+    margin: 0 0 16px;
+  }
+  .manifesto p :global(em) {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--teal-700);
+  }
+</style>

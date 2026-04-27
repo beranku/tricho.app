@@ -1,0 +1,185 @@
+---
+import PhoneStatusBar from './PhoneStatusBar.astro';
+
+interface Props {
+  time: string;
+  client: { name: string; meta: string };
+  tags: string[];
+  diagnostika: string;
+  history: { date: string; what: string }[];
+  photos: { label: string }[];
+}
+const { time, client, tags, diagnostika, history, photos } = Astro.props;
+---
+
+<PhoneStatusBar time={time} />
+
+<div class="phone-chrome">
+  <div class="phone-glyph" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  </div>
+  <div class="phone-glyph" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </svg>
+  </div>
+</div>
+
+<div class="card-header">
+  <div class="card-name">{client.name}</div>
+  <div class="card-meta">{client.meta}</div>
+</div>
+
+<div class="card-tags">
+  {tags.map((tag) => <span class="card-tag">{tag}</span>)}
+</div>
+
+<div class="card-section">
+  <div class="card-section-label">Diagnostika</div>
+  <p class="card-diag">{diagnostika}</p>
+</div>
+
+<div class="card-section">
+  <div class="card-section-label">Historie</div>
+  <ul class="card-history">
+    {history.map((h) => (
+      <li>
+        <span class="date">{h.date}</span>
+        <span class="what">{h.what}</span>
+      </li>
+    ))}
+  </ul>
+</div>
+
+<div class="card-photos">
+  {photos.map((p) => <div class="card-photo" data-label={p.label}></div>)}
+</div>
+
+<style>
+  .phone-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px 10px;
+    min-height: 48px;
+  }
+  .phone-glyph {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+  }
+
+  .card-header {
+    padding: 8px 16px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .card-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    margin-bottom: 2px;
+  }
+  .card-meta { font-size: 11px; color: var(--ink-3); }
+
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 14px 16px 12px;
+  }
+  .card-tag {
+    font-family: 'Caveat', cursive;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--copper-deep);
+    background: var(--copper-soft);
+    padding: 2px 9px;
+    border-radius: 4px;
+    line-height: 1.2;
+  }
+  :global(:root[data-theme='dark']) .card-tag {
+    background: var(--copper-soft);
+    color: var(--copper);
+  }
+
+  .card-section {
+    padding: 12px 16px;
+    border-top: 1px solid var(--line-2);
+  }
+  .card-section-label {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--copper);
+    margin-bottom: 8px;
+  }
+  .card-diag {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    margin: 0;
+  }
+
+  .card-history {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+  }
+  .card-history li {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    gap: 8px;
+    font-size: 12px;
+    align-items: baseline;
+  }
+  .card-history .date {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .card-history .what { color: var(--ink-3); }
+
+  .card-photos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--line-2);
+  }
+  .card-photo {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--cream) 0%, var(--copper-soft) 100%);
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .card-photo::after {
+    content: attr(data-label);
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 8px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+</style>
