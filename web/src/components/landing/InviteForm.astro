@@ -46,6 +46,24 @@ const { align = 'center' } = Astro.props;
     </button>
   </div>
 
+  {/* Toggle for the Brevo `JOIN_TESTING` attribute. Rendered as a radio
+      group for clarity (one option must always be selected); the submit
+      handler translates the chosen value to `JOIN_TESTING=1` only when
+      the testing option is picked, mirroring Brevo's checkbox semantics. */}
+  <fieldset class="invite-choice">
+    <legend class="invite-choice__legend">{inviteForm.choice.legend}</legend>
+    <label class="invite-choice__option">
+      <input type="radio" name="join_choice" value="testing" />
+      <span class="invite-choice__bullet" aria-hidden="true"></span>
+      <span class="invite-choice__text">{inviteForm.choice.testing}</span>
+    </label>
+    <label class="invite-choice__option">
+      <input type="radio" name="join_choice" value="wait" checked />
+      <span class="invite-choice__bullet" aria-hidden="true"></span>
+      <span class="invite-choice__text">{inviteForm.choice.wait}</span>
+    </label>
+  </fieldset>
+
   <p class="invite-helper">{inviteForm.helper}</p>
 
   <p class="invite-status invite-status--ok" data-invite-status="ok" hidden role="status">
@@ -178,6 +196,82 @@ const { align = 'center' } = Astro.props;
     overflow: hidden;
     opacity: 0;
   }
+
+  /* Testing toggle. Native radio inputs are visually hidden; the
+   * .invite-choice__bullet draws the dot. */
+  .invite-choice {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .invite-choice__legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .invite-choice__option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    padding: 6px 4px;
+    border-radius: var(--radius-ctrl);
+    transition: background var(--t-hover);
+  }
+  .invite-choice__option:hover {
+    background: var(--copper-tint);
+  }
+  .invite-choice__option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .invite-choice__bullet {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink-4);
+    background: var(--surface);
+    position: relative;
+    transition: border-color var(--t-base);
+  }
+  .invite-choice__option input:checked ~ .invite-choice__bullet {
+    border-color: var(--teal);
+  }
+  .invite-choice__option input:checked ~ .invite-choice__bullet::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--teal);
+  }
+  .invite-choice__option input:focus-visible ~ .invite-choice__bullet {
+    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.18);
+  }
+  .invite-choice__text {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--ink-2);
+    text-align: left;
+  }
+  .invite-form--center .invite-choice {
+    text-align: left;
+    max-width: 440px;
+    margin: 0 auto;
+    width: 100%;
+  }
 </style>
 
 <script>
@@ -205,11 +299,21 @@ const { align = 'center' } = Astro.props;
       form.dataset.state = 'loading';
       if (submit) submit.disabled = true;
 
+      // Translate the radio-group choice into Brevo's `JOIN_TESTING`
+      // checkbox field: `JOIN_TESTING=1` only when the testing option is
+      // selected; otherwise the field is omitted entirely.
+      const formData = new FormData(form);
+      const choice = formData.get('join_choice');
+      formData.delete('join_choice');
+      if (choice === 'testing') {
+        formData.set('JOIN_TESTING', '1');
+      }
+
       try {
         await fetch(BREVO_URL, {
           method: 'POST',
           mode: 'no-cors',
-          body: new FormData(form),
+          body: formData,
         });
         // With no-cors the response is opaque; we cannot read status. Treat
         // any completion without a network error as success. Verifiable in
