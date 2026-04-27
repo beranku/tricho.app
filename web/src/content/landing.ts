@@ -156,7 +156,7 @@ export const twoScreens = {
 
 export const story = {
   num: '02',
-  titleHtml: 'Aplikace, jakou Ludmila <em>potřebovala</em>.',
+  titleHtml: 'Aplikace, jakou Lída <em>potřebovala</em>.',
   sub: 'Tricholožka · Pardubice · 8 let praxe',
   quotes: [
     'Vedu si kartotéku osm let. Začínala jsem na papírových kartičkách v zamykatelné skříňce — pak v Excelu, pak ve fotkách v galerii.',
