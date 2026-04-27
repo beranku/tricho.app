@@ -23,6 +23,7 @@ export const header = {
   ],
   themeToggleLabel: 'Přepnout motiv',
   ctaLabel: 'Požádat o pozvánku',
+  ctaLabelShort: 'Chci to',
   ctaHref: '#pozvanka',
 };
 
