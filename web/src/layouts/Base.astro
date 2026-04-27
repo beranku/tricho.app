@@ -92,10 +92,12 @@ const allJsonLd = [orgJsonLd, ...jsonLd];
          Linked here so the install prompt can fire on the marketing landing. -->
     <link rel="manifest" href="/manifest.webmanifest" />
 
-    <!-- Icons -->
-    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <!-- Icons. Favicon is a copper notebook with a Fraunces "T" — raster
+         only (no SVG version) because the artwork is a 3D rendered image,
+         not flat vector. Browsers pick the closest size. -->
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
 
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
