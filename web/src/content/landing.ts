@@ -10,6 +10,9 @@ export const siteMeta = {
   lang: 'cs',
 };
 
+// Tricho.app is currently invite-only. Every CTA on the landing now points
+// to #pozvanka — the anchor of the FinalCta section, which renders the
+// invite-request form (InviteForm.astro). Hero renders the form inline too.
 export const header = {
   brandName: 'Tricho.app',
   brandVersion: 'v0.9 · v přípravě',
@@ -19,8 +22,20 @@ export const header = {
     { label: 'Plány', href: '#plany' },
   ],
   themeToggleLabel: 'Přepnout motiv',
-  ctaLabel: 'Začít zdarma',
-  ctaHref: '/app/',
+  ctaLabel: 'Požádat o pozvánku',
+  ctaHref: '#pozvanka',
+};
+
+export const inviteForm = {
+  label: 'Tvůj e-mail',
+  placeholder: 'tvůj@email.cz',
+  submitLabel: 'Požádat o pozvánku',
+  helper:
+    'Aplikace je teď jen na pozvánky. Napiš nám e-mail a ozveme se ti, jakmile budeme mít místo.',
+  successMessage:
+    'Díky! Pozvánku ti pošleme na e-mail, jakmile uvolníme další místa.',
+  errorMessage:
+    'Něco se pokazilo při odesílání. Zkus to znovu nebo nám napiš na ahoj@tricho.app.',
 };
 
 export type PhoneSlot =
@@ -117,8 +132,8 @@ export const hero = {
   // Title is rendered as raw HTML (set:html) so <em> can flip to italic teal.
   titleHtml: 'Karta klientky,<br>která si <em>pamatuje za tebe</em>.',
   lede: 'Anamnéza, alergeny, fotky pokožky, co jste minule zkoušely, kdy přijde příště. Všechno o jedné klientce na jednom místě, v telefonu.',
-  ctaLabel: 'Začít zdarma',
-  ctaHref: '/app/',
+  // Hero renders <InviteForm /> instead of a single CTA button while the
+  // app is invite-only.
   meta: ['iPhone i Android', 'Bez platební karty'],
 };
 
@@ -199,8 +214,8 @@ export const pricing = {
     label: 'Aplikace',
     titleHtml: 'Bez <em>háčku</em>.',
     text: 'Bez omezení počtu klientek, bez časového limitu. Žádný „trial", po kterém se zamknou funkce. Co máš teď, máš napořád.',
-    ctaLabel: 'Začít zdarma',
-    ctaHref: '/app/',
+    ctaLabel: 'Požádat o pozvánku',
+    ctaHref: '#pozvanka',
     features: [
       'Tolik klientek a termínů, kolik potřebuješ',
       'Diář a karta klientky',
@@ -327,8 +342,10 @@ export const faq = {
 export const finalCta = {
   titleHtml: 'Začni s <em>další klientkou</em>.',
   lede: 'Staré poznámky nech v sešitě. První návštěvu, která ti přijde, zapiš do Tricha — a uvidíš, jestli ti sedne.',
-  ctaLabel: 'Začít zdarma',
-  ctaHref: '/app/',
+  // FinalCta renders <InviteForm /> in place of the old button — kept here
+  // for any consumers that still want a fallback link target.
+  ctaLabel: 'Požádat o pozvánku',
+  ctaHref: '#pozvanka',
   riskReversal:
     'Bez platební karty. Když ti to nesedne, smažeš účet jedním klepnutím a data si vezmeš s sebou.',
   micro: 'iPhone i Android · iPad i tablet · Funguje i v prohlížeči na PC',

@@ -1,6 +1,7 @@
 ---
 import PhoneFrame from '../phone/PhoneFrame.astro';
 import ContentClientReal from '../phone/ContentClientReal.astro';
+import InviteForm from './InviteForm.astro';
 import { hero, realClient } from '../../content/landing';
 ---
 
@@ -11,8 +12,8 @@ import { hero, realClient } from '../../content/landing';
         <div class="hero-eyebrow">{hero.eyebrow}</div>
         <h1 class="hero-title" set:html={hero.titleHtml} />
         <p class="hero-lede">{hero.lede}</p>
-        <div class="hero-ctas">
-          <a href={hero.ctaHref} class="btn-primary">{hero.ctaLabel}</a>
+        <div class="hero-cta-form">
+          <InviteForm align="left" />
         </div>
         <div class="hero-meta">
           {hero.meta.map((m) => <span>{m}</span>)}
@@ -83,10 +84,7 @@ import { hero, realClient } from '../../content/landing';
     max-width: 46ch;
     margin: 0 0 36px;
   }
-  .hero-ctas {
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
+  .hero-cta-form {
     margin-bottom: 28px;
   }
   .hero-meta {

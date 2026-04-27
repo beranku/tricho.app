@@ -1,13 +1,16 @@
 ---
+import InviteForm from './InviteForm.astro';
 import { finalCta } from '../../content/landing';
 ---
 
-<section class="final-cta" id="stahnout">
+{/* Anchor "pozvanka" replaces the old "stahnout" — every CTA on the page
+    points here while the app is invite-only. */}
+<section class="final-cta" id="pozvanka">
   <div class="page">
     <h2 set:html={finalCta.titleHtml} />
     <p class="lede">{finalCta.lede}</p>
-    <div class="ctas">
-      <a href={finalCta.ctaHref} class="btn-primary">{finalCta.ctaLabel}</a>
+    <div class="form-wrap">
+      <InviteForm align="center" />
     </div>
     <p class="risk-reversal">{finalCta.riskReversal}</p>
     <div class="micro">{finalCta.micro}</div>
@@ -42,11 +45,9 @@ import { finalCta } from '../../content/landing';
     max-width: 50ch;
     margin: 0 auto 32px;
   }
-  .final-cta .ctas {
+  .final-cta .form-wrap {
     display: flex;
     justify-content: center;
-    gap: 14px;
-    flex-wrap: wrap;
   }
   .final-cta .risk-reversal {
     margin: 24px auto 0;
