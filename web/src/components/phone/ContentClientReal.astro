@@ -102,15 +102,21 @@ const {
     background: var(--bg);
   }
 
-  /* Sticky client chrome — kicker + Fraunces name. Sits below status + chrome buttons. */
+  /* Client chrome — kicker + Fraunces name centered between the absolute
+   * chrome buttons (back-arrow on the left, ellipsis on the right). The
+   * horizontal padding leaves room for the 32-px buttons + 10-px chrome
+   * padding on each side. */
   .client-chrome {
-    margin-top: 76px;
-    padding: 8px 56px 10px;
+    position: relative;
+    margin-top: 38px;
+    min-height: 40px;
+    padding: 4px 56px 8px;
     background: var(--bg);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    gap: 4px;
     z-index: 15;
   }
   .kicker {

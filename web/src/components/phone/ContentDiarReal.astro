@@ -128,11 +128,14 @@ const {
     background: var(--bg);
   }
 
-  /* Sticky day header — sits below status bar + chrome buttons */
+  /* Day header — kicker + Fraunces date centered between the absolute
+   * chrome buttons (hamburger on the left, ellipsis on the right).
+   * Horizontal padding leaves room for the 32-px buttons + 10-px chrome
+   * padding on each side. The hand-drawn sun sits inside that left padding. */
   .day-header-today {
     position: relative;
-    margin-top: 80px;
-    min-height: 44px;
+    margin-top: 38px;
+    min-height: 40px;
     padding: 4px 56px 8px;
     background: var(--bg);
     display: flex;
@@ -142,7 +145,7 @@ const {
   }
   .weather-sun {
     position: absolute;
-    left: 18px;
+    left: 50px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--copper);
