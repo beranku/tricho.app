@@ -1,0 +1,58 @@
+---
+// Mirrors app/src/components/astro/ChromeButtons.astro — pair of icon
+// buttons that float above the sticky day-header / client-header.
+//
+// variant 'a' = Phone A / Diary (hamburger + ellipsis).
+// variant 'b' = Phone B / Client (back-arrow + ellipsis).
+interface Props {
+  variant?: 'a' | 'b';
+}
+const { variant = 'a' } = Astro.props;
+---
+
+<div class="chrome-buttons">
+  <span class="chrome-glyph">
+    {variant === 'a' ? (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" y1="8" x2="20" y2="8" />
+        <line x1="4" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="16" x2="20" y2="16" />
+      </svg>
+    ) : (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="14,6 8,12 14,18" />
+      </svg>
+    )}
+  </span>
+  <span class="chrome-glyph">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </svg>
+  </span>
+</div>
+
+<style>
+  .chrome-buttons {
+    position: absolute;
+    top: 38px;
+    left: 0;
+    right: 0;
+    min-height: 40px;
+    padding: 4px 10px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 16;
+    pointer-events: none;
+  }
+  .chrome-glyph {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-2);
+  }
+</style>

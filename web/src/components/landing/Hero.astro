@@ -1,7 +1,7 @@
 ---
 import PhoneFrame from '../phone/PhoneFrame.astro';
-import ContentDiar from '../phone/ContentDiar.astro';
-import { hero, phoneDiar } from '../../content/landing';
+import ContentClientReal from '../phone/ContentClientReal.astro';
+import { hero, realClient } from '../../content/landing';
 ---
 
 <section class="hero landing-section">
@@ -21,15 +21,18 @@ import { hero, phoneDiar } from '../../content/landing';
 
       <div>
         <PhoneFrame variant="full">
-          <ContentDiar
-            time={phoneDiar.status.time}
-            weatherIcon={phoneDiar.dayHeader.weatherIcon}
-            kicker={phoneDiar.dayHeader.kicker}
-            temperature={phoneDiar.dayHeader.temperature}
-            main={phoneDiar.dayHeader.main}
-            slots={phoneDiar.slots}
-            divider={phoneDiar.divider}
-            tomorrow={phoneDiar.tomorrow}
+          <ContentClientReal
+            time={realClient.time}
+            islandSize="full"
+            clientName={realClient.clientName}
+            serviceLabel={realClient.serviceLabel}
+            allergen={realClient.allergen}
+            remainingLabel={realClient.remainingLabel}
+            thumbs={realClient.thumbs}
+            services={realClient.services}
+            products={realClient.products}
+            note={realClient.note}
+            nextTermLabel={realClient.nextTermLabel}
           />
         </PhoneFrame>
       </div>

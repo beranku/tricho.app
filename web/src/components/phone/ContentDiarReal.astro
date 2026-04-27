@@ -1,0 +1,319 @@
+---
+// Production-fidelity preview of the PWA's Daily Schedule (Phone A).
+// Mirrors app/src/components/astro/{StatusBar,Island,ChromeButtons,
+// DayHeaderToday,Slot,SlotDone,SlotActive,SlotFree,DayDivider}.astro,
+// inlined for the static landing page (no React, no app routing).
+import RealStatusBar from './RealStatusBar.astro';
+import RealIsland from './RealIsland.astro';
+import ChromeButtons from './ChromeButtons.astro';
+import type { PhoneSlot } from '../../content/landing';
+
+interface Props {
+  time?: string;
+  islandSize?: 'full' | 'mini';
+  weatherTemp?: string;
+  date: string;
+  slots: PhoneSlot[];
+  divider: { label: string; main: string };
+  tomorrow: PhoneSlot[];
+}
+const {
+  time = '9:41',
+  islandSize = 'full',
+  weatherTemp = '15°',
+  date,
+  slots,
+  divider,
+  tomorrow,
+} = Astro.props;
+---
+
+<div class="diary-screen">
+  <RealStatusBar time={time} />
+  <RealIsland size={islandSize} />
+  <ChromeButtons variant="a" />
+
+  <div class="day-header-today">
+    <span class="weather-sun" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 8.5 9 Q 7.8 12.2 9.8 14.4 Q 12 15.8 14.3 14.4 Q 16 12 14.6 9.5 Q 12.5 8 10 8.4 Q 8.9 8.7 8.5 9 Z" />
+        <path d="M 12 3 L 12 5.2" />
+        <path d="M 12 18.8 L 12 21" />
+        <path d="M 3 12 L 5.2 12" />
+        <path d="M 18.8 12 L 21 12" />
+        <path d="M 5.4 5.4 L 7 7" />
+        <path d="M 17 17 L 18.6 18.6" />
+        <path d="M 5.4 18.6 L 7 17" />
+        <path d="M 17 7 L 18.6 5.4" />
+      </svg>
+    </span>
+    <span class="header-stack">
+      <span class="kicker-row">
+        <span class="kicker">Dnes</span>
+        <span class="kicker-temp">{weatherTemp}</span>
+      </span>
+      <span class="header-main">
+        {date}
+        <svg class="caret" width="10" height="8" viewBox="0 0 12 8" fill="none" aria-hidden="true">
+          <path d="M1 1.5 L6 6.5 L11 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
+    </span>
+  </div>
+
+  <div class="slots">
+    {slots.map((slot) => (
+      slot.kind === 'free' ? (
+        <div class="slot slot--free">
+          <span class="slot-time slot-time--dim">{slot.time}</span>
+          <span class="slot-body">
+            <span class="slot-free-label">{slot.freeText}</span>
+          </span>
+          <span class="slot-plus" aria-hidden="true">+</span>
+        </div>
+      ) : (
+        <div class:list={['slot', slot.status === 'done' && 'slot--done', slot.status === 'active' && 'slot--active']}>
+          <span class="slot-time">{slot.time}</span>
+          <span class="slot-body">
+            <span class="slot-name">{slot.name}</span>
+            <span class="slot-sub">{slot.subtitle}</span>
+          </span>
+          {slot.status === 'done' ? (
+            <span class="slot-check" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2.8 7.2 C 3.8 8.6, 4.8 9.6, 5.7 10.2 C 6.5 8.3, 8.7 5.4, 11.4 2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+          ) : (
+            <span class="slot-spacer" aria-hidden="true"></span>
+          )}
+        </div>
+      )
+    ))}
+
+    <div class="day-divider">
+      <span class="dv-line"></span>
+      <span class="dv-kicker">{divider.label}</span>
+      <span class="dv-line"></span>
+    </div>
+    <div class="dv-main">{divider.main}</div>
+
+    {tomorrow.map((slot) => (
+      slot.kind === 'free' ? (
+        <div class="slot slot--free">
+          <span class="slot-time slot-time--dim">{slot.time}</span>
+          <span class="slot-body">
+            <span class="slot-free-label">{slot.freeText}</span>
+          </span>
+          <span class="slot-plus" aria-hidden="true">+</span>
+        </div>
+      ) : (
+        <div class="slot">
+          <span class="slot-time">{slot.time}</span>
+          <span class="slot-body">
+            <span class="slot-name">{slot.name}</span>
+            <span class="slot-sub">{slot.subtitle}</span>
+          </span>
+          <span class="slot-spacer" aria-hidden="true"></span>
+        </div>
+      )
+    ))}
+  </div>
+</div>
+
+<style>
+  .diary-screen {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* Sticky day header — sits below status bar + chrome buttons */
+  .day-header-today {
+    position: relative;
+    margin-top: 80px;
+    min-height: 44px;
+    padding: 4px 56px 8px;
+    background: var(--bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 15;
+  }
+  .weather-sun {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--copper);
+    opacity: 0.9;
+    display: inline-flex;
+    align-items: center;
+  }
+  .header-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    line-height: 1;
+  }
+  .kicker-row {
+    position: relative;
+    display: inline-block;
+    line-height: 1;
+  }
+  .kicker {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--teal);
+  }
+  .kicker-temp {
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--ink-4);
+    font-variant-numeric: tabular-nums;
+  }
+  .header-main {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 17px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .caret { color: var(--ink-4); transform: translateY(1px); }
+
+  /* Slot rows — match app/src/components/astro/Slot.astro grid */
+  .slots { padding: 4px 0 16px; }
+  .slot {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    align-items: start;
+    padding: 11px 18px;
+    gap: 12px;
+    min-height: 56px;
+  }
+  .slot-time {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink-2);
+    line-height: 1.1;
+    padding-top: 1px;
+    font-variant-numeric: tabular-nums;
+  }
+  .slot-time--dim { font-weight: 550; color: var(--ink-4); }
+  .slot-body { display: flex; flex-direction: column; min-width: 0; }
+  .slot-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .slot-sub {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    margin-top: 4px;
+    font-weight: 400;
+  }
+  .slot-spacer { width: 18px; }
+
+  /* Done variant */
+  .slot--done { opacity: 0.55; }
+  .slot--done .slot-time { color: var(--ink-4); }
+  .slot--done .slot-name { color: var(--ink-3); }
+  .slot--done .slot-sub { color: var(--ink-4); }
+  .slot-check {
+    color: var(--copper-mid);
+    width: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 4px;
+    opacity: 0.85;
+  }
+
+  /* Active variant — teal-tinted card */
+  .slot--active {
+    background: var(--teal-tint);
+    border: 1px solid var(--teal-border);
+    border-radius: var(--radius-card);
+    padding: 12px 14px;
+    margin: 4px 4px;
+    box-shadow: 0 1px 2px rgba(14, 116, 144, 0.04);
+  }
+  .slot--active .slot-time,
+  .slot--active .slot-name { color: var(--teal-strong); }
+  .slot--active .slot-name { font-weight: 550; }
+  :global(:root[data-theme='dark']) .slot--active {
+    background: rgba(36, 148, 178, 0.12);
+    border-color: rgba(36, 148, 178, 0.28);
+  }
+
+  /* Free variant — Patrick Hand label, copper plus */
+  .slot--free .slot-free-label {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 16px;
+    color: var(--ink-3);
+    line-height: 1.1;
+    padding-top: 1px;
+  }
+  .slot-plus {
+    font-family: 'Caveat', cursive;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--copper);
+    width: 22px;
+    text-align: center;
+    line-height: 1;
+  }
+
+  /* Day divider — copper line + kicker, then Fraunces date below */
+  .day-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px 4px;
+    color: var(--copper);
+    justify-content: center;
+  }
+  .dv-line {
+    flex: 0 0 28px;
+    height: 1px;
+    background: var(--copper-border);
+    opacity: 0.6;
+  }
+  .dv-kicker {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .dv-main {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 17px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    text-align: center;
+    margin: 0 0 4px;
+    font-variant-numeric: tabular-nums;
+  }
+</style>

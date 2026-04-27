@@ -71,6 +71,27 @@ export const phoneDiarMini = {
   ] as PhoneSlot[],
 };
 
+// Production-fidelity client data used by the real-look ContentClientReal
+// component. Mirrors the shape rendered by app/src/components/islands/
+// ClientDetail.tsx (active-appointment summary, services + products chips,
+// Patrick-Hand note, next-term row, three thumbnail angles).
+export const realClient = {
+  time: '10:32',
+  clientName: 'Klára Dvořáková',
+  serviceLabel: 'Diagnostika',
+  allergen: 'Amoniak',
+  remainingLabel: 'zbývá 45 min',
+  thumbs: [
+    { label: 'Před', angle: 'before' as const },
+    { label: 'Detail', angle: 'detail' as const },
+    { label: 'Po', angle: 'after' as const },
+  ],
+  services: ['Diagnostika', 'Konzultace', 'Trichologický zákrok'],
+  products: ['Minoxidil 5 %', 'Šampon Trico'],
+  note: 'Přechází z barvení s amoniakem. Prosí přírodnější přípravky a víc fotek pokožky před zákrokem.',
+  nextTermLabel: '14. 5. — Konzultace',
+};
+
 export const phoneKartaKlientky = {
   status: { time: '10:32' },
   client: {

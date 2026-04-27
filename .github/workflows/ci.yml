@@ -2,7 +2,12 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    # `main` ships production (https://tricho.app); `dev` ships the staging
+    # branch alias on Cloudflare Pages. The `--branch` flag below tags each
+    # deploy so Cloudflare creates a stable per-branch URL — the dashboard
+    # custom-domain mapping (e.g. dev.tricho.app → branch=dev) is a one-time
+    # setup outside CI.
+    branches: [main, dev]
   pull_request:
     branches: [main]
 
