@@ -32,6 +32,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Italic emphasis = teal (north-star §4 signature emphasis). */
+em {
+  color: var(--teal);
+  font-style: italic;
+}
+
 /* Kicker — the all-caps copper label above narrative text. */
 .kicker {
   font-family: 'Geist', system-ui, sans-serif;

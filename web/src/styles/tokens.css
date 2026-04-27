@@ -33,7 +33,7 @@
   --teal-border: rgba(14, 116, 144, 0.22);
   --teal-200: #A5E4EC;
   --teal-600: #0E7490;
-  --teal-700: #155E75;
+  --teal-700: #0E7490;
   --teal-900: #134E5E;
 
   /* Annotation (warm) */
@@ -49,6 +49,7 @@
   /* Phone frame */
   --phone-frame: #F8F2E4;
   --phone-frame-border: #D9D2C3;
+  --island-fill: #1A1714;
   --phone-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
     0 0 0 1px var(--phone-frame-border),
@@ -73,7 +74,7 @@
 
   /* Radii */
   --radius-chip: 10px;
-  --radius-card: 18px;
+  --radius-card: 14px;
   --radius-panel: 20px;
   --radius-btn: 12px;
   --radius-ctrl: 12px;
@@ -124,7 +125,7 @@
   --teal-border: rgba(36, 148, 178, 0.34);
   --teal-200: #1B4F5C;
   --teal-600: #5FAFC5;
-  --teal-700: #7BC0D2;
+  --teal-700: #2494B2;
   --teal-900: #5FAFC5;
 
   --copper: #C48867;
@@ -138,6 +139,7 @@
 
   --phone-frame: #100C09;
   --phone-frame-border: #2A211B;
+  --island-fill: #1A1714;
   --phone-shadow:
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 0 0 1px var(--phone-frame-border),
