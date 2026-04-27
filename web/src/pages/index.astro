@@ -12,7 +12,10 @@ import Voices from '../components/landing/Voices.astro';
 import Faq from '../components/landing/Faq.astro';
 import FinalCta from '../components/landing/FinalCta.astro';
 import Footer from '../components/landing/Footer.astro';
-import InstallBanner from '../components/InstallBanner.astro';
+
+// InstallBanner is intentionally not rendered on the landing while the app
+// is invite-only — there is nothing to install yet for a non-invitee.
+// Re-import + render it here once invites open.
 
 import { siteMeta, pricing } from '../content/landing';
 
@@ -48,7 +51,6 @@ const softwareJsonLd = {
   <Header />
 
   <main id="main">
-    <InstallBanner />
     <Hero />
     <TwoScreens />
     <Story />

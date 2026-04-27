@@ -27,15 +27,14 @@ export const header = {
 };
 
 export const inviteForm = {
+  // `label` is rendered visually-hidden for screen readers — the placeholder
+  // and the surrounding section copy carry the visual context.
   label: 'Tvůj e-mail',
   placeholder: 'tvůj@email.cz',
   submitLabel: 'Požádat o pozvánku',
-  helper:
-    'Aplikace je teď jen na pozvánky. Napiš nám e-mail a ozveme se ti, jakmile budeme mít místo.',
-  successMessage:
-    'Díky! Pozvánku ti pošleme na e-mail, jakmile uvolníme další místa.',
-  errorMessage:
-    'Něco se pokazilo při odesílání. Zkus to znovu nebo nám napiš na ahoj@tricho.app.',
+  helper: 'Pošleme ti pozvánku, jakmile uvolníme místo.',
+  successMessage: 'Díky! Ozveme se ti.',
+  errorMessage: 'Něco se pokazilo. Napiš nám na ahoj@tricho.app.',
 };
 
 export type PhoneSlot =
