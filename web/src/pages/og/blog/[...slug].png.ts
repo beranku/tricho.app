@@ -69,7 +69,7 @@ export const GET: APIRoute = async ({ props }) => {
 
   if (!fontBuf) {
     const png = await renderPlaceholder();
-    return new Response(png, {
+    return new Response(new Uint8Array(png), {
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=31536000, immutable',
@@ -97,12 +97,12 @@ export const GET: APIRoute = async ({ props }) => {
   const svg = await satori(tree as Parameters<typeof satori>[0], {
     width: 1200,
     height: 630,
-    fonts: [{ name: 'Fraunces', data: fontBuf, weight: 550 as const, style: 'normal' as const }],
+    fonts: [{ name: 'Fraunces', data: fontBuf, weight: 500 as const, style: 'normal' as const }],
   });
 
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
 
-  return new Response(png, {
+  return new Response(new Uint8Array(png), {
     headers: {
       'Content-Type': 'image/png',
       'Cache-Control': 'public, max-age=31536000, immutable',
