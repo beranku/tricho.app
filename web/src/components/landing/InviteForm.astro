@@ -86,6 +86,15 @@ const { align = 'center' } = Astro.props;
     gap: 14px;
     width: 100%;
     max-width: 480px;
+    /* Anchor the form as a deliberate region — matches .feature-card /
+     * .pricing-card visual idiom in landing.css. The slightly warmer
+     * surface-2 lets the email input (var(--surface)) read as a "lifted"
+     * interactive layer. */
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    padding: 20px;
+    box-shadow: var(--card-shadow);
   }
   .invite-form--center {
     margin-left: auto;
@@ -116,6 +125,7 @@ const { align = 'center' } = Astro.props;
     flex: 1 1 240px;
     min-width: 0;
     padding: 12px 16px;
+    min-height: 44px;
     border-radius: var(--radius-ctrl);
     border: 1px solid var(--line);
     background: var(--surface);
@@ -165,8 +175,8 @@ const { align = 'center' } = Astro.props;
     color: var(--ink-3);
     line-height: 1.4;
     margin: 0;
+    text-align: center;
   }
-  .invite-form--center .invite-helper { text-align: center; }
 
   .invite-status {
     margin: 0;
@@ -198,14 +208,16 @@ const { align = 'center' } = Astro.props;
   }
 
   /* Testing toggle. Native radio inputs are visually hidden; the
-   * .invite-choice__bullet draws the dot. */
+   * .invite-choice__bullet draws the dot. Sits inside the form card
+   * with a subtle top border to separate from the email row. */
   .invite-choice {
     border: 0;
-    padding: 0;
+    padding: 4px 0 0;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    border-top: 1px solid var(--line-soft);
   }
   .invite-choice__legend {
     position: absolute;
@@ -220,7 +232,7 @@ const { align = 'center' } = Astro.props;
   }
   .invite-choice__option {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
     cursor: pointer;
     padding: 6px 4px;
@@ -237,9 +249,8 @@ const { align = 'center' } = Astro.props;
   }
   .invite-choice__bullet {
     flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
-    margin-top: 2px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     border: 1.5px solid var(--ink-4);
     background: var(--surface);
@@ -261,16 +272,10 @@ const { align = 'center' } = Astro.props;
   }
   .invite-choice__text {
     font-family: 'Geist', system-ui, sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.4;
     color: var(--ink-2);
     text-align: left;
-  }
-  .invite-form--center .invite-choice {
-    text-align: left;
-    max-width: 440px;
-    margin: 0 auto;
-    width: 100%;
   }
 </style>
 
