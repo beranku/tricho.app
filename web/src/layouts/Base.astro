@@ -41,7 +41,7 @@ const orgJsonLd = {
   '@type': 'Organization',
   name: 'Tricho',
   url: SITE,
-  logo: `${SITE}/icons/icon-512.png?v=3`,
+  logo: `${SITE}/icons/icon-512.png?v=4`,
 };
 
 const allJsonLd = [orgJsonLd, ...jsonLd];
@@ -95,12 +95,12 @@ const allJsonLd = [orgJsonLd, ...jsonLd];
     <!-- Icons. Favicon is a copper notebook with a Fraunces "T" — raster
          only (no SVG version) because the artwork is a 3D rendered image,
          not flat vector. Browsers pick the closest size.
-         The ?v=3 query strings cache-bust earlier deploys (which were
+         The ?v=4 query strings cache-bust earlier deploys (which were
          marked `Cache-Control: immutable`); bump the value any time the
          artwork changes. -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=3" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=3" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=4" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=4" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=4" />
 
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
