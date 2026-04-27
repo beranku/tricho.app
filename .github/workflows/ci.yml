@@ -23,6 +23,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       app: ${{ steps.filter.outputs.app }}
       shared: ${{ steps.filter.outputs.shared }}
+      backend: ${{ steps.filter.outputs.backend }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +37,9 @@ jobs:
               - 'app/**'
             shared:
               - 'shared/**'
+            backend:
+              - 'infrastructure/**'
+              - 'app/vitest.config.backend.ts'
             infra:
               - 'scripts/**'
               - '_headers'
@@ -101,9 +105,30 @@ jobs:
           path: app/dist
           retention-days: 7
 
+  test-backend:
+    name: Test backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npm ci
+        working-directory: infrastructure/couchdb/tricho-auth
+      - run: npm install
+        working-directory: infrastructure/mock-oidc
+      - run: npm run test:backend
+        working-directory: app
+
   build-and-deploy:
     name: Build merged dist & deploy
-    needs: [changes, test-web, test-app]
+    needs: [changes, test-web, test-app, test-backend]
     if: |
       always() &&
       !contains(needs.*.result, 'failure') &&
