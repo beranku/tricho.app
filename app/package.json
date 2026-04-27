@@ -4,9 +4,11 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "bash scripts/fetch-fonts.sh",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "fetch-fonts": "bash scripts/fetch-fonts.sh",
     "test": "vitest run --config vitest.config.unit.ts && vitest run --config vitest.config.component.ts",
     "test:watch": "vitest --config vitest.config.unit.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",

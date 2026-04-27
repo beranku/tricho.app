@@ -68,3 +68,8 @@ infrastructure/traefik/.env
 # Tricho-auth generated dev JWT keys
 infrastructure/couchdb/tricho-auth/node_modules/
 tricho-impl-v1.tar.gz
+
+# Self-hosted font binaries — fetched at build time by scripts/fetch-fonts.sh
+# (wired as the `prebuild` npm script); README.md stays committed, woff2 doesn't.
+web/public/fonts/**/*.woff2
+app/public/fonts/**/*.woff2
