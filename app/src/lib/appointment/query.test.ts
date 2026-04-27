@@ -169,7 +169,7 @@ describe('appointment-data wire shape + queries', () => {
     const db = await openVaultDb(VAULT_ID, dek, { adapter: 'memory' });
     const ix = await db.pouch.getIndexes();
     // _all_docs is auto-created; user indexes should be exactly one (`type, updatedAt`).
-    const userIndexes = ix.indexes.filter((i: { ddoc?: string }) => i.ddoc?.startsWith('_design'));
+    const userIndexes = ix.indexes.filter((i) => i.ddoc?.startsWith('_design'));
     expect(userIndexes.length).toBe(1);
     const fields = userIndexes[0]?.def?.fields;
     expect(JSON.stringify(fields)).toContain('"type"');

@@ -1,12 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 // All HTTP requests run through `page.evaluate(fetch)` so they go through
 // Chromium's resolver — this honours the --host-resolver-rules mapping in
 // playwright.config.ts. Playwright's APIRequestContext uses Node's DNS and
 // would ignore the override.
 
-async function fetchFromPage(page, path: string) {
-  return page.evaluate(async (p) => {
+async function fetchFromPage(page: Page, path: string) {
+  return page.evaluate(async (p: string) => {
     const res = await fetch(p);
     return {
       status: res.status,

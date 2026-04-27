@@ -7,7 +7,7 @@ let listener: SyncListener | null = null;
 vi.mock('../../sync/couch', () => ({
   subscribeSyncEvents: vi.fn((cb: SyncListener) => {
     listener = cb;
-    cb({ status: 'idle', error: null, lastEventAt: null, pushed: 0, pulled: 0, username: null });
+    cb({ status: 'idle', error: null, errorClass: null, lastEventAt: null, pushed: 0, pulled: 0, username: null });
     return () => { listener = null; };
   }),
 }));
@@ -29,6 +29,7 @@ describe('SyncStatusRow', () => {
       listener?.({
         status: 'syncing',
         error: null,
+        errorClass: null,
         lastEventAt: 1,
         pushed: 0,
         pulled: 0,
@@ -44,6 +45,7 @@ describe('SyncStatusRow', () => {
       listener?.({
         status: 'error',
         error: 'boom',
+        errorClass: 'unknown',
         lastEventAt: 1,
         pushed: 0,
         pulled: 0,

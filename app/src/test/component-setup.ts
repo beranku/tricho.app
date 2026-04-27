@@ -140,7 +140,7 @@ export function expectA11yBasics(s: typeof screen = screen): void {
   for (const input of inputs) {
     const label = input.getAttribute('aria-label') || input.getAttribute('aria-labelledby');
     const id = input.getAttribute('id');
-    const hasExternalLabel = id ? s.container?.querySelector(`label[for="${id}"]`) : null;
+    const hasExternalLabel = id ? document.querySelector(`label[for="${id}"]`) : null;
     if (!label && !hasExternalLabel) {
       throw new Error(
         `a11y: input without label — ${input.outerHTML.slice(0, 120)}`,

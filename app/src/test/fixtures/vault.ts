@@ -28,6 +28,6 @@ export async function makeVaultFixture(
   const vaultId = overrides.vaultId ?? generateVaultId();
   const userId = overrides.userId ?? `user-${vaultId.slice(0, 8)}`;
   const dek = await generateAesGcmKey(overrides.extractable ?? false);
-  const metadata = createDefaultMetadata(vaultId, userId);
+  const metadata = createDefaultMetadata();
   return { vaultId, userId, dek, metadata };
 }

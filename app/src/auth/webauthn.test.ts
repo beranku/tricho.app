@@ -37,7 +37,7 @@ describe('isWebAuthnAvailable', () => {
   it('true when window.PublicKeyCredential is defined', () => {
     (globalThis as Record<string, unknown>).PublicKeyCredential = function () {};
     // jsdom window === globalThis in vitest
-    (window as Record<string, unknown>).PublicKeyCredential = (
+    (window as unknown as Record<string, unknown>).PublicKeyCredential = (
       globalThis as Record<string, unknown>
     ).PublicKeyCredential;
     expect(isWebAuthnAvailable()).toBe(true);
@@ -94,17 +94,22 @@ describe('registerPasskey', () => {
   });
 
   it('deterministic PRF eval input per vaultId', async () => {
-    const capture = vi.fn(async () =>
+    type CreateOptsWithPrf = {
+      publicKey: { extensions: { prf: { eval: { first: Uint8Array } } } };
+    };
+    const capture = vi.fn(async (..._args: unknown[]) =>
       makeFakeCredential({ rawId: new Uint8Array([1]), prfEnabled: true, prfOutput: new Uint8Array(32) }),
     );
     (navigator.credentials.create as ReturnType<typeof vi.fn>).mockImplementation(capture);
+    const prfFirst = (call: number): Uint8Array =>
+      (capture.mock.calls[call]?.[0] as CreateOptsWithPrf).publicKey.extensions.prf.eval.first;
     await registerPasskey('vault-A', 'u');
     await registerPasskey('vault-A', 'u');
-    const first = capture.mock.calls[0][0].publicKey.extensions.prf.eval.first as Uint8Array;
-    const second = capture.mock.calls[1][0].publicKey.extensions.prf.eval.first as Uint8Array;
+    const first = prfFirst(0);
+    const second = prfFirst(1);
     expect(first).toEqual(second);
     await registerPasskey('vault-B', 'u');
-    const third = capture.mock.calls[2][0].publicKey.extensions.prf.eval.first as Uint8Array;
+    const third = prfFirst(2);
     expect(third).not.toEqual(first);
   });
 });

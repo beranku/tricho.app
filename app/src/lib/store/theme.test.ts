@@ -40,7 +40,7 @@ describe('theme persistence (_local/theme)', () => {
       _id: '_local/theme',
       theme: 'dark',
     });
-    expect((doc as Record<string, unknown>).payload).toBeUndefined();
+    expect((doc as unknown as Record<string, unknown>).payload).toBeUndefined();
     await probe.close();
   });
 
