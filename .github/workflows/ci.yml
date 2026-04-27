@@ -45,7 +45,11 @@ jobs:
   test-web:
     name: Test web
     needs: changes
-    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.infra == 'true' || github.event_name == 'push'
+    # Skip when no web/shared/infra files changed. The `dorny/paths-filter`
+    # step computes diffs correctly on push events too, so we no longer need
+    # the `github.event_name == 'push'` blanket override that previously
+    # forced this job to run on every push.
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -70,7 +74,10 @@ jobs:
   test-app:
     name: Test app
     needs: changes
-    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.infra == 'true' || github.event_name == 'push'
+    # Skip when no app/shared/infra files changed. The `build-and-deploy`
+    # job's "Build app (if not already built)" step rebuilds the PWA shell
+    # inline when this job is skipped, so the merged dist is still complete.
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.shared == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
