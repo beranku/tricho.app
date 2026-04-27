@@ -1,0 +1,60 @@
+---
+interface Props {
+  question: string;
+  answerHtml: string;
+}
+const { question, answerHtml } = Astro.props;
+---
+
+<details class="faq-item">
+  <summary>{question}</summary>
+  <div class="answer" set:html={answerHtml} />
+</details>
+
+<style>
+  .faq-item {
+    border-bottom: 1px solid var(--line);
+    padding: 24px 0;
+  }
+  .faq-item:first-child { border-top: 1px solid var(--line); }
+  summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after {
+    content: '+';
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 18px;
+    color: var(--copper);
+    transition: transform 0.22s ease;
+    flex-shrink: 0;
+  }
+  .faq-item[open] > summary::after { transform: rotate(45deg); }
+  summary:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 4px; }
+  .answer {
+    margin-top: 14px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink-3);
+    max-width: 62ch;
+  }
+  .answer :global(code) {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 12px;
+    background: var(--cream-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--ink-2);
+  }
+</style>

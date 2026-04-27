@@ -1,0 +1,67 @@
+---
+import { finalCta } from '../../content/landing';
+---
+
+<section class="final-cta" id="stahnout">
+  <div class="page">
+    <h2 set:html={finalCta.titleHtml} />
+    <p class="lede">{finalCta.lede}</p>
+    <div class="ctas">
+      <a href={finalCta.ctaHref} class="btn-primary">{finalCta.ctaLabel}</a>
+    </div>
+    <p class="risk-reversal">{finalCta.riskReversal}</p>
+    <div class="micro">{finalCta.micro}</div>
+  </div>
+</section>
+
+<style>
+  .final-cta {
+    text-align: center;
+    padding: 96px 0 112px;
+    border-top: 1px solid var(--line);
+    position: relative;
+  }
+  .final-cta h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 300;
+    font-size: clamp(30px, 4.2vw, 44px);
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    color: var(--ink);
+    margin: 0 auto 32px;
+    max-width: 22ch;
+  }
+  .final-cta h2 :global(em) {
+    font-style: italic;
+    color: var(--teal-700);
+  }
+  .final-cta .lede {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink-3);
+    max-width: 50ch;
+    margin: 0 auto 32px;
+  }
+  .final-cta .ctas {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .final-cta .risk-reversal {
+    margin: 24px auto 0;
+    font-family: 'Patrick Hand', cursive;
+    font-size: 16px;
+    color: var(--ink-3);
+    line-height: 1.5;
+    max-width: 50ch;
+  }
+  .final-cta .micro {
+    margin-top: 32px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-4);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+</style>

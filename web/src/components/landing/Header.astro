@@ -1,0 +1,87 @@
+---
+import ThemeToggle from '../ui/ThemeToggle.astro';
+import LaunchAppLink from '../LaunchAppLink.astro';
+import { header } from '../../content/landing';
+---
+
+<header class="site-header">
+  <div class="page">
+    <nav class="nav" aria-label="Hlavní navigace">
+      <a href="/" class="brand">
+        <span class="brand-name">{header.brandName}</span>
+        <span class="brand-version">{header.brandVersion}</span>
+      </a>
+      <ul class="nav-links">
+        {header.navLinks.map((link) => (
+          <li><a href={link.href}>{link.label}</a></li>
+        ))}
+      </ul>
+      <div class="header-actions">
+        <ThemeToggle label={header.themeToggleLabel} />
+        <LaunchAppLink />
+        <a href={header.ctaHref} class="btn-primary">{header.ctaLabel}</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0;
+  }
+  .brand {
+    text-decoration: none;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .brand-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .brand-version {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .nav-links a {
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--copper); }
+  @media (max-width: 720px) {
+    .nav-links { display: none; }
+  }
+  .header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+</style>

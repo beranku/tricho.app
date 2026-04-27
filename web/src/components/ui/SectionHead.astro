@@ -1,0 +1,14 @@
+---
+interface Props {
+  num: string;
+  titleHtml: string;
+  sub?: string;
+}
+const { num, titleHtml, sub } = Astro.props;
+---
+
+<div class="section-head">
+  <div class="section-num">{num}</div>
+  <h2 class="section-title" set:html={titleHtml} />
+  {sub && <div class="section-sub">{sub}</div>}
+</div>

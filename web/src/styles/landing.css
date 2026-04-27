@@ -1,0 +1,174 @@
+/* Landing-only styles. Imported once from web/src/pages/index.astro after
+ * tokens.css + site.css. Holds primitives shared across landing components
+ * (page container, section header, paper-grain body wash, link selection).
+ * Per-section visuals live in the components themselves via Astro <style>
+ * blocks (component-scoped).
+ */
+
+/* The marketing landing replaces site.css's site-wide gradient background
+ * with the prototype's flat cream + warm radial wash. Scoped to body.is-landing
+ * so /about, /pricing, /blog/* keep their existing background. */
+body.is-landing {
+  background: var(--bg);
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+body.is-landing::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 1400px 700px at 10% -10%, rgba(176, 110, 82, 0.06), transparent 60%),
+    radial-gradient(ellipse 1000px 500px at 100% 110%, rgba(14, 116, 144, 0.05), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+:root[data-theme='dark'] body.is-landing::before {
+  background:
+    radial-gradient(ellipse 1400px 700px at 10% -10%, rgba(212, 147, 113, 0.05), transparent 60%),
+    radial-gradient(ellipse 1000px 500px at 100% 110%, rgba(90, 184, 212, 0.04), transparent 60%);
+}
+
+body.is-landing ::selection {
+  background: var(--teal-200);
+  color: var(--ink);
+}
+
+/* The skip-link and main wrapper sit above the body wash. */
+body.is-landing main {
+  position: relative;
+  z-index: 1;
+  /* Override site.css's global `main` constraint (max-width 880, padding 48 24)
+   * — the landing manages its own page-container width per section. */
+  max-width: none;
+  padding: 0;
+  width: auto;
+}
+
+body.is-landing .skip-link {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+body.is-landing .skip-link:focus {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  width: auto;
+  height: auto;
+  padding: 12px 18px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--copper);
+  border-radius: var(--radius-ctrl);
+  z-index: 100;
+  text-decoration: none;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 14px;
+}
+
+/* Centered page container. */
+.page {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+@media (max-width: 600px) {
+  .page { padding: 0 24px; }
+}
+
+/* Sections — vertical rhythm. */
+.landing-section {
+  padding: 96px 0;
+  position: relative;
+}
+.landing-section + .landing-section { padding-top: 0; }
+@media (max-width: 800px) {
+  .landing-section { padding: 72px 0; }
+}
+
+/* Section head pattern. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+}
+.section-num {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--copper);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.section-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(26px, 3.4vw, 36px);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 0;
+}
+.section-title em {
+  font-style: italic;
+  font-weight: 300;
+  color: var(--teal-700);
+}
+.section-sub {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-left: auto;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+@media (max-width: 600px) {
+  .section-sub { margin-left: 0; width: 100%; }
+}
+
+/* Mono utility used across the landing. */
+.mono {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+/* Inline buttons used by Hero, Pricing, FinalCta. */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: var(--radius-ctrl);
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  background: var(--teal-700);
+  color: #FFFFFE;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+  min-height: 44px;
+}
+.btn-primary:hover { background: var(--teal-900); text-decoration: none; }
+:root[data-theme='dark'] .btn-primary { background: var(--teal-600); color: var(--bg); }
+:root[data-theme='dark'] .btn-primary:hover { background: var(--teal-700); }

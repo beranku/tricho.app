@@ -10,8 +10,11 @@
   --bg: #FDFAF3;
   --surface: #FFFFFE;
   --surface-2: #FAF5EC;
+  --cream: #F7F0E2;
+  --cream-2: #FAF5EC;
   --line: #EBE4D5;
   --line-soft: #F2ECE0;
+  --line-2: #F2ECE0;
 
   /* Ink */
   --ink: #1C1917;
@@ -19,16 +22,26 @@
   --ink-2: #44403C;
   --ink-3: #736D64;
   --ink-4: #9F9990;
+  /* Landing copy uses the prototype's softer ink-3 / ink-4 ramp. */
+  --ink-3-soft: #8B857D;
+  --ink-4-soft: #BAB4AB;
 
   /* State (cool) */
   --teal: #0E7490;
   --teal-strong: #134E5E;
   --teal-tint: rgba(14, 116, 144, 0.06);
   --teal-border: rgba(14, 116, 144, 0.22);
+  --teal-200: #A5E4EC;
+  --teal-600: #0E7490;
+  --teal-700: #155E75;
+  --teal-900: #134E5E;
 
   /* Annotation (warm) */
   --copper: #B06E52;
   --copper-mid: #9A5E44;
+  --copper-deep: #8C5640;
+  --copper-soft: #F3E1D2;
+  --copper-50: #FBF4EE;
   --copper-tint: rgba(176, 110, 82, 0.08);
   --copper-border: rgba(176, 110, 82, 0.32);
   --amber: #B97940;
@@ -60,10 +73,15 @@
 
   /* Radii */
   --radius-chip: 10px;
-  --radius-card: 14px;
+  --radius-card: 18px;
   --radius-panel: 20px;
   --radius-btn: 12px;
+  --radius-ctrl: 12px;
   --radius-fab: 22px;
+
+  /* Landing-page paper grain (inline SVG noise; consumed by body::before
+   * and phone-screen::after). */
+  --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.24 0 0 0 0 0.14 0 0 0 0.22 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.5'/></svg>");
 
   /* Transitions */
   --t-base: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -86,22 +104,34 @@
   --bg: #211A15;
   --surface: #29211B;
   --surface-2: #32281F;
+  --cream: #2A2117;
+  --cream-2: #32281F;
   --line: #3E3228;
   --line-soft: #332921;
+  --line-2: #332921;
 
   --ink: #F5EDE0;
   --ink-espresso: #F5EDE0;
   --ink-2: #D4C8B8;
   --ink-3: #9D9385;
   --ink-4: #6F665C;
+  --ink-3-soft: #9D9385;
+  --ink-4-soft: #6F665C;
 
   --teal: #2494B2;
   --teal-strong: #5FAFC5;
   --teal-tint: rgba(36, 148, 178, 0.14);
   --teal-border: rgba(36, 148, 178, 0.34);
+  --teal-200: #1B4F5C;
+  --teal-600: #5FAFC5;
+  --teal-700: #7BC0D2;
+  --teal-900: #5FAFC5;
 
   --copper: #C48867;
   --copper-mid: #B37959;
+  --copper-deep: #B37959;
+  --copper-soft: #3A2920;
+  --copper-50: #2C2018;
   --copper-tint: rgba(196, 136, 103, 0.10);
   --copper-border: rgba(196, 136, 103, 0.38);
   --amber: #D09860;
@@ -126,4 +156,5 @@
 
   --paper-blend: screen;
   --paper-opacity: 0.45;
+  --paper-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.96 0 0 0 0 0.9 0 0 0 0 0.78 0 0 0 0.12 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>");
 }

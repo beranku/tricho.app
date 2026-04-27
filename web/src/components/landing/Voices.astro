@@ -1,0 +1,49 @@
+---
+import SectionHead from '../ui/SectionHead.astro';
+import Testimonial from '../ui/Testimonial.astro';
+import { voices } from '../../content/landing';
+---
+
+<section class="voices landing-section">
+  <div class="page">
+    <SectionHead num={voices.num} titleHtml={voices.titleHtml} sub={voices.sub} />
+
+    <div class="voices-grid">
+      {voices.testimonials.map((t) => (
+        <Testimonial
+          quoteHtml={t.quoteHtml}
+          initials={t.initials}
+          name={t.name}
+          role={t.role}
+        />
+      ))}
+    </div>
+
+    <p class="voices-fine">{voices.fineprint}</p>
+  </div>
+</section>
+
+<style>
+  .voices {
+    background: var(--cream-2);
+    border-top: 1px solid var(--line-2);
+    border-bottom: 1px solid var(--line-2);
+  }
+  .voices-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  @media (max-width: 880px) {
+    .voices-grid { grid-template-columns: 1fr; gap: 20px; }
+  }
+  .voices-fine {
+    margin: 32px auto 0;
+    text-align: center;
+    font-family: 'Patrick Hand', cursive;
+    font-size: 15px;
+    color: var(--ink-3);
+    line-height: 1.5;
+    max-width: 56ch;
+  }
+</style>

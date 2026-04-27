@@ -1,0 +1,113 @@
+---
+import SectionHead from '../ui/SectionHead.astro';
+import PhoneFrame from '../phone/PhoneFrame.astro';
+import ContentDiar from '../phone/ContentDiar.astro';
+import ContentKartaKlientky from '../phone/ContentKartaKlientky.astro';
+import { twoScreens, phoneDiarMini, phoneKartaKlientky } from '../../content/landing';
+---
+
+<section class="landing-section">
+  <div class="page">
+    <SectionHead num={twoScreens.num} titleHtml={twoScreens.titleHtml} sub={twoScreens.sub} />
+
+    <p class="screens-intro" set:html={twoScreens.introHtml} />
+
+    <div class="screens-grid">
+      <div class="screen-col">
+        <PhoneFrame variant="mini">
+          <ContentDiar
+            time="9:41"
+            weatherIcon={false}
+            kicker={phoneDiarMini.dayHeader.kicker}
+            temperature=""
+            main={phoneDiarMini.dayHeader.main}
+            slots={phoneDiarMini.slots}
+            divider={phoneDiarMini.divider}
+            tomorrow={phoneDiarMini.tomorrow}
+          />
+        </PhoneFrame>
+        <div class="screen-text">
+          <div class="label">{twoScreens.diar.label}</div>
+          <h3>{twoScreens.diar.title}</h3>
+          <p>{twoScreens.diar.text}</p>
+        </div>
+      </div>
+
+      <div class="screen-col">
+        <PhoneFrame variant="mini">
+          <ContentKartaKlientky
+            time={phoneKartaKlientky.status.time}
+            client={phoneKartaKlientky.client}
+            tags={phoneKartaKlientky.tags}
+            diagnostika={phoneKartaKlientky.diagnostika}
+            history={phoneKartaKlientky.history}
+            photos={phoneKartaKlientky.photos}
+          />
+        </PhoneFrame>
+        <div class="screen-text">
+          <div class="label">{twoScreens.karta.label}</div>
+          <h3>{twoScreens.karta.title}</h3>
+          <p>{twoScreens.karta.text}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .screens-intro {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 300;
+    font-size: clamp(22px, 2.6vw, 28px);
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    max-width: 36ch;
+    margin: 0 0 56px;
+  }
+  .screens-intro :global(em) {
+    font-style: italic;
+    font-weight: 300;
+    color: var(--teal-700);
+  }
+
+  .screens-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 56px;
+    align-items: start;
+  }
+  @media (max-width: 800px) {
+    .screens-grid { grid-template-columns: 1fr; gap: 64px; }
+  }
+  .screen-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  .screen-text { text-align: center; max-width: 38ch; }
+  .screen-text .label {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--copper);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 12px;
+  }
+  .screen-text h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.2;
+    margin: 0 0 10px;
+  }
+  .screen-text p {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink-3);
+    margin: 0;
+  }
+</style>

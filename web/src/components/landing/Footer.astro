@@ -1,0 +1,123 @@
+---
+import { footer } from '../../content/landing';
+---
+
+<footer class="landing-footer">
+  <div class="page">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <a href="/" class="brand">
+          <span class="brand-name">{footer.brandName}</span>
+          <span class="brand-version">{footer.brandVersion}</span>
+        </a>
+        <p class="footer-tagline">{footer.tagline}</p>
+      </div>
+
+      {footer.columns.map((col) => (
+        <div class="footer-col">
+          <h5>{col.title}</h5>
+          <ul>
+            {col.links.map((link) => (
+              <li><a href={link.href}>{link.label}</a></li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+
+    <div class="footer-bottom">
+      <span>{footer.copyright}</span>
+      <span>{footer.versionTag}</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .landing-footer {
+    border-top: 1px solid var(--line);
+    padding: 48px 0 36px;
+    background: var(--bg);
+    position: relative;
+    z-index: 1;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 40px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 720px) {
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 480px) {
+    .footer-grid { grid-template-columns: 1fr; gap: 24px; }
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    text-decoration: none;
+  }
+  .brand-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .brand-version {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .footer-col h5 {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--copper);
+    margin: 0 0 16px;
+  }
+  .footer-col ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0;
+    margin: 0;
+  }
+  .footer-col a {
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s;
+  }
+  .footer-col a:hover { color: var(--copper); }
+  .footer-tagline {
+    font-size: 13px;
+    color: var(--ink-3);
+    line-height: 1.6;
+    margin: 12px 0 0;
+    max-width: 32ch;
+  }
+  .footer-bottom {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-4);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+</style>

@@ -1,0 +1,94 @@
+---
+interface Props {
+  name: string;
+  amount: string;
+  period: string;
+  tag: string;
+  features: string[];
+  microcopy: string;
+}
+const { name, amount, period, tag, features, microcopy } = Astro.props;
+---
+
+<div class="plan-cell">
+  <div class="plan-name">{name}</div>
+  <div class="plan-amount">{amount}<small>{period}</small></div>
+  <div class="plan-tag">{tag}</div>
+  <ul>
+    {features.map((feature) => <li set:html={feature} />)}
+  </ul>
+  <div class="plan-microcopy">{microcopy}</div>
+</div>
+
+<style>
+  .plan-cell {
+    background: var(--surface);
+    padding: 36px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .plan-name {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--copper);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .plan-amount {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 300;
+    font-size: 38px;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .plan-amount small {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--ink-3);
+    font-weight: 400;
+    letter-spacing: 0;
+    margin-left: 4px;
+  }
+  .plan-tag {
+    font-size: 13px;
+    color: var(--ink-3);
+    line-height: 1.5;
+    max-width: 32ch;
+  }
+  ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    padding: 18px 0 0;
+    margin: auto 0 0;
+  }
+  ul li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+  ul li::before {
+    content: '+';
+    color: var(--copper);
+    flex-shrink: 0;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-weight: 500;
+  }
+  .plan-microcopy {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 14px;
+    color: var(--ink-3);
+    line-height: 1.4;
+    padding-top: 4px;
+    border-top: 1px dashed var(--line);
+    margin-top: 4px;
+  }
+</style>

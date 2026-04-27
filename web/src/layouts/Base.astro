@@ -18,6 +18,7 @@ interface Props {
   ogType?: 'website' | 'article';
   noIndex?: boolean;
   jsonLd?: Record<string, unknown>[];
+  bodyClass?: string;
 }
 
 const {
@@ -28,6 +29,7 @@ const {
   ogType = 'website',
   noIndex = false,
   jsonLd = [],
+  bodyClass,
 } = Astro.props;
 
 const SITE = 'https://tricho.app';
@@ -50,10 +52,36 @@ const allJsonLd = [orgJsonLd, ...jsonLd];
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- FOUC-safe theme init. Runs before any CSS so dark mode applies on the
+         first paint. Reads localStorage['tricho-theme']; falls back to the
+         OS-level prefers-color-scheme on first visit. Wrapped in try/catch so
+         private-mode storage errors never block the render. -->
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem('tricho-theme');
+          if (t === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            return;
+          }
+          if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          }
+        } catch (_) { /* never throw on the marketing landing */ }
+      })();
+    </script>
+
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
     {noIndex && <meta name="robots" content="noindex,follow" />}
+
+    <!-- Google Fonts — Geist Mono + Caveat are landing-only display faces;
+         Fraunces / Geist / Patrick Hand are self-hosted in site.css. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
     <!-- Theme-color matches /shared/manifest.webmanifest so install splash and
          first paint show no color flash. -->
@@ -96,7 +124,7 @@ const allJsonLd = [orgJsonLd, ...jsonLd];
 
     <slot name="head-extra" />
   </head>
-  <body>
+  <body class={bodyClass}>
     <slot />
 
     <!-- Thin pass-through SW registration. Required for the install prompt

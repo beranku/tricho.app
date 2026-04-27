@@ -1,105 +1,63 @@
 ---
 import Base from '../layouts/Base.astro';
-import SiteHeader from '../components/SiteHeader.astro';
-import SiteFooter from '../components/SiteFooter.astro';
-import InstallBanner from '../components/InstallBanner.astro';
-import LaunchAppLink from '../components/LaunchAppLink.astro';
+import '../styles/landing.css';
 
+import Header from '../components/landing/Header.astro';
+import Hero from '../components/landing/Hero.astro';
+import TwoScreens from '../components/landing/TwoScreens.astro';
+import Story from '../components/landing/Story.astro';
+import Privacy from '../components/landing/Privacy.astro';
+import Pricing from '../components/landing/Pricing.astro';
+import Voices from '../components/landing/Voices.astro';
+import Faq from '../components/landing/Faq.astro';
+import FinalCta from '../components/landing/FinalCta.astro';
+import Footer from '../components/landing/Footer.astro';
+import InstallBanner from '../components/InstallBanner.astro';
+
+import { siteMeta, pricing } from '../content/landing';
+
+// SoftwareApplication JSON-LD — kept for /pricing parity (Free + paid Offers).
 const softwareJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: 'Tricho',
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Web',
-  description: 'Šifrovaný diář a CRM pro trichology a kadeřníky. Funguje offline, data zůstávají v zařízení.',
+  description: siteMeta.description,
   offers: [
-    {
+    { '@type': 'Offer', price: '0', priceCurrency: 'CZK', name: 'Free' },
+    ...pricing.plans.map((plan) => ({
       '@type': 'Offer',
-      price: '0',
+      price: plan.amount.replace(/\D/g, ''),
       priceCurrency: 'CZK',
-      name: 'Free',
-    },
+      name: plan.name,
+    })),
   ],
   url: 'https://tricho.app',
 };
 ---
 
 <Base
-  title="Tricho — šifrovaný diář a CRM, který tě nikdy nepustí ven"
-  description="Tricho je offline-first PWA pro trichology a kadeřníky. Tvoje zápisy, klienti i fotografie zůstávají v zařízení, šifrované end-to-end. Žádný server tvoje data nikdy nevidí."
+  title={siteMeta.title}
+  description={siteMeta.description}
   jsonLd={[softwareJsonLd]}
+  bodyClass="is-landing"
 >
-  <SiteHeader />
+  <a href="#main" class="skip-link">Přejít k obsahu</a>
 
-  <main>
+  <Header />
+
+  <main id="main">
     <InstallBanner />
-
-    <section class="hero">
-      <h1>Diář, který nikdo jiný nečte.</h1>
-      <p class="subhead">Šifrovaný end-to-end. Offline-first. Žádné účty u třetích stran.</p>
-      <p style="max-width: 540px; margin: 24px auto 0;">
-        Tricho je progresivní webová aplikace pro trichology, kadeřníky a další,
-        kdo si dělají poznámky o klientech a chtějí, aby je nikdy nikdo jiný
-        neviděl. Ani my, ani provider serveru, ani nikdo, kdo by mu data sebral.
-      </p>
-      <div class="hero-cta">
-        <LaunchAppLink />
-        <a href="/app/" class="btn btn--primary">Začít zdarma</a>
-        <a href="/about" class="btn btn--ghost">Jak to funguje</a>
-      </div>
-    </section>
-
-    <section>
-      <h2>Co Tricho umí</h2>
-      <div class="feature-grid">
-        <div class="feature-card">
-          <h3>Diář klientů</h3>
-          <p>Karta klienta, historie návštěv, fotografie zákroků, alergeny.
-          Vše propojené, vše prohledávatelné, vše offline.</p>
-        </div>
-        <div class="feature-card">
-          <h3>Šifrování v zařízení</h3>
-          <p>Klíče se nikdy nedostanou ze zařízení. Server vidí jen
-          šifrovaný binární proud — ani my nepřečteme, co píšeš.</p>
-        </div>
-        <div class="feature-card">
-          <h3>Synchronizace mezi zařízeními</h3>
-          <p>Dva iPady? Telefon a iPad? Přidej druhé zařízení QR kódem
-          a měj všechno aktuální. Stále zašifrované.</p>
-        </div>
-        <div class="feature-card">
-          <h3>Funguje offline</h3>
-          <p>Bez internetu? Pokračuj v práci. Když se signál vrátí,
-          změny se synchronizují tiše na pozadí.</p>
-        </div>
-        <div class="feature-card">
-          <h3>Záloha do ZIPu</h3>
-          <p>Stáhni si zálohu jako jeden soubor. Pokud vše zlomíš nebo
-          ztratíš zařízení, obnovíš ze ZIPu a Recovery Secretu.</p>
-        </div>
-        <div class="feature-card">
-          <h3>Žádné cookies třetích stran</h3>
-          <p>Žádné Google Analytics. Žádný Facebook Pixel. Stránka,
-          kterou právě čteš, neví, kdo jsi.</p>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Cena</h2>
-      <p>Pro jeden iPad navždy zdarma. Pro dvě zařízení a cloudovou synchronizaci 99 Kč měsíčně.
-      <a href="/pricing">Více o plánech</a>.</p>
-    </section>
-
-    <section>
-      <h2>Připraven začít?</h2>
-      <p>Nainstaluj Tricho jako aplikaci a otevři ji z plochy.</p>
-      <div class="hero-cta">
-        <a href="/app/" class="btn btn--primary">Otevřít aplikaci</a>
-        <a href="/help/getting-started" class="btn btn--ghost">Návod ke startu</a>
-      </div>
-    </section>
+    <Hero />
+    <TwoScreens />
+    <Story />
+    <Privacy />
+    <Pricing />
+    <Voices />
+    <Faq />
+    <FinalCta />
   </main>
 
-  <SiteFooter />
+  <Footer />
 </Base>

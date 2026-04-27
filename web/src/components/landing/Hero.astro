@@ -1,0 +1,105 @@
+---
+import PhoneFrame from '../phone/PhoneFrame.astro';
+import ContentDiar from '../phone/ContentDiar.astro';
+import { hero, phoneDiar } from '../../content/landing';
+---
+
+<section class="hero landing-section">
+  <div class="page">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-eyebrow">{hero.eyebrow}</div>
+        <h1 class="hero-title" set:html={hero.titleHtml} />
+        <p class="hero-lede">{hero.lede}</p>
+        <div class="hero-ctas">
+          <a href={hero.ctaHref} class="btn-primary">{hero.ctaLabel}</a>
+        </div>
+        <div class="hero-meta">
+          {hero.meta.map((m) => <span>{m}</span>)}
+        </div>
+      </div>
+
+      <div>
+        <PhoneFrame variant="full">
+          <ContentDiar
+            time={phoneDiar.status.time}
+            weatherIcon={phoneDiar.dayHeader.weatherIcon}
+            kicker={phoneDiar.dayHeader.kicker}
+            temperature={phoneDiar.dayHeader.temperature}
+            main={phoneDiar.dayHeader.main}
+            slots={phoneDiar.slots}
+            divider={phoneDiar.divider}
+            tomorrow={phoneDiar.tomorrow}
+          />
+        </PhoneFrame>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding-top: 96px;
+    padding-bottom: 64px;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 80px;
+    align-items: center;
+  }
+  @media (max-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 56px; }
+  }
+  .hero-eyebrow {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--copper);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 28px;
+  }
+  h1.hero-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 300;
+    font-size: clamp(40px, 5.5vw, 64px);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+    margin: 0 0 32px;
+  }
+  h1.hero-title :global(em) {
+    font-style: italic;
+    font-weight: 300;
+    color: var(--teal-700);
+  }
+  .hero-lede {
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 46ch;
+    margin: 0 0 36px;
+  }
+  .hero-ctas {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .hero-meta span::before {
+    content: '·';
+    color: var(--ink-4);
+    margin-right: 14px;
+  }
+  .hero-meta span:first-child::before { content: ''; margin: 0; }
+</style>
