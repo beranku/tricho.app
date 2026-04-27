@@ -38,8 +38,14 @@
 /app/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Icon files share stable URLs across releases (favicon.svg, icon-192.png,
+# etc.), so they CANNOT be `immutable` — once we replace the artwork, every
+# stale browser/CDN cache would otherwise hold the previous icon for a year.
+# 1-day max-age + standard revalidation is the right balance: still cached
+# for performance, but a new deploy lands within 24 h. Cache-bust at the
+# HTML / manifest layer (`?v=N` on each icon URL) for instant rollout.
 /icons/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400, must-revalidate
 
 /og/*
   Cache-Control: public, max-age=31536000, immutable
