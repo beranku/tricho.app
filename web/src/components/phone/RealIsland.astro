@@ -1,0 +1,29 @@
+---
+// Mirrors app/src/components/astro/Island.astro — the iOS dynamic-island
+// pill at the top of the phone screen.
+interface Props {
+  size?: 'full' | 'mini';
+}
+const { size = 'full' } = Astro.props;
+---
+
+<div class:list={['island', size === 'mini' && 'island--mini']} aria-hidden="true"></div>
+
+<style>
+  .island {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 96px;
+    height: 26px;
+    background: #1A1714;
+    border-radius: 999px;
+    z-index: 30;
+  }
+  .island--mini {
+    width: 80px;
+    height: 22px;
+    top: 8px;
+  }
+</style>

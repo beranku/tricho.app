@@ -1,10 +1,16 @@
 ---
 import ThemeToggle from '../ui/ThemeToggle.astro';
-import LaunchAppLink from '../LaunchAppLink.astro';
 import { header } from '../../content/landing';
 ---
 
-<header class="site-header">
+{/*
+  Class is intentionally `.landing-header` (not `.site-header`) to avoid the
+  global `web/src/styles/site.css` rule
+    `.site-header { max-width: 1120px; margin: 0 auto; }`
+  which constrains the header and visually cuts off its bottom border on
+  the landing page. Other marketing pages still use `.site-header`.
+*/}
+<header class="landing-header">
   <div class="page">
     <nav class="nav" aria-label="Hlavní navigace">
       <a href="/" class="brand">
@@ -18,7 +24,6 @@ import { header } from '../../content/landing';
       </ul>
       <div class="header-actions">
         <ThemeToggle label={header.themeToggleLabel} />
-        <LaunchAppLink />
         <a href={header.ctaHref} class="btn-primary">{header.ctaLabel}</a>
       </div>
     </nav>
@@ -26,7 +31,8 @@ import { header } from '../../content/landing';
 </header>
 
 <style>
-  .site-header {
+  .landing-header {
+    width: 100%;
     border-bottom: 1px solid var(--line);
     background: var(--bg);
     position: sticky;
@@ -37,7 +43,7 @@ import { header } from '../../content/landing';
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 0;
+    padding: 18px 0;
   }
   .brand {
     text-decoration: none;

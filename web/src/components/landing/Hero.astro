@@ -1,10 +1,10 @@
 ---
 import PhoneFrame from '../phone/PhoneFrame.astro';
-import ContentDiar from '../phone/ContentDiar.astro';
-import { hero, phoneDiar } from '../../content/landing';
+import ContentClientReal from '../phone/ContentClientReal.astro';
+import { hero, header, realClient } from '../../content/landing';
 ---
 
-<section class="hero landing-section">
+<section class="hero">
   <div class="page">
     <div class="hero-grid">
       <div>
@@ -12,7 +12,7 @@ import { hero, phoneDiar } from '../../content/landing';
         <h1 class="hero-title" set:html={hero.titleHtml} />
         <p class="hero-lede">{hero.lede}</p>
         <div class="hero-ctas">
-          <a href={hero.ctaHref} class="btn-primary">{hero.ctaLabel}</a>
+          <a href={header.ctaHref} class="btn-primary">{header.ctaLabel}</a>
         </div>
         <div class="hero-meta">
           {hero.meta.map((m) => <span>{m}</span>)}
@@ -21,15 +21,18 @@ import { hero, phoneDiar } from '../../content/landing';
 
       <div>
         <PhoneFrame variant="full">
-          <ContentDiar
-            time={phoneDiar.status.time}
-            weatherIcon={phoneDiar.dayHeader.weatherIcon}
-            kicker={phoneDiar.dayHeader.kicker}
-            temperature={phoneDiar.dayHeader.temperature}
-            main={phoneDiar.dayHeader.main}
-            slots={phoneDiar.slots}
-            divider={phoneDiar.divider}
-            tomorrow={phoneDiar.tomorrow}
+          <ContentClientReal
+            time={realClient.time}
+            islandSize="full"
+            clientName={realClient.clientName}
+            serviceLabel={realClient.serviceLabel}
+            allergen={realClient.allergen}
+            remainingLabel={realClient.remainingLabel}
+            thumbs={realClient.thumbs}
+            services={realClient.services}
+            products={realClient.products}
+            note={realClient.note}
+            nextTermLabel={realClient.nextTermLabel}
           />
         </PhoneFrame>
       </div>
@@ -39,8 +42,14 @@ import { hero, phoneDiar } from '../../content/landing';
 
 <style>
   .hero {
-    padding-top: 96px;
-    padding-bottom: 64px;
+    /* Sit closer to the header — the previous 96-px landing-section
+     * rhythm is too airy when the section is the very first one and
+     * there's no install banner above it. */
+    padding: 56px 0 72px;
+    position: relative;
+  }
+  @media (max-width: 800px) {
+    .hero { padding: 48px 0 64px; }
   }
   .hero-grid {
     display: grid;

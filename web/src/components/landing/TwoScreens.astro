@@ -1,9 +1,9 @@
 ---
 import SectionHead from '../ui/SectionHead.astro';
 import PhoneFrame from '../phone/PhoneFrame.astro';
-import ContentDiar from '../phone/ContentDiar.astro';
-import ContentKartaKlientky from '../phone/ContentKartaKlientky.astro';
-import { twoScreens, phoneDiarMini, phoneKartaKlientky } from '../../content/landing';
+import ContentDiarReal from '../phone/ContentDiarReal.astro';
+import ContentClientReal from '../phone/ContentClientReal.astro';
+import { twoScreens, phoneDiarMini, realClient } from '../../content/landing';
 ---
 
 <section class="landing-section">
@@ -15,12 +15,11 @@ import { twoScreens, phoneDiarMini, phoneKartaKlientky } from '../../content/lan
     <div class="screens-grid">
       <div class="screen-col">
         <PhoneFrame variant="mini">
-          <ContentDiar
+          <ContentDiarReal
             time="9:41"
-            weatherIcon={false}
-            kicker={phoneDiarMini.dayHeader.kicker}
-            temperature=""
-            main={phoneDiarMini.dayHeader.main}
+            islandSize="mini"
+            weatherTemp=""
+            date={phoneDiarMini.dayHeader.main}
             slots={phoneDiarMini.slots}
             divider={phoneDiarMini.divider}
             tomorrow={phoneDiarMini.tomorrow}
@@ -35,13 +34,18 @@ import { twoScreens, phoneDiarMini, phoneKartaKlientky } from '../../content/lan
 
       <div class="screen-col">
         <PhoneFrame variant="mini">
-          <ContentKartaKlientky
-            time={phoneKartaKlientky.status.time}
-            client={phoneKartaKlientky.client}
-            tags={phoneKartaKlientky.tags}
-            diagnostika={phoneKartaKlientky.diagnostika}
-            history={phoneKartaKlientky.history}
-            photos={phoneKartaKlientky.photos}
+          <ContentClientReal
+            time={realClient.time}
+            islandSize="mini"
+            clientName={realClient.clientName}
+            serviceLabel={realClient.serviceLabel}
+            allergen={realClient.allergen}
+            remainingLabel={realClient.remainingLabel}
+            thumbs={realClient.thumbs}
+            services={realClient.services}
+            products={realClient.products}
+            note={realClient.note}
+            nextTermLabel={realClient.nextTermLabel}
           />
         </PhoneFrame>
         <div class="screen-text">

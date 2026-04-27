@@ -1,0 +1,302 @@
+---
+// Production-fidelity preview of the PWA's Client Detail (Phone B).
+// Mirrors app/src/components/islands/ClientDetail.tsx + the surrounding
+// Astro chrome. Inlined for the static landing page.
+import RealStatusBar from './RealStatusBar.astro';
+import RealIsland from './RealIsland.astro';
+import ChromeButtons from './ChromeButtons.astro';
+
+interface Props {
+  time?: string;
+  islandSize?: 'full' | 'mini';
+  clientName: string;
+  serviceLabel: string;
+  allergen?: string;
+  remainingLabel?: string;
+  thumbs: { label: string; angle: 'before' | 'detail' | 'after' }[];
+  services: string[];
+  products: string[];
+  note: string;
+  nextTermLabel: string;
+}
+const {
+  time = '10:32',
+  islandSize = 'full',
+  clientName,
+  serviceLabel,
+  allergen,
+  remainingLabel,
+  thumbs,
+  services,
+  products,
+  note,
+  nextTermLabel,
+} = Astro.props;
+---
+
+<div class="client-screen">
+  <RealStatusBar time={time} />
+  <RealIsland size={islandSize} />
+  <ChromeButtons variant="b" />
+
+  <div class="client-chrome">
+    <span class="kicker">Klientka</span>
+    <span class="client-name">{clientName}</span>
+  </div>
+
+  <div class="current-head">
+    <div class="current-main">{serviceLabel}</div>
+    <div class="alert-meta">
+      {allergen && <span class="alert-allergen">{allergen}</span>}
+      {remainingLabel && <span class="alert-remaining">{remainingLabel}</span>}
+    </div>
+  </div>
+
+  <div class="thumbs">
+    {thumbs.map((t) => (
+      <div class:list={['thumb', `thumb-${t.angle}`]}>
+        <span class="thumb-label">{t.label}</span>
+      </div>
+    ))}
+  </div>
+
+  <div class="detail-card">
+    <div class="detail-section">
+      <div class="section-head-row">
+        <span class="section-label">Co jste řešily</span>
+      </div>
+      <div class="chips-row">
+        {services.map((s) => <span class="chip">{s}</span>)}
+        <span class="chip chip--add"><span class="chip-add-plus" aria-hidden="true">+</span><span>Přidat</span></span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="section-head-row">
+        <span class="section-label">Přípravky</span>
+      </div>
+      <div class="chips-row">
+        {products.map((p) => <span class="chip">{p}</span>)}
+        <span class="chip chip--add"><span class="chip-add-plus" aria-hidden="true">+</span><span>Přidat</span></span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="section-head-row">
+        <span class="section-label">Poznámka</span>
+      </div>
+      <p class="note-text">{note}</p>
+    </div>
+  </div>
+
+  <div class="next-term">
+    <span class="section-label next-term-label">Příští termín</span>
+    <span class="next-term-value">{nextTermLabel}</span>
+  </div>
+</div>
+
+<style>
+  .client-screen {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* Client chrome — kicker + Fraunces name centered between the absolute
+   * chrome buttons (back-arrow on the left, ellipsis on the right). The
+   * horizontal padding leaves room for the 32-px buttons + 10-px chrome
+   * padding on each side. */
+  .client-chrome {
+    position: relative;
+    margin-top: 38px;
+    min-height: 40px;
+    padding: 4px 56px 8px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    z-index: 15;
+  }
+  .kicker {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .client-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 17px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  /* Current head — service label in teal-strong, allergen in caveat amber, remaining in geist mono */
+  .current-head {
+    padding: 0 18px;
+    margin-top: 4px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .current-main {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 550;
+    font-size: 18px;
+    color: var(--teal-strong);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .alert-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 9px;
+    white-space: nowrap;
+  }
+  .alert-allergen {
+    font-family: 'Caveat', cursive;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--amber);
+    line-height: 1;
+  }
+  .alert-remaining {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-3);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Thumbnail strip — gradient swatches with Patrick Hand labels */
+  .thumbs {
+    padding: 0 12px;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .thumb {
+    flex: 1;
+    aspect-ratio: 1;
+    border-radius: 11px;
+    display: flex;
+    align-items: flex-end;
+    padding: 5px 7px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(69, 48, 28, 0.1);
+  }
+  .thumb-before { background: linear-gradient(135deg, #A56B42, #7A4A2C 60%, #57341D); }
+  .thumb-detail { background: linear-gradient(135deg, #4A5B72, #34425A 60%, #1F2A3E); }
+  .thumb-after { background: linear-gradient(135deg, #3F4E68, #2B3850 60%, #1A2438); }
+  .thumb-label {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 12px;
+    color: var(--ink-espresso);
+    background: rgba(253, 250, 243, 0.94);
+    padding: 1px 7px 2px;
+    border-radius: 5px;
+    line-height: 1.15;
+  }
+
+  /* Detail card — chips for services + products, Patrick Hand note */
+  .detail-card {
+    margin: 0 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    padding: 12px 14px 2px;
+    box-shadow: var(--card-shadow);
+  }
+  .detail-section {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .detail-section:last-child { border-bottom: none; }
+  .detail-section:first-child { padding-top: 4px; }
+  .section-head-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .section-label {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 550;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-3);
+  }
+
+  .chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .chip--add {
+    border: 1px dashed var(--copper-border);
+    background: transparent;
+    color: var(--copper-mid);
+    padding-left: 8px;
+  }
+  .chip-add-plus {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--copper-mid);
+    font-size: 13px;
+    line-height: 1;
+  }
+  .note-text {
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--ink-2);
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  /* Next term — outside the detail card, inline row */
+  .next-term {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 18px 16px;
+  }
+  .next-term-label { color: var(--ink-3); }
+  .next-term-value {
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--ink-3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1;
+  }
+</style>

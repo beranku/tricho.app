@@ -10,6 +10,9 @@ export const siteMeta = {
   lang: 'cs',
 };
 
+// Tricho.app is currently invite-only. Every CTA on the landing now points
+// to #pozvanka — the anchor of the FinalCta section, which renders the
+// invite-request form (InviteForm.astro). Hero renders the form inline too.
 export const header = {
   brandName: 'Tricho.app',
   brandVersion: 'v0.9 · v přípravě',
@@ -19,8 +22,19 @@ export const header = {
     { label: 'Plány', href: '#plany' },
   ],
   themeToggleLabel: 'Přepnout motiv',
-  ctaLabel: 'Začít zdarma',
-  ctaHref: '/app/',
+  ctaLabel: 'Požádat o pozvánku',
+  ctaHref: '#pozvanka',
+};
+
+export const inviteForm = {
+  // `label` is rendered visually-hidden for screen readers — the placeholder
+  // and the surrounding section copy carry the visual context.
+  label: 'Tvůj e-mail',
+  placeholder: 'tvůj@email.cz',
+  submitLabel: 'Požádat o pozvánku',
+  helper: 'Pošleme ti pozvánku, jakmile uvolníme místo.',
+  successMessage: 'Díky! Ozveme se ti.',
+  errorMessage: 'Něco se pokazilo. Napiš nám na ahoj@tricho.app.',
 };
 
 export type PhoneSlot =
@@ -71,6 +85,27 @@ export const phoneDiarMini = {
   ] as PhoneSlot[],
 };
 
+// Production-fidelity client data used by the real-look ContentClientReal
+// component. Mirrors the shape rendered by app/src/components/islands/
+// ClientDetail.tsx (active-appointment summary, services + products chips,
+// Patrick-Hand note, next-term row, three thumbnail angles).
+export const realClient = {
+  time: '10:32',
+  clientName: 'Klára Dvořáková',
+  serviceLabel: 'Diagnostika',
+  allergen: 'Amoniak',
+  remainingLabel: 'zbývá 45 min',
+  thumbs: [
+    { label: 'Před', angle: 'before' as const },
+    { label: 'Detail', angle: 'detail' as const },
+    { label: 'Po', angle: 'after' as const },
+  ],
+  services: ['Diagnostika', 'Konzultace', 'Trichologický zákrok'],
+  products: ['Minoxidil 5 %', 'Šampon Trico'],
+  note: 'Přechází z barvení s amoniakem. Prosí přírodnější přípravky a víc fotek pokožky před zákrokem.',
+  nextTermLabel: '14. 5. — Konzultace',
+};
+
 export const phoneKartaKlientky = {
   status: { time: '10:32' },
   client: {
@@ -96,8 +131,8 @@ export const hero = {
   // Title is rendered as raw HTML (set:html) so <em> can flip to italic teal.
   titleHtml: 'Karta klientky,<br>která si <em>pamatuje za tebe</em>.',
   lede: 'Anamnéza, alergeny, fotky pokožky, co jste minule zkoušely, kdy přijde příště. Všechno o jedné klientce na jednom místě, v telefonu.',
-  ctaLabel: 'Začít zdarma',
-  ctaHref: '/app/',
+  // Hero renders <InviteForm /> instead of a single CTA button while the
+  // app is invite-only.
   meta: ['iPhone i Android', 'Bez platební karty'],
 };
 
@@ -121,7 +156,7 @@ export const twoScreens = {
 
 export const story = {
   num: '02',
-  titleHtml: 'Aplikace, jakou Ludmila <em>potřebovala</em>.',
+  titleHtml: 'Aplikace, jakou Lída <em>potřebovala</em>.',
   sub: 'Tricholožka · Pardubice · 8 let praxe',
   quotes: [
     'Vedu si kartotéku osm let. Začínala jsem na papírových kartičkách v zamykatelné skříňce — pak v Excelu, pak ve fotkách v galerii.',
@@ -178,8 +213,8 @@ export const pricing = {
     label: 'Aplikace',
     titleHtml: 'Bez <em>háčku</em>.',
     text: 'Bez omezení počtu klientek, bez časového limitu. Žádný „trial", po kterém se zamknou funkce. Co máš teď, máš napořád.',
-    ctaLabel: 'Začít zdarma',
-    ctaHref: '/app/',
+    ctaLabel: 'Požádat o pozvánku',
+    ctaHref: '#pozvanka',
     features: [
       'Tolik klientek a termínů, kolik potřebuješ',
       'Diář a karta klientky',
@@ -306,8 +341,10 @@ export const faq = {
 export const finalCta = {
   titleHtml: 'Začni s <em>další klientkou</em>.',
   lede: 'Staré poznámky nech v sešitě. První návštěvu, která ti přijde, zapiš do Tricha — a uvidíš, jestli ti sedne.',
-  ctaLabel: 'Začít zdarma',
-  ctaHref: '/app/',
+  // FinalCta renders <InviteForm /> in place of the old button — kept here
+  // for any consumers that still want a fallback link target.
+  ctaLabel: 'Požádat o pozvánku',
+  ctaHref: '#pozvanka',
   riskReversal:
     'Bez platební karty. Když ti to nesedne, smažeš účet jedním klepnutím a data si vezmeš s sebou.',
   micro: 'iPhone i Android · iPad i tablet · Funguje i v prohlížeči na PC',
