@@ -77,11 +77,12 @@ const allJsonLd = [orgJsonLd, ...jsonLd];
     <link rel="canonical" href={canonicalUrl} />
     {noIndex && <meta name="robots" content="noindex,follow" />}
 
-    <!-- Google Fonts — Geist Mono + Caveat are landing-only display faces;
-         Fraunces / Geist / Patrick Hand are self-hosted in site.css. -->
+    <!-- Google Fonts — Geist Mono is the only face still loaded from CDN.
+         Fraunces / Geist / Patrick Hand / Caveat are all self-hosted in
+         site.css (matching app/src/styles/base.css; see web/scripts/fetch-fonts.sh). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
     <!-- Theme-color matches /shared/manifest.webmanifest so install splash and
          first paint show no color flash. -->

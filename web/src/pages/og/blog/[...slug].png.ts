@@ -32,6 +32,12 @@ async function loadFont(): Promise<ArrayBuffer | null> {
   try {
     const buf = await readFile(fontPath);
     if (buf.byteLength === 0) return null;
+    // Satori parses TTF/OTF only; woff2 (magic "wOF2") would crash opentype.js.
+    // The browser-shipped fonts are woff2, so degrade to placeholder until a
+    // TTF copy is added alongside.
+    if (buf[0] === 0x77 && buf[1] === 0x4f && buf[2] === 0x46 && buf[3] === 0x32) {
+      return null;
+    }
     cachedFont = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     return cachedFont;
   } catch {

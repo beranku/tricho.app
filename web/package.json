@@ -6,11 +6,13 @@
   "description": "Tricho.app marketing site — landing, blog, help, pricing. Static Astro output served at the apex; the PWA shell lives at /app/.",
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "bash scripts/fetch-fonts.sh",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
     "lint": "astro check",
-    "typecheck": "astro check && tsc --noEmit"
+    "typecheck": "astro check && tsc --noEmit",
+    "fetch-fonts": "bash scripts/fetch-fonts.sh"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.0.0",

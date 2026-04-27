@@ -23,6 +23,7 @@ export const header = {
   ],
   themeToggleLabel: 'Přepnout motiv',
   ctaLabel: 'Požádat o pozvánku',
+  ctaLabelShort: 'Chci to',
   ctaHref: '#pozvanka',
 };
 
@@ -32,9 +33,14 @@ export const inviteForm = {
   label: 'Tvůj e-mail',
   placeholder: 'tvůj@email.cz',
   submitLabel: 'Požádat o pozvánku',
-  helper: 'Pošleme ti pozvánku, jakmile uvolníme místo.',
+  helper: 'Pozvánku ti pošleme, až přijdeš na řadu.',
   successMessage: 'Díky! Ozveme se ti.',
   errorMessage: 'Něco se pokazilo. Napiš nám na ahoj@tricho.app.',
+  choice: {
+    legend: 'Chci se zapojit do testování',
+    testing: 'Chci pomoct testovat — dej mi přístup co nejdřív',
+    wait: 'Stačí mi dát vědět, až bude hotová verze',
+  },
 };
 
 export type PhoneSlot =
@@ -340,13 +346,13 @@ export const faq = {
 
 export const finalCta = {
   titleHtml: 'Začni s <em>další klientkou</em>.',
-  lede: 'Staré poznámky nech v sešitě. První návštěvu, která ti přijde, zapiš do Tricha — a uvidíš, jestli ti sedne.',
+  lede: 'Staré poznámky nech v sešitě. Tu další klientku zapíšeš jako první sem.',
   // FinalCta renders <InviteForm /> in place of the old button — kept here
   // for any consumers that still want a fallback link target.
   ctaLabel: 'Požádat o pozvánku',
   ctaHref: '#pozvanka',
   riskReversal:
-    'Bez platební karty. Když ti to nesedne, smažeš účet jedním klepnutím a data si vezmeš s sebou.',
+    'Žádný spam. Když si to rozmyslíš, jeden klik a tvůj e-mail u nás nezůstane.',
   micro: 'iPhone i Android · iPad i tablet · Funguje i v prohlížeči na PC',
 };
 

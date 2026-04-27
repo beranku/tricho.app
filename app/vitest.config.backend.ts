@@ -8,12 +8,12 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'node',
-      include: ['infrastructure/**/test/**/*.test.mjs'],
-      exclude: ['infrastructure/**/test/integration/**'],
+      include: ['../infrastructure/**/test/**/*.test.mjs'],
+      exclude: ['../infrastructure/**/test/integration/**'],
       passWithNoTests: true,
       coverage: {
-        include: ['infrastructure/**/*.mjs'],
-        exclude: ['infrastructure/**/test/**', 'infrastructure/**/node_modules/**'],
+        include: ['../infrastructure/**/*.mjs'],
+        exclude: ['../infrastructure/**/test/**', '../infrastructure/**/node_modules/**'],
         reportsDirectory: 'coverage/backend',
       },
     },
