@@ -8,7 +8,7 @@ Jsi senior frontend engineer s expertízou v Astro a moderní webové typografii
 
 ## Kontext produktu
 
-Tricho.app je PWA pro evidenci klientek u samostatných tricholožek a kadeřnic v ČR a SR. Cílovka: ženy 28–38 let s vlastní praxí. Klíčové vlastnosti: end-to-end šifrování, offline-first, dvě obrazovky (diář + karta klientky). Plány: Free napořád, Pro 299 Kč/rok, Max 499 Kč/rok.
+Tricho.app je PWA pro evidenci klientek u samostatných tricholožek a kadeřnic v ČR a SR. Cílovka: ženy 28–38 let s vlastní praxí. Klíčové vlastnosti: end-to-end šifrování, offline-first, dvě obrazovky (diář + karta klientky). Plány: Free napořád, Pro 299 Kč/rok, Max 999 Kč/rok.
 
 Stránka je v češtině, tichá, deníková, bez marketingového hype. Pozice je inspirovaná Bear, Day One, Standard Notes, Linear.
 

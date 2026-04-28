@@ -44,10 +44,18 @@ body.is-landing main {
   position: relative;
   z-index: 1;
   /* Override site.css's global `main` constraint (max-width 880, padding 48 24)
-   * — the landing manages its own page-container width per section. */
+   * — the landing manages its own page-container width per section.
+   *
+   * `margin: 0` is load-bearing: site.css gives `main` `margin: 0 auto`, and in
+   * a flex column container (body) auto cross-axis margins suppress the
+   * default `align-items: stretch` behavior. Without resetting the margins,
+   * `width: auto` collapses to the intrinsic max-content (1100px from `.page`)
+   * and full-bleed sections like `.privacy-quiet` / `.voices` can't reach the
+   * viewport edges. */
   max-width: none;
   padding: 0;
-  width: auto;
+  margin: 0;
+  width: 100%;
 }
 
 body.is-landing .skip-link {
@@ -93,8 +101,25 @@ body.is-landing .skip-link:focus {
   position: relative;
 }
 .landing-section + .landing-section { padding-top: 0; }
+
+/* Restore the top padding around sections that introduce a different
+ * background (cream-2 bands like Privacy and Voices), and around the
+ * sections that immediately follow them. Without this, the shared
+ * `landing-section + landing-section` buffer collapses entirely onto one
+ * side of the color boundary, so the dark band reads as "attached" to the
+ * next section instead of contained. Specificity (0,2,1) matches the
+ * collapse rule above; source order wins. */
+.landing-section + .privacy-quiet,
+.landing-section + .voices,
+.privacy-quiet + .landing-section,
+.voices + .landing-section { padding-top: 96px; }
+
 @media (max-width: 800px) {
   .landing-section { padding: 72px 0; }
+  .landing-section + .privacy-quiet,
+  .landing-section + .voices,
+  .privacy-quiet + .landing-section,
+  .voices + .landing-section { padding-top: 72px; }
 }
 
 /* Section head pattern. */

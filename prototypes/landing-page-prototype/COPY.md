@@ -208,7 +208,7 @@ A popis pod mockupem:
 ### Max plán
 
 - Name: `Max`
-- Amount: `499 Kč/rok`
+- Amount: `999 Kč/rok`
 - Tag: `Pro víc zařízení a dlouhou paměť.`
 - Features:
   - **5 zařízení**

@@ -14,8 +14,9 @@ export const siteMeta = {
 // to #pozvanka — the anchor of the FinalCta section, which renders the
 // invite-request form (InviteForm.astro). Hero renders the form inline too.
 export const header = {
-  brandName: 'Tricho.app',
-  brandVersion: 'v0.9 · v přípravě',
+  brandName: 'Tricho',
+  brandKicker: '.app',
+  brandVersion: 'v přípravě',
   navLinks: [
     { label: 'Blog', href: '/blog' },
     { label: 'Nápověda', href: '/help' },
@@ -250,7 +251,7 @@ export const pricing = {
     },
     {
       name: 'Max',
-      amount: '499 Kč',
+      amount: '999 Kč',
       period: '/rok',
       tag: 'Pro víc zařízení a dlouhou paměť.',
       features: [

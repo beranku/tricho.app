@@ -15,6 +15,7 @@ import { header } from '../../content/landing';
     <nav class="nav" aria-label="Hlavní navigace">
       <a href="/" class="brand">
         <span class="brand-name">{header.brandName}</span>
+        <span class="brand-kicker">{header.brandKicker}</span>
         <span class="brand-version">{header.brandVersion}</span>
       </a>
       <ul class="nav-links">
@@ -49,7 +50,7 @@ import { header } from '../../content/landing';
     text-decoration: none;
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 0;
   }
   .brand-name {
     font-family: 'Fraunces', Georgia, serif;
@@ -59,12 +60,26 @@ import { header } from '../../content/landing';
     letter-spacing: -0.02em;
     line-height: 1;
   }
-  .brand-version {
+  /* Kicker sits next to the wordmark and is shifted up to roughly the
+   * cap-height of "Tricho" — visually it floats above the name's baseline
+   * like a superscript hint, while keeping `.app` legible at kicker size. */
+  .brand-kicker {
     font-family: 'Geist Mono', ui-monospace, monospace;
     font-size: 10px;
-    color: var(--ink-3);
+    color: var(--copper);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    align-self: baseline;
+    transform: translateY(-0.85em);
+  }
+  .brand-version {
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--ink-4);
+    line-height: 1;
+    margin-left: 10px;
   }
   .nav-links {
     display: flex;

@@ -153,7 +153,7 @@ Obsahuje:
 ### PlanCell.astro
 **Props:**
 - `name: string` (Pro / Max)
-- `amount: string` (`299` / `499`)
+- `amount: string` (`299` / `999`)
 - `period: string` (`/rok`)
 - `tag: string` (krátký popis)
 - `features: string[]`

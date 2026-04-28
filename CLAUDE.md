@@ -110,7 +110,7 @@ The product is Czech-language. Copy is canonical in `prototypes/landing-page-pro
 - **Avoid:** uživatelka, klient (m.), CRM, dashboard, workflow, onboarding, scheduler, "end-to-end" (write it in Czech instead).
 - **Brand phrases (literal, never translate or restyle):** `Tricho`, `Tricho.app`, `Free`, `Pro`, `Max`, `Začít zdarma`.
 - Italics (`*…*` in Markdown, `<em>` in HTML) = signature emphasis, rendered teal-700.
-- Plans: **Free** (zdarma napořád, no caps, no trial, includes encrypted file backup), **Pro** 299 Kč/yr (2 zařízení, cloud backup 12 měsíců), **Max** 499 Kč/yr (5 zařízení, cloud backup 5 let). Sync is the upsell, not core. Free is fully usable on its own.
+- Plans: **Free** (zdarma napořád, no caps, no trial, includes encrypted file backup), **Pro** 299 Kč/yr (2 zařízení, cloud backup 12 měsíců), **Max** 999 Kč/yr (5 zařízení, cloud backup 5 let). Sync is the upsell, not core. Free is fully usable on its own.
 - Signature line: *"Co ti řekne klientka, zůstane mezi vámi."*
 
 ## Design system signals
