@@ -1752,6 +1752,74 @@ curl -f https://couch.tricho.app/_up || exit 1
 
 ---
 
+## Production releases (promote dev → main)
+
+Production releases are a single click in the GitHub Actions UI. The
+`.github/workflows/promote-dev-to-main.yml` workflow fast-forwards `main`
+to whatever SHA `dev` currently points at — `main` and `dev` end up on the
+exact same commit object, so production deploys the artifact that was
+already tested on staging (`dev.tricho.app`).
+
+### How to release
+
+1. Go to **Actions** → **Promote dev → main** → **Run workflow**.
+2. Type `RELEASE` into the `confirm` input.
+3. Click **Run workflow**.
+
+That's it. The workflow validates four preflight gates, fast-forwards
+`main`, tags the released SHA `prod-YYYY-MM-DD-<shortsha>`, and posts a
+summary. The push to `main` then triggers `ci.yml`, which builds and
+deploys to `tricho.app` as today.
+
+### What the workflow checks before pushing
+
+If any of these gates fails, the workflow aborts before touching `main`
+and prints a remediation message in the run summary.
+
+| Gate | What it checks | Remediation if it fails |
+| --- | --- | --- |
+| 0. Confirmation | `confirm` input equals `RELEASE` | Re-run, type `RELEASE` exactly |
+| 1. Ahead of main | `dev` has ≥ 1 commit not on `main` | Land work on `dev` first |
+| 2. Linear ancestor | `main` is an ancestor of `dev` (no divergence) | `git fetch origin && git checkout dev && git rebase origin/main && git push --force-with-lease origin dev` |
+| 3. No merge commits | `main..dev` contains no merge commits | Rebase `dev` to a linear history |
+| 4. Staging CI green | Latest `ci.yml` run on dev's tip SHA is `success` | Wait for staging CI, or fix the failure on `dev` and push again |
+
+The push uses `git push origin <dev-sha>:refs/heads/main` with no force
+flag, so the GitHub server itself rejects any non-fast-forward update.
+The workflow never force-pushes.
+
+### Recommended GitHub repo settings
+
+Apply these once in **Settings → Branches** to enforce the same
+invariants at the server side, regardless of the workflow:
+
+- **`main` branch protection rule:**
+  - ✅ Require linear history.
+  - ❌ Disable "Allow squash merging" and "Allow merge commits" for PRs
+    targeting `main`. (Squash- or merge-merging a PR breaks the
+    dev↔main parity invariant; the recovery commit `e8ff12d "Merge main
+    into dev to resolve squash-merge divergence"` records the last time
+    that happened.)
+  - ⚠️ Do **not** enable "Require pull request before merging" — the
+    workflow's `GITHUB_TOKEN` push would be denied. The `confirm:
+    RELEASE` gate replaces PR review for the single-developer flow.
+
+### Rollback
+
+Rollback is one click in the Cloudflare Pages dashboard:
+**Workers & Pages → tricho → Deployments → "Rollback to this deployment"**
+on the previous green deployment. There is no automated rollback
+workflow today.
+
+### Production tag timeline
+
+`git tag --list 'prod-*' --sort=-v:refname` shows the production
+release timeline (most recent first). These tags are independent of
+the PWA semver `app-v*` tags created by `release-app.yml` — different
+axes, different namespaces, no collision.
+
+---
+
 ## Troubleshooting
 
 ### Common Issues

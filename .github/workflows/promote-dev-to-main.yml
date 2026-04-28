@@ -1,0 +1,169 @@
+name: Promote dev → main
+
+# Single-click production release: fast-forwards `main` to `dev`'s tip after
+# four preflight gates (linearity, ahead-of-main, no merge commits, green CI
+# on dev). No squash, no merge commit, no force-push — main and dev end up
+# pointing at the same SHA, so the production deploy uses the exact same
+# artifact that was tested on staging.
+#
+# Trigger: GitHub UI → Actions → "Promote dev → main" → Run workflow → type
+# RELEASE in the confirm input → Run.
+#
+# This workflow does NOT deploy. The fast-forward push to `main` triggers
+# `ci.yml`, which builds and deploys to Cloudflare Pages as today.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type RELEASE to confirm production promotion'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-dev-to-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Promote dev → main
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Gate 0 — Confirmation token
+        run: |
+          set -eu
+          if [ "${{ inputs.confirm }}" != "RELEASE" ]; then
+            echo "::error::confirm input must be 'RELEASE' (got '${{ inputs.confirm }}'). Aborting — no refs were modified."
+            exit 1
+          fi
+          echo "Confirmation token accepted."
+
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Fetch origin/main
+        run: git fetch origin main:refs/remotes/origin/main
+
+      - name: Capture dev SHA
+        id: capture
+        run: |
+          set -eu
+          DEV_SHA=$(git rev-parse origin/dev)
+          SHORT_SHA="${DEV_SHA:0:7}"
+          echo "DEV_SHA=$DEV_SHA" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+          echo "Captured dev SHA: $DEV_SHA ($SHORT_SHA)"
+
+      - name: Gate 1 — dev is ahead of main
+        run: |
+          set -eu
+          AHEAD=$(git rev-list --count origin/main.."$DEV_SHA")
+          echo "Commits on dev not on main: $AHEAD"
+          if [ "$AHEAD" -lt 1 ]; then
+            echo "::error::dev has no commits ahead of main; nothing to release."
+            exit 1
+          fi
+
+      - name: Gate 2 — main is ancestor of dev (linear)
+        run: |
+          set -eu
+          if ! git merge-base --is-ancestor origin/main "$DEV_SHA"; then
+            echo "::error::main has commits not on dev; rebase dev onto main locally and retry."
+            echo "Hint: git fetch origin && git checkout dev && git rebase origin/main && git push --force-with-lease origin dev"
+            exit 1
+          fi
+          echo "main is an ancestor of dev — fast-forward is possible."
+
+      - name: Gate 3 — no merge commits in main..dev
+        run: |
+          set -eu
+          MERGES=$(git rev-list --merges origin/main.."$DEV_SHA")
+          if [ -n "$MERGES" ]; then
+            echo "::error::merge commits found in main..dev; rebase dev to a linear history and retry."
+            echo "Offending merge commits:"
+            echo "$MERGES"
+            exit 1
+          fi
+          echo "No merge commits in main..dev."
+
+      - name: Gate 4 — staging CI green for dev tip
+        run: |
+          set -eu
+          # Look at recent successful CI/CD runs on dev and check whether the
+          # captured dev SHA appears among them. We check up to 50 to be
+          # robust against quick succession of pushes.
+          RUN_JSON=$(gh run list \
+            --workflow=ci.yml \
+            --branch=dev \
+            --status=success \
+            --json headSha,conclusion,databaseId,url \
+            --limit=50)
+          if ! echo "$RUN_JSON" | jq -e --arg sha "$DEV_SHA" 'any(.[]; .headSha == $sha and .conclusion == "success")' > /dev/null; then
+            # Look for any (non-success) run on this SHA so we can link to it.
+            ANY_JSON=$(gh run list \
+              --workflow=ci.yml \
+              --branch=dev \
+              --json headSha,conclusion,databaseId,url,status \
+              --limit=50)
+            FAIL_URL=$(echo "$ANY_JSON" | jq -r --arg sha "$DEV_SHA" 'map(select(.headSha == $sha)) | first | .url // empty')
+            if [ -n "$FAIL_URL" ]; then
+              echo "::error::CI on dev tip $DEV_SHA is not green. See $FAIL_URL"
+            else
+              echo "::error::no CI run found for dev SHA $DEV_SHA. Wait for staging CI to finish, then retry."
+            fi
+            exit 1
+          fi
+          echo "Staging CI is green for $DEV_SHA."
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fast-forward main to dev
+        run: |
+          set -eu
+          # Server-side fast-forward only. No --force, no leading '+'. If
+          # main has advanced to a SHA that is not an ancestor of $DEV_SHA
+          # since gate 2 ran, the GitHub server rejects this push and the
+          # workflow fails — we do NOT escalate to force-push.
+          if ! git push origin "${DEV_SHA}:refs/heads/main"; then
+            echo "::error::fast-forward push to main was rejected. main may have advanced concurrently. Investigate before retrying — do not force-push."
+            exit 1
+          fi
+          echo "main is now at $DEV_SHA."
+
+      - name: Tag release
+        run: |
+          set -eu
+          TAG="prod-$(date -u +%Y-%m-%d)-${SHORT_SHA}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          if git ls-remote --exit-code --tags origin "$TAG" > /dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin — skipping creation."
+          else
+            git tag -a "$TAG" "$DEV_SHA" -m "Production release $TAG"
+            git push origin "$TAG"
+            echo "Created and pushed tag $TAG."
+          fi
+
+      - name: Run summary
+        run: |
+          {
+            echo "## Production release succeeded"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Released SHA | \`$DEV_SHA\` (\`$SHORT_SHA\`) |"
+            echo "| Tag | \`$TAG\` |"
+            echo "| Production | https://tricho.app/ |"
+            echo ""
+            echo "Cloudflare Pages will now deploy via \`ci.yml\` on the push to \`main\`."
+          } >> "$GITHUB_STEP_SUMMARY"

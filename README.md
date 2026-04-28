@@ -146,6 +146,13 @@ URL deployed automatically. The URL is posted as a PR comment.
 atomically. Rollback is one click in the Cloudflare dashboard
 (Workers & Pages → tricho → Deployments → "Rollback to this deployment").
 
+**Promoting `dev` → `main`:** production releases are a single click in
+the GitHub Actions UI — the `.github/workflows/promote-dev-to-main.yml`
+workflow fast-forwards `main` to `dev`'s tip after four preflight gates
+(linear history, ahead-of-main, no merge commits, green staging CI). See
+[docs/DEVELOPER.md → Production releases](./docs/DEVELOPER.md#production-releases-promote-dev--main)
+for the runbook.
+
 ## Releasing the PWA
 
 The PWA follows semver. Tags are namespaced `app-v*` so the marketing site
