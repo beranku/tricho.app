@@ -175,6 +175,8 @@ body.is-landing .skip-link:focus {
 
 /* Inline buttons used by Hero, Pricing, FinalCta. */
 .btn-primary {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -188,12 +190,79 @@ body.is-landing .skip-link:focus {
   text-decoration: none;
   cursor: pointer;
   border: none;
-  background: var(--teal-700);
+  background-color: var(--teal-700);
   color: #FFFFFE;
-  transition: background 0.2s ease;
+  /* Slow filament cooldown when leaving hover. */
+  transition: box-shadow 700ms cubic-bezier(0.33, 0, 0.67, 1);
   white-space: nowrap;
   min-height: 44px;
+  /* Five layers — first four are the lit halo (transparent at rest, opaque on hover), last is the resting ground shadow. Same count both states so box-shadow interpolates. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 254, 0),
+    0 0 0 1px rgba(165, 228, 236, 0),
+    0 0 18px rgba(43, 168, 197, 0),
+    0 0 42px rgba(14, 116, 144, 0),
+    0 1px 2px rgba(19, 78, 94, 0.18);
 }
-.btn-primary:hover { background: var(--teal-900); text-decoration: none; }
-:root[data-theme='dark'] .btn-primary { background: var(--teal-600); color: var(--bg); }
-:root[data-theme='dark'] .btn-primary:hover { background: var(--teal-700); }
+/* Lit-bulb overlay — sits behind the label, fades in fast and out slow. */
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 160% at 50% 30%, #6BC8DD 0%, #2A9CBA 45%, #0E7490 100%);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity 700ms cubic-bezier(0.33, 0, 0.67, 1);
+}
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  color: #FFFFFE;
+  text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 254, 0.35),
+    0 0 0 1px rgba(165, 228, 236, 0.55),
+    0 0 18px rgba(43, 168, 197, 0.65),
+    0 0 42px rgba(14, 116, 144, 0.40),
+    0 1px 2px rgba(19, 78, 94, 0.18);
+  /* Quick warm-up — bulb lights briskly but not instantly. */
+  transition: box-shadow 260ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+.btn-primary:hover::before,
+.btn-primary:focus-visible::before {
+  opacity: 1;
+  transition: opacity 260ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+:root[data-theme='dark'] .btn-primary {
+  background-color: var(--teal-600);
+  color: var(--bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 254, 0),
+    0 0 0 1px rgba(95, 175, 197, 0),
+    0 0 16px rgba(95, 175, 197, 0),
+    0 0 36px rgba(36, 148, 178, 0),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+}
+:root[data-theme='dark'] .btn-primary::before {
+  /* Dark mode resting bg is already a bright cyan, so the overlay is a subtle additional glow. */
+  background: radial-gradient(120% 160% at 50% 30%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0) 100%);
+}
+:root[data-theme='dark'] .btn-primary:hover,
+:root[data-theme='dark'] .btn-primary:focus-visible {
+  color: var(--bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 254, 0.22),
+    0 0 0 1px rgba(95, 175, 197, 0.55),
+    0 0 16px rgba(95, 175, 197, 0.55),
+    0 0 36px rgba(36, 148, 178, 0.40),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary,
+  .btn-primary::before,
+  .btn-primary:hover,
+  .btn-primary:hover::before,
+  .btn-primary:focus-visible,
+  .btn-primary:focus-visible::before { transition: none; }
+}

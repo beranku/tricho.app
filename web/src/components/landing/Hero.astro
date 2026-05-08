@@ -10,7 +10,7 @@ import { hero, header, realClient } from '../../content/landing';
       <div>
         <div class="hero-eyebrow">{hero.eyebrow}</div>
         <h1 class="hero-title" set:html={hero.titleHtml} />
-        <p class="hero-lede">{hero.lede}</p>
+        <p class="hero-lede" set:html={hero.ledeHtml}></p>
         <div class="hero-ctas">
           <a href={header.ctaHref} class="btn-primary">{header.ctaLabel}</a>
         </div>
@@ -33,6 +33,7 @@ import { hero, header, realClient } from '../../content/landing';
             products={realClient.products}
             note={realClient.note}
             nextTermLabel={realClient.nextTermLabel}
+            labels={realClient.labels}
           />
         </PhoneFrame>
       </div>

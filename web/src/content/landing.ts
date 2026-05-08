@@ -24,7 +24,7 @@ export const header = {
   ],
   themeToggleLabel: 'Přepnout motiv',
   ctaLabel: 'Požádat o pozvánku',
-  ctaLabelShort: 'Chci to',
+  ctaLabelShort: 'To chci',
   ctaHref: '#pozvanka',
 };
 
@@ -34,13 +34,13 @@ export const inviteForm = {
   label: 'Tvůj e-mail',
   placeholder: 'tvůj@email.cz',
   submitLabel: 'Požádat o pozvánku',
-  helper: 'Pozvánku ti pošleme, až přijdeš na řadu.',
+  helper: 'Pozvánku obdržíš, jakmile na tebe přijde řada. Brzy.',
   successMessage: 'Díky! Ozveme se ti.',
   errorMessage: 'Něco se pokazilo. Napiš nám na ahoj@tricho.app.',
   choice: {
     legend: 'Chci se zapojit do testování',
-    testing: 'Chci pomoct testovat — dej mi přístup co nejdřív',
-    wait: 'Stačí mi dát vědět, až bude hotová verze',
+    testing: 'Chci pomoct testovat, dej mi přístup co nejdřív',
+    wait: 'Dej mi vědět, až bude hotová verze',
   },
 };
 
@@ -111,6 +111,12 @@ export const realClient = {
   products: ['Minoxidil 5 %', 'Šampon Trico'],
   note: 'Přechází z barvení s amoniakem. Prosí přírodnější přípravky a víc fotek pokožky před zákrokem.',
   nextTermLabel: '14. 5. — Konzultace',
+  labels: {
+    services: 'Služby',
+    products: 'Produkty',
+    note: 'Poznámka',
+    nextTerm: 'Příští termín',
+  },
 };
 
 export const phoneKartaKlientky = {
@@ -134,10 +140,10 @@ export const phoneKartaKlientky = {
 };
 
 export const hero = {
-  eyebrow: 'Pro samostatné tricholožky a kadeřnice',
+  eyebrow: 'Chytrý zápisník tricholožky',
   // Title is rendered as raw HTML (set:html) so <em> can flip to italic teal.
-  titleHtml: 'Karta klientky,<br>která si <em>pamatuje za tebe</em>.',
-  lede: 'Anamnéza, alergeny, fotky pokožky, co jste minule zkoušely, kdy přijde příště. Všechno o jedné klientce na jednom místě, v telefonu.',
+  titleHtml: 'Karta klientky.<br><em>Pamatuje si</em><br> za tebe.',
+  ledeHtml: 'Fotky pokožky, anamnéza, alergeny, co jste řešili minule, kdy přijde příště. Všechno o jedné klientce na jednom místě, offline v telefonu.',
   // Hero renders <InviteForm /> instead of a single CTA button while the
   // app is invite-only.
   meta: ['iPhone i Android', 'Bez platební karty'],
@@ -146,18 +152,18 @@ export const hero = {
 export const twoScreens = {
   num: '01',
   titleHtml: 'Aplikace má <em>dvě obrazovky</em>.',
-  sub: 'Diář a karta klientky',
+  sub: 'Diář a kartu',
   introHtml:
-    'V diáři vidíš, koho čekáš a v kolik. Z jejího jména otevřeš její <em>kartu</em> — anamnéza, alergeny, fotky před a po, co jste minule zkoušely.',
+    'V diáři vidíš, koho čekáš a v kolik. Kliknitím na jméno otevřeš <em>kartu</em> — fotky před a po, anamnéza, alergeny, co jste řešili minule.',
   diar: {
     label: 'Obrazovka 1 — Diář',
-    title: 'Co máš dnes a co bylo',
-    text: 'Nahoře je dnešek, pak zítřek, pak zbytek týdne. A když si chceš vzpomenout na loňský duben, odscrolluješ tam.',
+    title: 'Co máš dnes, co bylo a co bude',
+    text: 'Nahoře je dnešek, pak zítřek, pak zbytek týdne. A když si chceš vzpomenout na loňský duben, jsi tam raz dva.',
   },
   karta: {
     label: 'Obrazovka 2 — Karta klientky',
-    title: 'Všechno o ní pohromadě',
-    text: 'Jedna obrazovka, na které najdeš všechno odshora dolů. Bez záložek, bez prokliků.',
+    title: 'Všechno pohromadě',
+    text: 'Jediná obrazovka, na které najdeš všechno odshora dolů. Bez záložek, bez prokliků.',
   },
 };
 
@@ -176,7 +182,7 @@ export const story = {
   videoAriaPlay: 'Přehrát video',
   videoPlaceholderTag: '[ Video Ludmily — placeholder ]',
   manifestoHtml:
-    'Aplikaci píšeme v malém českém týmu podle toho, jak Ludmila pracuje. Proto v ní nenajdeš grafy, statistiky ani „doporučení od AI". <em>Karta klientky, diář — a ticho.</em>',
+    'Aplikaci píšeme v malém českém týmu podle toho, jak Ludmila pracuje. Proto v ní nenajdeš grafy, statistiky ani „doporučení od AI". <em>Karta, diář — klid.</em>',
 };
 
 export const privacy = {
@@ -185,15 +191,15 @@ export const privacy = {
   prose: [
     {
       kind: 'normal' as const,
-      html: 'Tvoje záznamy se zašifrují rovnou v telefonu, dřív než cokoli odejde ven. Šifrovací klíč ti telefon vytvoří z tvého hesla a ven se nedostane.',
+      html: 'Tvoje záznamy se zašifrují rovnou v telefonu, dřív než se uloží. Šifrovací klíč ti telefon vytvoří a předá.',
     },
     {
       kind: 'lift' as const,
-      html: 'K datům se nedostane nikdo. <em>Ani my, ani hacker, ani úřad.</em>',
+      html: 'K datům se nedostane nikdo.<br>Ani hacker, <em>ani my …</em>',
     },
     {
       kind: 'normal' as const,
-      html: 'A co když zapomeneš heslo a nemáš zálohu? Data jsou pryč. Neumíme je obnovit — to není chyba, je to ten důvod, proč to funguje. Proto je v každém plánu, <span class="hand-soft">i v tom zdarma</span>, šifrovaná záloha do souboru. Schováš si ji.',
+      html: 'A když ztratíš klíč? Data jsou pryč. Neumíme je obnovit — to není chyba, to je důvod, proč to funguje. Pro případ ztráty nebo výměny telefonu můžeš využít šifrované zálohy.',
     },
   ],
   pillars: [
@@ -214,8 +220,8 @@ export const privacy = {
 
 export const pricing = {
   num: '04',
-  titleHtml: 'Aplikace zdarma.<br><em>Synchronizace volitelná.</em>',
-  sub: 'Free / Pro / Max',
+  titleHtml: 'Aplikace zdarma. Tečka.',
+  sub: 'Free',
   free: {
     label: 'Aplikace',
     titleHtml: 'Bez <em>háčku</em>.',
@@ -223,17 +229,17 @@ export const pricing = {
     ctaLabel: 'Požádat o pozvánku',
     ctaHref: '#pozvanka',
     features: [
-      'Tolik klientek a termínů, kolik potřebuješ',
-      'Diář a karta klientky',
-      'Fotky před a po',
+      'Tolik klientek i termínů, kolik potřebuješ',
       'Šifrování přímo v telefonu',
-      'Záloha do souboru',
+      'Diář a karta klientky',
+      'Zálohy do souboru',
+      'Funguje plně bez připojení',
     ],
   },
   plansIntro: {
-    label: 'Když chceš víc',
-    titleHtml: 'Synchronizace mezi zařízeními a <em>záloha v cloudu</em>.',
-    text: 'Hodí se ti, když pracuješ na víc zařízeních nebo nechceš řešit zálohy ručně.',
+    label: '05',
+    titleHtml: 'Když chceš víc.<br><em>Synchronizace</em> mezi zařízeními <em>a záloha</em> v cloudu.',
+    text: 'Pro  /  Max',
   },
   plans: [
     {
@@ -242,10 +248,11 @@ export const pricing = {
       period: '/rok',
       tag: 'Pro telefon a tablet. Záloha rok zpátky.',
       features: [
-        '<strong>2 zařízení</strong>',
-        'Zálohy v cloudu — <strong>12 měsíců zpětně</strong>',
-        'Synchronizace mezi zařízeními',
-        'Obnova při výměně telefonu',
+        '<strong>2 zařízení</strong> v synchronizaci',
+        'Automatické šifrované zálohy v cloudu',
+        'Zálohy fotek<strong> 12 měsíců zpětně</strong>',
+        'Neomezené zálohy diáře a návštěv',
+        'Snadná obnova při výměně telefonu',
       ],
       microcopy: 'Vyjde to na 25 Kč měsíčně. Platíš jednou ročně.',
     },
@@ -255,99 +262,95 @@ export const pricing = {
       period: '/rok',
       tag: 'Pro víc zařízení a dlouhou paměť.',
       features: [
-        '<strong>5 zařízení</strong>',
-        'Zálohy v cloudu — <strong>5 let zpětně</strong>',
-        'Synchronizace mezi zařízeními',
-        'Obnova při výměně telefonu',
+        '<strong>5 zařízení</strong> v synchronizaci',
+        'Automatické šifrované zálohy v cloudu',
+        'Zálohy fotek<strong> 5 let zpětně</strong>',
+        'Neomezené zálohy diáře a návštěv',
+        'Snadná obnova při výměně telefonu',
       ],
-      microcopy: 'Pro někoho přebytek, pro jiného přesně to, co potřebuje.',
+      microcopy: 'Pro někoho luxus, pro jiného přesně to, co potřebuje.',
     },
   ],
-  fineprint: 'Když přestaneš platit, vrátíš se na Free plán a data zůstanou s tebou.',
+  fineprint: 'Když předplatné ukončíš, aplikace i data ti zůstanou.',
 };
 
 export const voices = {
   num: '05',
   titleHtml: 'Co říkají <em>kolegyně</em>.',
-  sub: 'Trichologky a kadeřnice, ČR a SR',
+  sub: 'Tricholožky a kadeřnice, ČR a SR',
   testimonials: [
     {
       quoteHtml:
-        'Klientka přijde po půl roce a chce „přesně to samé jako minule". <em>Dřív jsem chvíli vzpomínala, teď to mám rozkliknuté za dvě vteřiny.</em>',
+        'Klientka přijde po půl roce a chce ‚přesně to samé jako minule‘. <em>Dřív jsem chvíli vzpomínala, teď to mám rozkliknuté za dvě vteřiny.</em>',
       initials: 'MN',
       name: 'Marie Nováková',
-      role: 'Kadeřnice a trichologyně, Brno',
+      role: 'Kadeřnice a tricholožka, Brno',
     },
     {
       quoteHtml:
-        'Bála jsem se, že se budu zase něco učit. <em>Naťukala jsem první klientku do minuty.</em>',
+        'Bála jsem se, že se budu zase něco učit. <em>První záznam návštěvy jsem zvládla do minuty.</em>',
       initials: 'JK',
       name: 'Jana Kratochvílová',
-      role: 'Trichologyně, Olomouc',
+      role: 'Kadeřnice, Olomouc',
     },
     {
       quoteHtml:
-        'Klientky mi posílají hormonální profily, fotky pokožky, zdravotní zprávy. <em>Nemůžu to mít válet v galerii vedle dovolené.</em>',
+        'Klientky mi posílají hormonální profily, fotky pokožky, zdravotní zprávy. <em>Nemůžu to válet v galerii vedle fotek z dovolené.</em>',
       initials: 'PS',
       name: 'Petra Svobodová',
-      role: 'Kadeřnice, Pardubice',
+      role: 'Tricholožka, Praha',
     },
   ],
   fineprint:
-    'Tricho zatím testujeme s pár trichologkami a kadeřnicemi z ČR a SR. Citace jsou jejich, fotky doplníme, až aplikaci spustíme veřejně.',
+    'Tricho.app zatím testujeme s pár tricholožkami a kadeřnicemi. Zapojíš se?',
 };
 
 export const faq = {
   num: '06',
-  titleHtml: 'Otázky, které <em>chodí</em>.',
+  titleHtml: 'Otázky, a <em>odpovědi</em>.',
   sub: 'Co se ptáte nejčastěji',
   items: [
     {
-      question: 'Zapomněla jsem heslo. Co teď?',
+      question: 'Wifi v salonu jde a nejde. Tricho.app mi vypadne?',
       answerHtml:
-        'Když nemáš zálohu, jsou data pryč. Heslo neumíme obnovit — neznáme ho a vědomě ani neuchováváme. Proto je v každém plánu, <strong>i ve Free</strong>, šifrovaná záloha do souboru. Schováš si ji do iCloudu, na flashku, do e-mailu — kam chceš. V Pro a Max plánu se zálohy ukládají do cloudu samy.',
-    },
-    {
-      question: 'Wifi v salonu jde a nejde. Tricho mi vypadne?',
-      answerHtml:
-        'Ne. Tricho funguje offline. Otevřeš kartu, zapíšeš poznámku, zavřeš. Až přijde signál a máš zapnutý sync, samo se srovná s druhým zařízením.',
+        'Nevypadne. Tricho.app funguje plně offline. Otevřeš kartu, zapíšeš poznámku, zavřeš. S aktivovanou synchronizací se to samo srovná s druhým zařízením jakmile bude signál.',
     },
     {
       question: 'Klientky mi posílají citlivé věci. Je to opravdu jen u mě?',
       answerHtml:
-        'Ano. Tricho šifruje data přímo v tvém telefonu a klíč nikam neposílá. Ani my jako provozovatel se k těm datům nedostaneme — kdybychom se podívali na server, vidíme jen šum.',
+        'Ano. Tricho.app šifruje data přímo ve tvém telefonu a klíč nikam neposílá. Ani my jako provozovatel se k těm datům nedostaneme — na serveru je jen rozsypaný čaj a kávová sedlina.',
     },
     {
-      question: 'A GDPR? Můžu to klientce ukázat ve smlouvě?',
+      question: 'A GDPR? Můžu to klientce zaručit ve smlouvě?',
       answerHtml:
-        'Můžeš. U klientek pracuješ s údaji o zdraví — to je čl. 9 GDPR a Tricho je postavené tak, aby tobě i klientce zaručilo, že data vidíš jen ty. Hostujeme v EU, šifrujeme E2E, neprodáváme nikomu. Šablonu DPA si stáhneš v patičce.',
+        'Můžeš. U klientek pracuješ s údaji o zdraví, tedy s citlivými osobními údaji podle čl. 9 GDPR. Tricho.app je postavená tak, aby tobě i klientce zaručila, že údaje vidíš jen ty. Data šifrujeme end-to-end, hostujeme v EU, neprodáváme nikomu.',
     },
     {
       question: 'Free napořád — fakt napořád, nebo „dokud to nezměníme"?',
       answerHtml:
-        'Napořád. Žádný trial, žádné automatické přepnutí, žádná kreditka při registraci. Když někdy budeš chtít synchronizaci nebo cloudové zálohy, koupíš si Pro. Free plán si můžeš nechat klidně deset let.',
+        'Napořád. Žádný trial, žádné automatické přepnutí, žádná kreditka při registraci. Když někdy budeš chtít synchronizaci nebo automatické zálohy, koupíš si Pro. Appku si můžeš nechat zdarma klidně deset let.',
     },
     {
-      question: 'Co když Tricho v roce 2030 zanikne?',
+      question: 'Co když Tricho.app zanikne?',
       answerHtml:
-        'Stáhneš si data v <code>JSON</code> souboru. Otevřený formát — můžeš si je nahrát jinam, nebo si je nechat ležet na disku. V Tricho tě nikdo nedrží.',
+        'Myslíš, až Skynet převzme nadvládu? Stáhneš si fotky i data v otevřeném formátu — můžeš si je nahrát jinam, nebo si je nechat ležet na disku. V Tricho.app tě nikdo nedrží.',
     },
     {
       question: 'Mám iPhone. Funguje to?',
       answerHtml:
-        'Funguje. V Safari otevřeš tricho.app, klepneš na <strong>↑ Sdílet</strong> → „Přidat na plochu". Hotovo — od té chvíle Tricho otevíráš ze své plochy jako každou jinou aplikaci. iOS má jedno omezení: synchronizace běží jen, když je aplikace otevřená.',
+        'Funguje. V Safari klepneš na <strong>↑ Sdílet</strong>, pak na <strong>Přidat na plochu</strong>. Hotovo — od té chvíle Tricho.app otevíráš ze své plochy jako každou jinou aplikaci. iOS má jedno omezení: automatická synchronizace běží jen, když je aplikace otevřená.',
     },
     {
-      question: 'Můžou si u mě klientky samy rezervovat?',
+      question: 'Můžou se u mě klientky samy rezervovat?',
       answerHtml:
-        'Ne — a vědomě. Tricho je sešit, ne rezervační systém. Když potřebuješ veřejné rezervace pro klientky, dál používej Reservio nebo Booksy a Tricho měj vedle nich na evidenci. Většině kolegyň takhle stačí.',
+        'Ne. Tricho.app je zápisník, ne rezervační systém. <span class="hand-soft">Zatím.</span>',
     },
   ],
 };
 
 export const finalCta = {
   titleHtml: 'Začni s <em>další klientkou</em>.',
-  lede: 'Staré poznámky nech v sešitě. Tu další klientku zapíšeš jako první sem.',
+  ledeHtml: 'Otevři Tricho.app, staré poznámky vyfoť a rovnou zaznamenej aktuální návštěvu.',
   // FinalCta renders <InviteForm /> in place of the old button — kept here
   // for any consumers that still want a fallback link target.
   ctaLabel: 'Požádat o pozvánku',
@@ -359,9 +362,9 @@ export const finalCta = {
 
 export const footer = {
   brandName: 'Tricho.app',
-  brandVersion: 'v0.9 · v přípravě',
+  brandVersion: 'v přípravě',
   tagline:
-    'Sešit pro tricholožky a kadeřnice. Postavený v Česku, hostovaný v EU.',
+    'Chytrý zápisník pro tricholožky a kadeřnice. Postavený v Česku, hostovaný v EU.',
   columns: [
     {
       title: 'Produkt',
@@ -389,5 +392,5 @@ export const footer = {
     },
   ],
   copyright: '© 2026 Tricho.app · Praha, EU',
-  versionTag: 'v0.9 · v přípravě',
+  versionTag: 'hlavně jednoduše',
 };

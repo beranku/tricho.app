@@ -8,7 +8,7 @@ import { finalCta } from '../../content/landing';
 <section class="final-cta" id="pozvanka">
   <div class="page">
     <h2 set:html={finalCta.titleHtml} />
-    <p class="lede">{finalCta.lede}</p>
+    <p class="lede" set:html={finalCta.ledeHtml}></p>
     <div class="form-wrap">
       <InviteForm align="center" />
     </div>

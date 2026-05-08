@@ -18,6 +18,12 @@ interface Props {
   products: string[];
   note: string;
   nextTermLabel: string;
+  labels: {
+    services: string;
+    products: string;
+    note: string;
+    nextTerm: string;
+  };
 }
 const {
   time = '10:32',
@@ -31,6 +37,7 @@ const {
   products,
   note,
   nextTermLabel,
+  labels,
 } = Astro.props;
 ---
 
@@ -63,7 +70,7 @@ const {
   <div class="detail-card">
     <div class="detail-section">
       <div class="section-head-row">
-        <span class="section-label">Co jste řešily</span>
+        <span class="section-label">{labels.services}</span>
       </div>
       <div class="chips-row">
         {services.map((s) => <span class="chip">{s}</span>)}
@@ -73,7 +80,7 @@ const {
 
     <div class="detail-section">
       <div class="section-head-row">
-        <span class="section-label">Přípravky</span>
+        <span class="section-label">{labels.products}</span>
       </div>
       <div class="chips-row">
         {products.map((p) => <span class="chip">{p}</span>)}
@@ -83,14 +90,14 @@ const {
 
     <div class="detail-section">
       <div class="section-head-row">
-        <span class="section-label">Poznámka</span>
+        <span class="section-label">{labels.note}</span>
       </div>
       <p class="note-text">{note}</p>
     </div>
   </div>
 
   <div class="next-term">
-    <span class="section-label next-term-label">Příští termín</span>
+    <span class="section-label next-term-label">{labels.nextTerm}</span>
     <span class="next-term-value">{nextTermLabel}</span>
   </div>
 </div>
