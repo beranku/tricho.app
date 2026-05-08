@@ -15,5 +15,5 @@
 
 ## 3. Archive
 
-- [ ] 3.1 Once both spec files are merged on `main`, run `openspec-archive-change relax-pr-coupling-in-deploy-spec` to move this change directory to `openspec/changes/archive/<date>-relax-pr-coupling-in-deploy-spec/`.
-- [ ] 3.2 Verify the live spec files in `openspec/specs/cloudflare-pages-deploy/spec.md` and `openspec/specs/e2e-testing/spec.md` reflect the deltas after archive.
+- [x] 3.1 Once both spec files are merged on `main`, run `openspec-archive-change relax-pr-coupling-in-deploy-spec` to move this change directory to `openspec/changes/archive/<date>-relax-pr-coupling-in-deploy-spec/`. *(Performed on 2026-05-08 once `029b1af` reached `origin/main` via the `Promote dev → main` run; archive landed at `openspec/changes/archive/2026-05-08-relax-pr-coupling-in-deploy-spec/`.)*
+- [x] 3.2 Verify the live spec files in `openspec/specs/cloudflare-pages-deploy/spec.md` and `openspec/specs/e2e-testing/spec.md` reflect the deltas after archive. *(Verified post-archive: cloudflare-pages-deploy carries the new "Branch-aliased deploys" + "PR runs SHOULD post a preview-URL comment" requirements and the broadened "Path-filtered tests" requirement; e2e-testing carries the renamed `ci.yml` workflow reference, the broadened triggers, and the reframed scenarios. `openspec validate` clean on both.)*
