@@ -9,8 +9,10 @@ name: Promote dev → main
 # Trigger: GitHub UI → Actions → "Promote dev → main" → Run workflow → type
 # RELEASE in the confirm input → Run.
 #
-# This workflow does NOT deploy. The fast-forward push to `main` triggers
-# `ci.yml`, which builds and deploys to Cloudflare Pages as today.
+# Production deploy: pushes made by the default `GITHUB_TOKEN` do NOT
+# trigger downstream `push`-event workflows, so this workflow explicitly
+# dispatches `ci.yml` against `main` as its final step. `ci.yml` is the
+# unchanged build + Cloudflare Pages deploy pipeline.
 
 on:
   workflow_dispatch:
@@ -21,7 +23,14 @@ on:
         type: string
 
 permissions:
+  # `contents: write` — fast-forward `main` and push the prod-* tag.
+  # `actions:  write` — dispatch `ci.yml` on `main` after the push, since
+  #                     GITHUB_TOKEN-driven pushes don't auto-trigger it.
+  # No other scopes; no PAT or GitHub App involved. The `confirm: RELEASE`
+  # input is what gates *invocation*; these scopes only constrain what
+  # this workflow can do once it's running.
   contents: write
+  actions: write
 
 concurrency:
   group: promote-dev-to-main
@@ -154,6 +163,42 @@ jobs:
             echo "Created and pushed tag $TAG."
           fi
 
+      - name: Dispatch production deploy
+        run: |
+          set -eu
+          # Pushes by GITHUB_TOKEN do NOT trigger downstream `push`-event
+          # workflows, so we explicitly dispatch ci.yml against `main`.
+          # `--ref main` is required (not the tag, not the SHA) because
+          # ci.yml's Cloudflare Pages step uses `github.ref_name` to set
+          # the deploy `--branch` — only `main` produces a production
+          # deploy. Race risk: branch protection blocks direct pushes to
+          # main, and this workflow's `concurrency` group serializes
+          # promote runs, so by the time we get here `main` is at the
+          # SHA we just pushed.
+          if ! gh workflow run ci.yml --ref main; then
+            echo "::error::failed to dispatch ci.yml on main; production will not deploy. Run \`gh workflow run \"CI/CD\" --ref main\` manually."
+            exit 1
+          fi
+          # Best-effort: surface the run URL in the summary. Dispatched
+          # runs take a moment to register; poll briefly without blocking
+          # success on it. The promote workflow's concurrency group plus
+          # branch-protection on main mean the most recent
+          # workflow_dispatch run on `main` is unambiguously ours.
+          DISPATCH_URL=""
+          for _ in 1 2 3 4 5; do
+            sleep 2
+            DISPATCH_URL=$(gh run list \
+              --workflow=ci.yml \
+              --branch=main \
+              --event=workflow_dispatch \
+              --limit=1 \
+              --json url \
+              --jq '.[0].url' 2>/dev/null || true)
+            [ -n "$DISPATCH_URL" ] && break
+          done
+          echo "DISPATCH_URL=$DISPATCH_URL" >> "$GITHUB_ENV"
+          echo "Dispatched ci.yml on main; run URL: ${DISPATCH_URL:-(not yet available)}"
+
       - name: Run summary
         run: |
           {
@@ -163,7 +208,12 @@ jobs:
             echo "| --- | --- |"
             echo "| Released SHA | \`$DEV_SHA\` (\`$SHORT_SHA\`) |"
             echo "| Tag | \`$TAG\` |"
+            if [ -n "${DISPATCH_URL:-}" ]; then
+              echo "| Deploy run | $DISPATCH_URL |"
+            else
+              echo "| Deploy run | dispatched — see Actions → CI/CD on main |"
+            fi
             echo "| Production | https://tricho.app/ |"
             echo ""
-            echo "Cloudflare Pages will now deploy via \`ci.yml\` on the push to \`main\`."
+            echo "Cloudflare Pages will deploy via the dispatched \`ci.yml\` run above."
           } >> "$GITHUB_STEP_SUMMARY"

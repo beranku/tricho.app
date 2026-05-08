@@ -88,7 +88,7 @@ Tier floors (enforced by `scripts/coverage/diff-vs-baseline.mjs` in CI):
 | Component | ≥ 70 % | ≥ 60 % | ≥ 70 % |
 | Backend unit | ≥ 85 % | ≥ 80 % | ≥ 85 % |
 
-Baselines live in `coverage-baseline.json` at the repo root. A PR that drops any metric by more than 0.5 pp must either restore it or carry an explicit reviewer-acknowledged exception (commit body: `cov-exception: <why>`).
+Baselines live in `coverage-baseline.json` at the repo root. A commit that drops any metric by more than 0.5 pp must either restore it or carry an explicit exception in the commit body: `cov-exception: <why>`.
 
 Generate per-tier coverage locally:
 
@@ -139,18 +139,18 @@ Rule of three: the moment two test files need the same setup, extract into the d
 
 ## CI layering
 
-`.github/workflows/tests.yml` fans out into parallel jobs: `unit`, `component`, `backend-unit`, `backend-integ`, `e2e`, `smoke`, `coverage-gate`. Path-filters (`dorny/paths-filter`) skip jobs whose inputs didn't change. Target wall-clock for a full green run: < 5 min.
+`.github/workflows/ci.yml` fans out into parallel jobs (`test-web`, `test-app`, `test-backend`, `build-and-deploy`). Path-filters (`dorny/paths-filter`) skip jobs whose inputs didn't change. Target wall-clock for a full green run: < 5 min.
 
 ## Updating the baseline
 
-When a PR intentionally drops a metric (e.g. removing a dead-code branch also removes its test), regenerate the baseline:
+When a commit intentionally drops a metric (e.g. removing a dead-code branch also removes its test), regenerate the baseline:
 
 ```sh
 npm run test:coverage
 cp coverage/unit/coverage-summary.json         coverage-baseline.json     # or merge per-tier
 ```
 
-Commit the new baseline in the same PR. Add a note in the commit body: `cov-baseline: updated after <reason>`.
+Commit the new baseline alongside the change. Add a note in the commit body: `cov-baseline: updated after <reason>`.
 
 ## Third-party mocks
 

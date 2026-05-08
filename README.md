@@ -139,19 +139,30 @@ Actions (`.github/workflows/ci.yml`) — Cloudflare does not poll the repo.
    `Test app`, `Build merged dist & deploy`; require linear history;
    restrict direct pushes.
 
-**Per-PR previews:** every PR gets a unique `<branch>.tricho.pages.dev`
-URL deployed automatically. The URL is posted as a PR comment.
+**Staging:** every push to `dev` deploys to `dev.tricho.app` via the
+Cloudflare Pages branch alias. This is the everyday integration target
+in the solo direct-to-`dev` flow (see
+[docs/DEVELOPER.md → Day-to-day development](./docs/DEVELOPER.md#day-to-day-development-solo-flow)).
 
-**Production deploys:** every push to `main` deploys to `tricho.app`
-atomically. Rollback is one click in the Cloudflare dashboard
+**Production deploys:** the `Promote dev → main` workflow fast-forwards
+`main` to `dev`'s tip after four preflight gates (linear history,
+ahead-of-main, no merge commits, green staging CI), tags the released
+SHA `prod-YYYY-MM-DD-<shortsha>`, and dispatches `ci.yml` on `main` to
+build + deploy `tricho.app`. Trigger from the GitHub Actions UI
+("Promote dev → main" → type `RELEASE` → Run) or the CLI:
+
+```sh
+gh workflow run "Promote dev → main" --ref dev -f confirm=RELEASE
+```
+
+Rollback is one click in the Cloudflare dashboard
 (Workers & Pages → tricho → Deployments → "Rollback to this deployment").
+See [docs/DEVELOPER.md → Production releases](./docs/DEVELOPER.md#production-releases-promote-dev--main)
+for the full runbook.
 
-**Promoting `dev` → `main`:** production releases are a single click in
-the GitHub Actions UI — the `.github/workflows/promote-dev-to-main.yml`
-workflow fast-forwards `main` to `dev`'s tip after four preflight gates
-(linear history, ahead-of-main, no merge commits, green staging CI). See
-[docs/DEVELOPER.md → Production releases](./docs/DEVELOPER.md#production-releases-promote-dev--main)
-for the runbook.
+**Per-PR previews (rarely used in solo flow):** if you do open a PR
+against `main`, Cloudflare Pages will deploy it to a unique
+`<branch>.tricho.pages.dev` URL and the URL is posted as a PR comment.
 
 ## Releasing the PWA
 
@@ -461,27 +472,6 @@ npm install
 npm run dev              # Astro dev server on http://localhost:4321 (no CouchDB, no auth)
 npm run build            # produces dist/
 npm run preview          # serves dist/
-```
-
-## Deployment
-
-Automatický deployment na GitHub Pages s custom doménou přes GitHub Actions:
-
-1. Push do `main` větve
-2. Workflow `.github/workflows/deploy.yml`:
-   - Checkout → Setup Node → Install → Build → Deploy
-3. Dostupné na `https://tricho.app/`
-
-### Custom doména
-
-- Soubor `public/CNAME` obsahuje `tricho.app`
-- DNS musí mít CNAME záznam směřující na `beranku.github.io`
-
-### Manuální deployment
-
-```bash
-npm run build
-# Upload obsahu dist/ na hosting
 ```
 
 ## Datový tok

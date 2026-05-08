@@ -31,6 +31,6 @@ rules:
       numbers; line numbers rot.
   design:
     - When touching key material or transport, include a short
-      threat-model delta: what the adversary could do before vs. after.
+      threat-model delta — what the adversary could do before vs. after.
   tasks:
     - Prefer tasks under 2 hours each; split anything larger.

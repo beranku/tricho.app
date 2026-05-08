@@ -107,8 +107,16 @@ manifest's trailing-slash `start_url`.
 3. `build-and-deploy` downloads (or rebuilds) both artifacts, runs the
    merge + validate scripts, and deploys via
    `cloudflare/wrangler-action@v3 pages deploy dist --project-name=tricho`.
-4. PR runs deploy to `<branch>.tricho.pages.dev` and post the URL as a PR
-   comment. Pushes to `main` deploy to production (`tricho.app`).
+4. The Cloudflare deploy `--branch` is set from `github.ref_name`, so a
+   push to `dev` deploys to `dev.tricho.app` (the everyday staging
+   target) and a push to `main` deploys to `tricho.app` (production).
+   PRs — used rarely in the solo flow — deploy to a per-branch preview
+   URL with the URL posted as a PR comment.
+5. `ci.yml` is also invoked via `workflow_dispatch` by the
+   `Promote dev → main` workflow as the final step of a production
+   release; that's the path that produces a production deploy on `main`,
+   since `GITHUB_TOKEN`-driven pushes don't auto-trigger downstream
+   `push`-event workflows.
 
 `.github/workflows/tests.yml` runs the existing test pyramid (smoke,
 unit, component, backend-unit, backend-integ, e2e, coverage-gate) — its
@@ -125,7 +133,7 @@ commits since the previous `app-v*` tag.
 | `CLOUDFLARE_API_TOKEN`     | Pages-Edit-only token; deploys via wrangler.    |
 | `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account that owns the `tricho` project. |
 | `SOPS_AGE_KEY` (existing)  | Decrypts `secrets/*.sops.yaml` for the e2e stack. |
-| `GITHUB_TOKEN` (auto)      | PR-comment posting + release creation.           |
+| `GITHUB_TOKEN` (auto)      | PR-comment posting, release creation, and `workflow_dispatch` of `ci.yml` on `main` from `promote-dev-to-main.yml` (gated by that workflow's narrow `actions: write` scope). |
 
 ## Rollback
 

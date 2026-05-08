@@ -1752,6 +1752,63 @@ curl -f https://couch.tricho.app/_up || exit 1
 
 ---
 
+## Day-to-day development (solo flow)
+
+Tricho is a single-developer project. There are **no pull requests**. The
+two long-lived branches each have a clear role:
+
+- **`dev`** — staging. Cloudflare Pages auto-deploys it to
+  `dev.tricho.app`. Push as often as you like; this is where you iterate.
+- **`main`** — production. Only the `Promote dev → main` workflow is
+  allowed to update it (see the section below).
+
+### The loop
+
+```bash
+# 1. Sync up
+git switch dev && git pull --ff-only
+
+# 2. Hack. Commit small, conventional-commit messages.
+#    For risky multi-step work, branch locally:
+#      git switch -c feat/x   →   …work…   →
+#      git switch dev && git merge --ff-only feat/x && git branch -d feat/x
+#    Use --ff-only (or rebase first) to keep dev's history linear —
+#    the promote workflow's "no merge commits" gate will reject any
+#    merge commit between main and dev.
+
+# 3. Run the relevant tests before pushing. Pick the cheapest tier
+#    that exercises what you changed:
+#      cd app && npm run test         # unit + component, < 15 s
+#      cd app && npm run typecheck    # TS only
+#      make ci                        # full stack up
+#      make test-all                  # entire pyramid (minutes)
+#    See docs/TESTING.md for the pyramid contract.
+
+# 4. Push to dev. CI/CD fires automatically and deploys to
+#    dev.tricho.app on success. If CI goes red, fix it on dev and push
+#    again — the promote workflow will refuse to release a red tip.
+git push
+
+# 5. When you're happy with what's on dev, run the promote workflow
+#    (next section).
+```
+
+### What you do *not* do
+
+- Open a PR. The repo has no required reviewers; PRs would just be
+  ceremony for one person.
+- Merge `main` back into `dev`. Creating a merge commit between them
+  breaks the promote workflow's `no-merge-commits` gate. The
+  `e8ff12d "Merge main into dev to resolve squash-merge divergence"`
+  commit is a record of the last time this happened — don't repeat it.
+- Push directly to `main`. Branch protection should reject it; if it
+  doesn't, fix branch protection (see "Recommended GitHub repo
+  settings" below).
+- Long-lived feature branches. Land work on `dev` quickly; let
+  staging be the integration point.
+
+---
+
 ## Production releases (promote dev → main)
 
 Production releases are a single click in the GitHub Actions UI. The
@@ -1762,14 +1819,36 @@ already tested on staging (`dev.tricho.app`).
 
 ### How to release
 
-1. Go to **Actions** → **Promote dev → main** → **Run workflow**.
-2. Type `RELEASE` into the `confirm` input.
-3. Click **Run workflow**.
+From your terminal:
 
-That's it. The workflow validates four preflight gates, fast-forwards
-`main`, tags the released SHA `prod-YYYY-MM-DD-<shortsha>`, and posts a
-summary. The push to `main` then triggers `ci.yml`, which builds and
-deploys to `tricho.app` as today.
+```bash
+gh workflow run "Promote dev → main" --ref dev -f confirm=RELEASE
+```
+
+…or in the GitHub UI: **Actions** → **Promote dev → main** → **Run
+workflow** → type `RELEASE` into the `confirm` input → **Run workflow**.
+
+The workflow validates four preflight gates, fast-forwards `main`, tags
+the released SHA `prod-YYYY-MM-DD-<shortsha>`, and dispatches `ci.yml`
+on `main` to run the production build + Cloudflare Pages deploy. The
+run summary links to the dispatched CI run.
+
+#### Why a separate dispatch step (and not just a push trigger)?
+
+Pushes made by the default `GITHUB_TOKEN` do **not** trigger downstream
+`push`-event workflows — that's a deliberate GitHub safeguard against
+recursive workflow loops. The promote workflow therefore explicitly
+calls `gh workflow run ci.yml --ref main` at the end, gated by the
+`actions: write` permission scoped to *this workflow only*. No PAT, no
+GitHub App, nothing else to rotate. The `confirm: RELEASE` input is
+still the only way to invoke the workflow in the first place.
+
+If the dispatch step ever fails (e.g. GitHub Actions outage), the
+workflow surfaces a manual recovery command:
+
+```bash
+gh workflow run "CI/CD" --ref main
+```
 
 ### What the workflow checks before pushing
 
@@ -1866,28 +1945,27 @@ axes, different namespaces, no collision.
 
 ---
 
-## Contributing
+## Code conventions
 
-### Development Workflow
+Tricho is a single-developer project, so there is no contributor flow —
+the day-to-day loop and release process are documented above
+("Day-to-day development", "Production releases"). What follows are the
+in-repo conventions.
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/my-feature`
-3. Make changes following code style
-4. Write/update tests
-5. Run tests: `npm test`
-6. Run linter: `npm run lint`
-7. Commit with conventional commits
-8. Push and create pull request
+### Code style
 
-### Code Style
+- TypeScript strict mode.
+- ESLint + Prettier for the `web/` package; the `app/` package relies on
+  `astro check && tsc --noEmit` (see `app/package.json` `typecheck`).
+- Don't write doc comments that just restate the code. Add a comment
+  only when the *why* is non-obvious (a hidden invariant, a workaround,
+  a constraint that would surprise a reader).
+- For invariant-touching paths (encryption, sync, billing, anything in
+  `openspec/specs/`), prefer the OpenSpec workflow (`/openspec-propose`
+  → `/openspec-apply-change`) over freehand edits. That is the project's
+  review surface in lieu of PRs.
 
-- Use TypeScript strict mode
-- Follow ESLint configuration
-- Use Prettier for formatting
-- Write JSDoc comments for public APIs
-- Add unit tests for new functionality
-
-### Commit Messages
+### Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -1898,6 +1976,11 @@ docs: update API reference
 test: add key wrapping tests
 refactor: simplify sync orchestrator
 ```
+
+The `Promote dev → main` workflow does not parse commit messages, but
+clean conventional-commit history makes the production tag timeline
+(`git tag --list 'prod-*'`) and the eventual release notes much
+cheaper to scan.
 
 ---
 

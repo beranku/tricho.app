@@ -44,13 +44,13 @@ The `mock-oidc` container MUST run only under the `ci` profile. It MUST issue RS
 - THEN `mock-oidc` does not appear
 
 ### Requirement: CI workflow produces actionable artifacts on failure
-A GitHub Actions workflow (`.github/workflows/e2e.yml`) MUST execute the suite on every pull request and on pushes to `main`. On failure, it MUST upload Playwright traces, screenshots, video (if enabled), and the `docker compose logs` of every service as artifacts.
+The CI workflow (`.github/workflows/ci.yml`) MUST execute the e2e suite on every push to `dev`, every push to `main`, and every pull request. On failure, it MUST upload Playwright traces, screenshots, video (if enabled), and the `docker compose logs` of every service as artifacts. The diagnostics MUST be attached to the failing run regardless of the trigger event (push or PR).
 
-#### Scenario: Failing test keeps diagnostics
-- GIVEN a PR whose change breaks the OAuth callback
-- WHEN the `e2e` job fails
-- THEN the workflow uploads `playwright-report/`, `test-results/` and `docker-logs/` as artifacts
-- AND the PR's status check links to those artifacts
+#### Scenario: Failing CI run keeps diagnostics
+- **GIVEN** a CI run (triggered by a push to `dev`, a push to `main`, or a pull request) whose change breaks the OAuth callback
+- **WHEN** the e2e job fails
+- **THEN** the workflow uploads `playwright-report/`, `test-results/` and `docker-logs/` as artifacts
+- **AND** the run summary links to those artifacts so the developer can open them without re-running locally
 
 ### Requirement: Self-signed TLS is trusted by the test browser
 The `ci` profile MUST present a TLS certificate for `tricho.test` that Playwright trusts (either via `ignoreHTTPSErrors: true`, a pre-loaded root CA in the test browser context, or a `mkcert`-style injected root). Production ACME behavior MUST NOT be exercised in CI.
@@ -64,11 +64,11 @@ The `ci` profile MUST present a TLS certificate for `tricho.test` that Playwrigh
 ### Requirement: E2E boot is hermetic and reproducible
 Each `make e2e` run MUST start from a clean CouchDB data volume and a clean `tricho-auth` meta database. The workflow MUST either recreate the named volumes or use `docker compose --project-name <unique>` so parallel runs do not collide.
 
-#### Scenario: Two parallel CI jobs do not corrupt each other
-- GIVEN two pull requests triggering `e2e.yml` concurrently on the same runner pool
-- WHEN both jobs reach the test phase
-- THEN neither observes documents created by the other
-- AND each job tears down its own stack in the `always()` post-step
+#### Scenario: Two parallel CI runs do not corrupt each other
+- **GIVEN** two CI runs triggering the e2e job concurrently on the same runner pool (any combination of pushes to `dev`, pushes to `main`, and pull requests)
+- **WHEN** both runs reach the test phase
+- **THEN** neither observes documents created by the other
+- **AND** each run tears down its own stack in the `always()` post-step
 
 ### Requirement: Server-visible payload shape is asserted end-to-end
 The Playwright suite SHALL include at least one test that, after a real OAuth + vault unlock, writes a user document on the client and then reads the corresponding row from CouchDB through the Traefik edge (NOT the container port). The test MUST assert that the server-stored row exposes only the `{_id, _rev, type, updatedAt, deleted, payload}` shape and that `payload` is an `{v, alg, kid, iv, ct}` envelope. The test MUST fail if any plaintext field of the original document appears anywhere in the server row.
@@ -133,14 +133,14 @@ The Playwright suite MUST include a test that, after Device A has written a doc 
 Cross-device E2E specs MUST use two `BrowserContext`s within a single Playwright test (rather than two `test()` blocks coordinating via a shared volume) and MUST pass the same `sub` to both while letting cookies diverge so each context registers as a distinct device. The harness MUST live under `tests/e2e/fixtures/cross-device.ts` and be the single import surface every cross-device spec uses; no spec MAY hand-roll the two-context dance inline.
 
 #### Scenario: New cross-device spec uses the harness in one line
-- **GIVEN** a contributor adding a new cross-device test
+- **GIVEN** a developer adding a new cross-device test
 - **WHEN** they import `openTwoDevices` from `tests/e2e/fixtures/cross-device.ts`
 - **THEN** they receive `{ deviceA, deviceB }` already signed in to the same vault
 - **AND** they do not reproduce the OAuth + unlock dance inline
 
-#### Scenario: Spec that reaches around the harness fails review
-- **GIVEN** a PR adding a `tests/e2e/*.spec.ts` that calls `browser.newContext()` directly with cross-device intent
-- **WHEN** the reviewer runs `grep "browser.newContext()" tests/e2e`
+#### Scenario: Spec that reaches around the harness is detectable
+- **GIVEN** a commit on `dev` (or a PR) adding a `tests/e2e/*.spec.ts` that calls `browser.newContext()` directly with cross-device intent
+- **WHEN** `grep "browser.newContext()" tests/e2e` is run on the change
 - **THEN** the only matches are inside `tests/e2e/fixtures/cross-device.ts`
 
 ### Requirement: Virtual WebAuthn authenticator is the canonical CI passkey provider

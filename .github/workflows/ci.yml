@@ -10,6 +10,11 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main]
+  # Allow `promote-dev-to-main.yml` to dispatch a deploy on `main` after the
+  # fast-forward push. This is required because pushes made by the default
+  # `GITHUB_TOKEN` do NOT trigger downstream `push`-event workflows; without
+  # this trigger, production would not deploy after a promotion.
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
