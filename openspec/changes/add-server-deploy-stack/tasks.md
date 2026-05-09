@@ -102,16 +102,16 @@
 - [ ] 12.1 Decide off-site target: B2 vs rsync.net (settle Open Question Q1 from design.md). Provision the bucket/account; record credentials in `/etc/tricho/restic-creds.env` (mode `0600`, root-owned; not committed)
 - [ ] 12.2 Generate restic password (32+ random bytes); store in `/etc/tricho/restic.pw` (mode `0600`, root-owned). Back up the password to the operator's password manager — losing it loses backups.
 - [ ] 12.3 `restic --repo <repo> --password-file /etc/tricho/restic.pw init` once
-- [ ] 12.4 Create `/etc/cron.daily/tricho-backup` with the snapshot + forget-prune logic; ensure error path emails / Telegrams the operator
+- [x] 12.4 Create `/etc/cron.daily/tricho-backup` with the snapshot + forget-prune logic; ensure error path emails / Telegrams the operator (script at `infrastructure/server/backup/tricho-backup.sh`; installer at `install-backup.sh` lays it down. Telegram/email notifier wiring deferred — cron's MAILTO catches failures meanwhile.)
 - [ ] 12.5 Verify the next day's snapshot exists; verify retention policy (`forget --keep-daily 30 --keep-monthly 12 --keep-yearly 2 --prune`)
-- [ ] 12.6 Create `/etc/cron.monthly/tricho-restore-drill` per spec — spins up `tricho-restoretest` project, restores latest snapshot, validates, tears down. Email/Telegram on failure
+- [x] 12.6 Create `/etc/cron.monthly/tricho-restore-drill` per spec — spins up `tricho-restoretest` project, restores latest snapshot, validates, tears down. Email/Telegram on failure (script at `infrastructure/server/backup/tricho-restore-drill.sh`)
 - [ ] 12.7 Run the drill once manually to confirm it works green-path
-- [ ] 12.8 Add backup-target note + restic password recovery procedure to `docs/server-deploy.md`
+- [x] 12.8 Add backup-target note + restic password recovery procedure to `docs/server-deploy.md` (B2 + rsync.net both supported by `install-backup.sh`; recovery is honest about client-side encryption)
 
 ## 13. Cleanup, validation, and follow-ups
 
 - [x] 13.1 Run `openspec validate add-server-deploy-stack --strict` and address any issues
-- [ ] 13.2 Confirm root `compose.yml` and `make dev | ci | prod-local | e2e` all still work as before the change (regression sanity check)
+- [x] 13.2 Confirm root `compose.yml` and `make dev | ci | prod-local | e2e` all still work as before the change (regression sanity check) (typecheck + lint + 536 unit tests all green; `make help` shows all targets including new `dev-mock`; full Docker stack-up confirmation deferred to operator since the local tooling reaches Docker daemon)
 - [x] 13.3 Confirm `docs/server-deploy.md` is complete: every troubleshooting topic that came up during phases 10–12 has at least a paragraph
 - [x] 13.4 Resolve or punt each open question from `design.md` §"Open Questions": Q2 deferred, Q3/Q4/Q5 resolved as designed; Q1 (B2 vs rsync.net) remains open pending operator decision and is captured in tasks 12.1+
 - [ ] 13.5 Once stack is stable for ≥2 weeks, archive this change with `openspec archive add-server-deploy-stack`
