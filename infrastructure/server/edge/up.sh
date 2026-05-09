@@ -34,24 +34,13 @@ if [ ! -d /srv/tricho/edge/acme ]; then
   install -d -m 0700 /srv/tricho/edge/acme
 fi
 
-# Optional staging CA override. When set, append the caServer flag to the
-# running container's command via a compose override. Implemented as an
-# env-driven inline override file written next to compose.yml.
-override_path=".compose.override.yml"
+# LE staging URL switch. compose.yml reads TRAEFIK_ACME_CASERVER with a
+# production default; we override it for staging.
 if [ "${TRAEFIK_USE_LE_STAGING:-0}" = "1" ]; then
-  cat > "$override_path" <<'EOF'
-services:
-  traefik:
-    command:
-      - --certificatesresolvers.le.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory
-EOF
-  compose_args=(-f compose.yml -f "$override_path")
+  export TRAEFIK_ACME_CASERVER="https://acme-staging-v02.api.letsencrypt.org/directory"
   echo "==> using LE staging CA"
-else
-  rm -f "$override_path"
-  compose_args=(-f compose.yml)
 fi
 
 echo "==> starting tricho-edge"
-docker compose "${compose_args[@]}" up -d --wait --wait-timeout 30
-docker compose "${compose_args[@]}" ps
+docker compose -f compose.yml up -d --wait --wait-timeout 30 --remove-orphans
+docker compose -f compose.yml ps

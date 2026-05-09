@@ -35,6 +35,7 @@ The PWA on Cloudflare Pages reaches the sync stack across origins (`tricho.app` 
 Before bootstrapping the first host:
 
 - A deploy host: Ubuntu 24.04 ARM64, SSH-reachable, with a fully-qualified hostname (e.g., `o3.tricho.app`). 4 GB+ RAM, 40 GB+ disk.
+- **Cloud-provider ingress for ports 80 and 443.** On Oracle Cloud, edit the VCN's Security List (or the instance's NSG) to add stateful ingress rules: `Source 0.0.0.0/0`, `IP Protocol TCP`, `Destination Port 80` and `443`. The host's own iptables/ufw rules are not enough on cloud providers that wrap the instance in a virtual firewall.
 - DNS records under your control:
   - `sync.tricho.app` A/AAAA → host IP
   - `sync.dev.tricho.app` A/AAAA → host IP

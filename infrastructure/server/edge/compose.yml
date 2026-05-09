@@ -55,9 +55,10 @@ services:
       - --certificatesresolvers.le.acme.storage=/etc/traefik/acme/acme.json
       - --certificatesresolvers.le.acme.httpchallenge=true
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
-      # Staging endpoint when TRAEFIK_USE_LE_STAGING=1; default is prod LE.
-      # The conditional flag is appended by edge/up.sh — keeping config out
-      # of compose.yml means we don't need a separate compose for staging.
+      # ACME server URL: default is LE production; up.sh sets the staging
+      # URL when TRAEFIK_USE_LE_STAGING=1 to dodge prod rate limits during
+      # shakedown.
+      - --certificatesresolvers.le.acme.caserver=${TRAEFIK_ACME_CASERVER:-https://acme-v02.api.letsencrypt.org/directory}
     labels:
       # Edge owns no business routes — every router is per-stack via labels
       # on the sync project's containers. Just enable Traefik for itself

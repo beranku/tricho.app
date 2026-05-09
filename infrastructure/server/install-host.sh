@@ -61,13 +61,16 @@ else
 fi
 
 # ── Other tooling (idempotent) ──────────────────────────────────────────────
+# `sops` is NOT in Ubuntu's apt repo; install from upstream GitHub release.
+# `age` is in apt and is fine. The rest is straight apt.
 declare -A pkgs=(
-  [sops]=sops
   [age]=age
   [jq]=jq
   [restic]=restic
   [ufw]=ufw
   [curl]=curl
+  [git]=git
+  [make]=make
 )
 to_install=()
 for bin in "${!pkgs[@]}"; do
@@ -79,6 +82,19 @@ if [ ${#to_install[@]} -gt 0 ]; then
   echo "==> installing tooling: ${to_install[*]}"
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${to_install[@]}"
+fi
+
+# sops via official GitHub release deb (linux-arm64). Pinning version so an
+# upstream-yank doesn't surprise a re-bootstrap.
+SOPS_VERSION="3.10.2"
+SOPS_DEB="sops_${SOPS_VERSION}_arm64.deb"
+SOPS_URL="https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/${SOPS_DEB}"
+if ! command -v sops >/dev/null 2>&1 || [ "$(sops --version 2>/dev/null | awk '{print $2}' | head -1)" != "$SOPS_VERSION" ]; then
+  echo "==> installing sops v$SOPS_VERSION"
+  tmp_sops="$(mktemp -d)"
+  trap 'rm -rf "$tmp_sops"' EXIT
+  curl -fsSL -o "$tmp_sops/$SOPS_DEB" "$SOPS_URL"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$tmp_sops/$SOPS_DEB"
 fi
 
 # ── Dedicated runner user ───────────────────────────────────────────────────
@@ -145,6 +161,25 @@ else
       ufw allow ${port}/tcp
     fi
   done
+fi
+
+# Oracle Cloud's Ubuntu image ships /etc/iptables/rules.v4 with a high-priority
+# global REJECT in the INPUT chain that fires before the ufw chains. Insert
+# explicit ACCEPT for HTTP(S) at the head of INPUT so traffic reaches Traefik.
+# Idempotent: -C (check) returns non-zero if the rule is missing.
+#
+# IMPORTANT: this only handles the host-local firewall. On Oracle Cloud you
+# ALSO need the VCN's Security List (or NSG) to allow ingress on tcp/80 and
+# tcp/443 — do that in the OCI console; it is outside this script's scope.
+for port in 80 443; do
+  if ! iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+    iptables -I INPUT -p tcp --dport "$port" -j ACCEPT
+  fi
+done
+# Persist via netfilter-persistent if installed; otherwise the rules survive
+# until reboot only. (Oracle's image typically ships iptables-persistent.)
+if command -v netfilter-persistent >/dev/null 2>&1; then
+  netfilter-persistent save >/dev/null 2>&1 || true
 fi
 
 # ── Swap ────────────────────────────────────────────────────────────────────
