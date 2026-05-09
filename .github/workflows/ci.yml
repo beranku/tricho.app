@@ -104,6 +104,12 @@ jobs:
       - run: npm run build
         env:
           GITHUB_SHA: ${{ github.sha }}
+          # Bake the sync stack origin into the PWA bundle. Per the cross-
+          # origin topology, the PWA on tricho.app talks to sync.tricho.app,
+          # and the dev PWA on dev.tricho.app talks to sync.dev.tricho.app.
+          # PR previews use dev (consistent with their preview alias).
+          VITE_AUTH_PROXY_URL: ${{ github.ref == 'refs/heads/main' && 'https://sync.tricho.app' || 'https://sync.dev.tricho.app' }}
+          VITE_COUCHDB_URL: ${{ github.ref == 'refs/heads/main' && 'https://sync.tricho.app' || 'https://sync.dev.tricho.app' }}
       - uses: actions/upload-artifact@v4
         with:
           name: app-dist
@@ -175,6 +181,9 @@ jobs:
         working-directory: app
         env:
           GITHUB_SHA: ${{ github.sha }}
+          # Same env as test-app's build step — keep in sync.
+          VITE_AUTH_PROXY_URL: ${{ github.ref == 'refs/heads/main' && 'https://sync.tricho.app' || 'https://sync.dev.tricho.app' }}
+          VITE_COUCHDB_URL: ${{ github.ref == 'refs/heads/main' && 'https://sync.tricho.app' || 'https://sync.dev.tricho.app' }}
         run: |
           npm ci
           npm run build
