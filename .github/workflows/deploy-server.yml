@@ -127,6 +127,12 @@ jobs:
           # the LE staging chain via curl -k. Production leaves this
           # unset so curl validates against system trust store.
           TRAEFIK_USE_LE_STAGING: ${{ vars.TRAEFIK_USE_LE_STAGING }}
+          # The runner's hardened systemd unit has PrivateTmp=yes which
+          # appears empty to subprocesses spawned via certain make/sh
+          # patterns ("mktemp: No such file or directory"). Pin TMPDIR
+          # to the per-job runner temp dir, which is in
+          # ReadWritePaths=/opt/actions-runner.
+          TMPDIR: ${{ runner.temp }}
         run: |
           set -eu
           # Per secrets-management spec, MUST NOT echo $SOPS_AGE_KEY.
