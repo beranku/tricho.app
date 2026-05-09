@@ -113,6 +113,7 @@ Operator targets live at the repo root:
 ```bash
 make help          # list every target
 make dev           # local development behind Traefik on http://tricho.localhost
+make dev-mock      # same, but with mock OIDC — full e2e loop without a real Google client
 make prod-local    # production-equivalent local run (Let's Encrypt + Caddy)
 make ci            # self-signed TLS + mock OIDC, for running Playwright
 make e2e           # boot ci profile + run the E2E suite
@@ -123,6 +124,32 @@ make test-all      # all tiers
 make secrets-edit       # sops edit secrets/$(PROFILE).sops.yaml
 make secrets-rotate-age # re-encrypt with current age recipient set
 ```
+
+## Full local e2e loop with `make dev-mock`
+
+Use `make dev-mock` when you want to iterate on the OAuth/sync code paths without registering a localhost OAuth client in Google Cloud Console. It runs the dev profile (Vite HMR PWA + tricho-auth + CouchDB + Traefik) plus a `mock-oidc-dev` container that speaks the same OpenID Connect protocol Google does, signing RS256 ID tokens that tricho-auth treats as authentic.
+
+```bash
+# One-time: ensure the host resolves to localhost
+echo '127.0.0.1 tricho.localhost' | sudo tee -a /etc/hosts
+
+make dev-mock
+# Open http://tricho.localhost/app/
+# Click "Continue with Google" → mock OIDC pretends to be accounts.google.com
+# → tricho-auth's callback creates the local vault → wizard advances.
+```
+
+The mock has a `/mock/identity` endpoint that picks which `sub`/`email` the next sign-in round-trip uses. Default identity is `mock-user@tricho.test`. To switch:
+
+```bash
+curl -X POST http://tricho.localhost/mock-oidc/mock/identity \
+  -H 'Content-Type: application/json' \
+  -d '{"sub": "1234567890", "email": "ludmila@example.com", "name": "Ludmila"}'
+```
+
+This setup matches the **single-host** topology (PWA + sync + auth all on `tricho.localhost`). Cross-origin behavior — which is what production uses, with PWA on Cloudflare Pages and sync on `sync.tricho.app` — isn't exercised by `make dev-mock`. For cross-origin verification, push to `dev` branch and observe the deploy on `sync.dev.tricho.app`.
+
+`make down` tears everything down and wipes `.secrets-runtime/`.
 
 ## Quick browser-only iteration (no backend)
 

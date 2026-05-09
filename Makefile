@@ -35,6 +35,34 @@ dev: _check-prereqs _render-secrets ## Bring up the dev stack (CouchDB + tricho-
 	PROFILE=dev $(COMPOSE) $(ENV_FILE_ARGS) -f $(COMPOSE_FILE) --profile dev up -d
 	@echo "Stack up. CouchDB at http://localhost:5984, tricho-auth at http://localhost:4545"
 
+.PHONY: dev-mock
+dev-mock: _check-prereqs _render-secrets ## Dev stack + mock-oidc — full local e2e loop without a real Google OAuth client
+	@# Adds `mock-oidc-dev` to the dev profile and points tricho-auth at it.
+	@# Vite HMR still serves the PWA on tricho.localhost; the OAuth flow now
+	@# round-trips through the in-stack mock instead of accounts.google.com.
+	@# Useful for iterating on auth/sync code paths without committing.
+	@getent hosts tricho.localhost >/dev/null 2>&1 || grep -q "tricho.localhost" /etc/hosts 2>/dev/null || { \
+		echo "tricho.localhost does not resolve. Add '127.0.0.1 tricho.localhost' to /etc/hosts:" >&2; \
+		echo "  echo '127.0.0.1 tricho.localhost' | sudo tee -a /etc/hosts" >&2; \
+		exit 1; \
+	}
+	APP_HOST=tricho.localhost \
+	APP_ORIGIN=http://tricho.localhost \
+	GOOGLE_ISSUER_URL=http://mock-oidc:8080 \
+	GOOGLE_CLIENT_ID=mock-client \
+	GOOGLE_REDIRECT_URI=http://tricho.localhost/auth/google/callback \
+	PROFILE=dev $(COMPOSE) $(ENV_FILE_ARGS) -f $(COMPOSE_FILE) --profile dev --profile dev-mock up -d
+	@echo
+	@echo "Local stack up:"
+	@echo "  PWA (Vite HMR):    http://tricho.localhost/app/"
+	@echo "  Mock OIDC:         http://tricho.localhost/mock-oidc/.well-known/openid-configuration"
+	@echo "  CouchDB:           http://localhost:5984"
+	@echo "  tricho-auth:       http://localhost:4545/auth/health"
+	@echo
+	@echo "Sign-in flow uses the mock OIDC — no real Google account needed."
+	@echo "POST /mock-oidc/mock/identity to pick which sub/email the next round-trip uses;"
+	@echo "default is 'mock-user@tricho.test'."
+
 .PHONY: prod-local
 prod-local: _check-prereqs _guard-profile _render-secrets ## Run the prod topology locally (Let's Encrypt, Caddy-served dist)
 	PROFILE=prod $(COMPOSE) $(ENV_FILE_ARGS) -f $(COMPOSE_FILE) --profile prod up -d

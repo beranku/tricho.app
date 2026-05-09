@@ -507,6 +507,43 @@ services:
       retries: 10
     profiles: [ci]
 
+  # ── Mock OIDC for the local dev loop (`make dev-mock`) ────────────────────
+  # Same image as the ci `mock-oidc` service but routed via traefik-dev's
+  # HTTP entrypoint on `tricho.localhost`. Run alongside the dev profile
+  # (`docker compose --profile dev --profile dev-mock up -d`) to iterate on
+  # the OAuth/sync flow without registering a real Google client for
+  # localhost. Network aliases include `mock-oidc` so tricho-auth's
+  # `GOOGLE_ISSUER_URL=http://mock-oidc:8080` resolves to this container.
+  mock-oidc-dev:
+    build:
+      context: ./infrastructure/mock-oidc
+    container_name: tricho_mock_oidc_dev
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      MOCK_OIDC_ISSUER: http://mock-oidc-dev:8080
+      MOCK_OIDC_PUBLIC_BASE: http://${APP_HOST:-tricho.localhost}/mock-oidc
+      MOCK_OIDC_INTERNAL_BASE: http://mock-oidc-dev:8080
+    networks:
+      tricho-net:
+        aliases: [mock-oidc]
+    expose:
+      - "8080"
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-net
+      traefik.http.routers.mock-oidc-dev.rule: Host(`${APP_HOST:-tricho.localhost}`) && PathPrefix(`/mock-oidc`)
+      traefik.http.routers.mock-oidc-dev.entrypoints: web
+      traefik.http.routers.mock-oidc-dev.middlewares: mock-oidc-dev-strip@docker
+      traefik.http.middlewares.mock-oidc-dev-strip.stripprefix.prefixes: /mock-oidc
+      traefik.http.services.mock-oidc-dev.loadbalancer.server.port: "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    profiles: [dev-mock]
+
   # ── Stripe mocks — ci profile only ─────────────────────────────────────────
   # `stripe-mock` (port 12111) is stateless and OpenAPI-driven; we use it for
   # SDK-shape contract tests at the backend-integration tier.
