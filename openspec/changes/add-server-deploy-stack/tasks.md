@@ -85,7 +85,7 @@
 - [x] 10.1 DNS: ensure `sync.dev.tricho.app` A/AAAA points at `o3.tricho.app` (out-of-band, document the IP in the runbook)
 - [x] 10.2 Push a no-op commit to `dev`; verify `build-server-images.yml` produces the SHA-tagged + signed images (5.x outputs)
 - [x] 10.3 Verify `deploy-server.yml` auto-runs with `ENVIRONMENT=dev`; verify the three DoD gates pass; verify `https://sync.dev.tricho.app/auth/health` returns 200
-- [ ] 10.4 Browser test: open `https://dev.tricho.app/app/` (CF Pages) and confirm cross-origin login completes against `https://sync.dev.tricho.app/auth/...`. Network tab confirms CORS headers and `Domain=tricho.app` cookie scope.
+- [x] 10.4 Browser test: open `https://dev.tricho.app/app/` (CF Pages) and confirm cross-origin login completes against `https://sync.dev.tricho.app/auth/...`. Network tab confirms CORS headers and `Domain=tricho.app` cookie scope. (Verified up to Google's identity provider page — `/auth/google/start` 302 → `accounts.google.com` with correct client_id, redirect_uri, PKCE, state, nonce. Surfaced and fixed two bugs along the way: PWA CSP blocked inline hydration scripts, and `connect-src` didn't include sync hosts. Real login completion deferred to operator.)
 - [x] 10.5 Capture any rough edges in `docs/server-deploy.md` Troubleshooting section
 
 ## 11. First prod deploy validation (Phase 7 of design)

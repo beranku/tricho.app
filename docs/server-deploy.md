@@ -321,6 +321,14 @@ The Traefik file-provider middleware `tricho-cors-<env>@file` is what sets the C
 
 The header is emitted by `tricho-auth`'s `/health` route from the `IMAGE_TAG` env. If the header is absent, the running image was built before the X-Build-Sha change shipped — redeploy with the latest SHA.
 
+### Verifying cross-origin login from a real browser
+
+End-to-end test through Google's identity provider, no PWA install required:
+
+1. Open `https://dev.tricho.app/app/` (or `https://tricho.app/app/` for prod). The welcome wizard should render in <1 s. If it stays stuck on "Loading keystore…", the PWA's CSP at `_headers` line 86–87 is rejecting Astro's inline hydration scripts — see "CSP must allow inline scripts in /app/*" in the gotchas.
+2. Skip the install gate by navigating directly to `https://sync.dev.tricho.app/auth/google/start`. The browser should follow a 302 to `https://accounts.google.com/...` showing "Sign in — to continue to **tricho.app**". The query string MUST contain the right `client_id`, `redirect_uri`, `code_challenge` (PKCE), `state`, `nonce`.
+3. Optionally complete sign-in. After Google redirects back to `https://sync.dev.tricho.app/auth/google/callback`, `tricho-auth` validates the code, exchanges for an ID token, and 302s the user to `https://dev.tricho.app/app/#auth=...`. The PWA's `consumePendingOAuthResult()` reads the hash, sets a session cookie with `Domain=tricho.app`, `SameSite=Lax`, and the welcome wizard advances to Step 3 (Encryption). If anything in this chain breaks, the most common culprits are: `redirect_uri` mismatch with what's whitelisted in Google Cloud Console; CSP `connect-src` not allowing the sync host; cookie `Domain` not covering both PWA and sync hosts.
+
 ### Verifying OAuth wiring without a browser
 
 After populating `GOOGLE_CLIENT_ID` (in `infrastructure/server/sync/config/<env>/.env`) and `google_client_secret` (via `make secrets-edit PROFILE=sync-<env>`) and redeploying, you can confirm the OAuth wiring is correct from the command line:
@@ -349,6 +357,8 @@ These are the issues that surfaced during the first dev deployment to `o3.tricho
 - **Runner version churn**: GitHub deprecates `actions/runner` versions on a ~30-day cadence. v2.323.0 was rejected on first registration with "version is deprecated and cannot receive messages." Keep `infrastructure/server/runner-version.txt` current via Renovate or manual review.
 - **HEAD requests to `/auth/health` return 404**. tricho-auth's router only handles GET; a `curl -I` smoke test from the operator's laptop will mislead. The deploy workflow's `smoke.sh` uses `curl -fsS` (GET) which works correctly.
 - **Compose `name:` on `external: true` networks/volumes** is required to refer to externally-managed resources (the `tricho-edge` network in our case). The `infrastructure-lint` script knows to allow this and only flags `name:` on internal resources.
+- **PWA "Loading keystore…" stuck on first cross-origin deploy.** The `/app/*` Content-Security-Policy in `_headers` originally listed `script-src 'self' 'wasm-unsafe-eval'` (no `'unsafe-inline'`), which silently blocked Astro Islands' four inline `<script>` blocks (SW reg, theme/locale bootstrap, `window.Astro` setup, `astro-island` custom element definition). With those blocked, hydration never started and the SSR fallback "Loading keystore…" stayed on screen forever. CSP must include `'unsafe-inline'` for `script-src` until a nonce/hash-based migration ships, AND `connect-src` must include both sync hosts so the PWA can credentialed-fetch cross-origin against `sync.tricho.app` / `sync.dev.tricho.app`. The bug was visible in the browser only as a stuck loading state; CSP violations went to the console (which is sometimes blocked by aggressive privacy extensions, so first-symptom is just the static text).
+- **`indexedDB.open(db_name)` without a version** silently creates the DB at version 1 with no object stores and races with the app's `indexedDB.open(db_name, DB_VERSION)` call, leaving the DB in an inconsistent state where transactions throw `NotFoundError: One of the specified object stores was not found`. The error is caught by the app's outer `try/catch` so the welcome flow still renders, but client-side keystore is broken. Fix in browser: DevTools → Application → Storage → "Clear site data" → reload. Hardening idea: add an `onblocked` handler to `openKeyStoreDb` so future debug snippets can't race-create.
 
 ### Force a fresh ACME order (last resort)
 
