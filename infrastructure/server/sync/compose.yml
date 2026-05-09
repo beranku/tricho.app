@@ -42,11 +42,11 @@ volumes:
     # the prefix. Holds only the public JWT key — not sensitive on its own.
 
 secrets:
-  couchdb_password:    { file: ./.secrets-runtime/couchdb_password    }
-  cookie_secret:       { file: ./.secrets-runtime/cookie_secret       }
-  google_client_secret:{ file: ./.secrets-runtime/google_client_secret}
-  apple_client_secret: { file: ./.secrets-runtime/apple_client_secret }
-  jwt_private_pem:     { file: ./.secrets-runtime/jwt_private_pem     }
+  couchdb_password:     { file: ./.secrets-runtime/couchdb_password     }
+  cookie_secret:        { file: ./.secrets-runtime/cookie_secret        }
+  google_client_secret: { file: ./.secrets-runtime/google_client_secret }
+  apple_client_secret:  { file: ./.secrets-runtime/apple_client_secret  }
+  jwt_private_pem:      { file: ./.secrets-runtime/jwt_private_pem      }
 
 x-deploy-defaults: &deploy-defaults
   restart: unless-stopped
