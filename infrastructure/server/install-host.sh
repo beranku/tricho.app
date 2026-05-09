@@ -123,6 +123,7 @@ chown -R 5984:5984 /srv/tricho/prod/couchdb /srv/tricho/dev/couchdb
 
 # ── Hardened daemon.json ────────────────────────────────────────────────────
 new_daemon_json='{
+  "min-api-version": "1.24",
   "no-new-privileges": true,
   "userland-proxy": false,
   "log-driver": "json-file",
@@ -133,6 +134,11 @@ new_daemon_json='{
   "live-restore": true
 }
 '
+# `min-api-version: 1.24` lets older Docker SDK clients (notably Traefik
+# v3.x via its embedded Docker library) keep talking to Docker Engine
+# 29.x+, which by default rejects API < 1.40 with "client version is
+# too old". When a future Traefik release ships a newer SDK we can drop
+# this and tighten the minimum back up.
 # `userns-remap` deliberately NOT enabled here. For single-tenant production
 # deploy on this host the migration cost outweighs the benefit; revisit if
 # the host begins running untrusted workloads.
