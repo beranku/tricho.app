@@ -73,3 +73,5 @@ tricho-impl-v1.tar.gz
 # (wired as the `prebuild` npm script); README.md stays committed, woff2 doesn't.
 web/public/fonts/**/*.woff2
 app/public/fonts/**/*.woff2
+
+.decrypted*
