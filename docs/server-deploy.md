@@ -321,6 +321,23 @@ The Traefik file-provider middleware `tricho-cors-<env>@file` is what sets the C
 
 The header is emitted by `tricho-auth`'s `/health` route from the `IMAGE_TAG` env. If the header is absent, the running image was built before the X-Build-Sha change shipped — redeploy with the latest SHA.
 
+### Verifying OAuth wiring without a browser
+
+After populating `GOOGLE_CLIENT_ID` (in `infrastructure/server/sync/config/<env>/.env`) and `google_client_secret` (via `make secrets-edit PROFILE=sync-<env>`) and redeploying, you can confirm the OAuth wiring is correct from the command line:
+
+```bash
+curl -sS -D - -o /dev/null https://sync.dev.tricho.app/auth/google/start | head -10
+```
+
+Expected: HTTP 302 with a `location:` header pointing at `https://accounts.google.com/o/oauth2/v2/auth?…`. The query string MUST contain:
+
+- `client_id` — matches your Google Cloud Console OAuth client ID
+- `redirect_uri=https%3A%2F%2Fsync.<env>.tricho.app%2Fauth%2Fgoogle%2Fcallback` (URL-encoded; must match the Authorized redirect URI you whitelisted in the Console exactly)
+- `state`, `nonce`, `code_challenge` (CSRF + replay + PKCE protection)
+- `scope=openid+email+profile`, `response_type=code`
+
+If `client_id` is wrong or absent, the env render is broken — check that `make _render-secrets PROFILE=sync-<env>` writes a non-empty `.secrets-runtime/google_client_secret`. If `redirect_uri` doesn't match what's in the Google Console, Google will return `redirect_uri_mismatch` after the user signs in — fix in the Console (single-client setups should list all four sync host URIs).
+
 ### Known shakedown gotchas (recorded May 2026)
 
 These are the issues that surfaced during the first dev deployment to `o3.tricho.app`. The bootstrap scripts and workflows now handle them — captured here so a future operator hitting the same symptom can recognize it.

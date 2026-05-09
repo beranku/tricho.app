@@ -112,6 +112,6 @@
 
 - [x] 13.1 Run `openspec validate add-server-deploy-stack --strict` and address any issues
 - [ ] 13.2 Confirm root `compose.yml` and `make dev | ci | prod-local | e2e` all still work as before the change (regression sanity check)
-- [ ] 13.3 Confirm `docs/server-deploy.md` is complete: every troubleshooting topic that came up during phases 10–12 has at least a paragraph
-- [ ] 13.4 Resolve or punt each open question from `design.md` §"Open Questions": pick the off-site target (Q1), decide whether to defer warm-standby replication (Q2), confirm GHCR-only (Q3), confirm `tricho-couchdb` ships as its own GHCR package (Q4), confirm prod environment branch policy (Q5)
+- [x] 13.3 Confirm `docs/server-deploy.md` is complete: every troubleshooting topic that came up during phases 10–12 has at least a paragraph
+- [x] 13.4 Resolve or punt each open question from `design.md` §"Open Questions": Q2 deferred, Q3/Q4/Q5 resolved as designed; Q1 (B2 vs rsync.net) remains open pending operator decision and is captured in tasks 12.1+
 - [ ] 13.5 Once stack is stable for ≥2 weeks, archive this change with `openspec archive add-server-deploy-stack`

@@ -250,8 +250,10 @@ This is an additive change: nothing is being removed or behaviourally altered fo
 
 ## Open Questions
 
-- **Q1.** What's the off-site backup target — B2, rsync.net, or both? Cost difference is small; choosing now keeps the runbook concrete. *Default if undecided: rsync.net (operator already has an account; restic-friendly plan).*
-- **Q2.** Continuous CouchDB replication to a warm standby — implement in v1 or defer? *Default: defer. Restic + monthly drill is sufficient first-week posture; replication adds an operational dependency that's easier to land later.*
-- **Q3.** Image registry — GHCR is the default; is there appetite for an org-level pull-secret rotation policy? *Default: defer. The runner uses `GITHUB_TOKEN`, which is per-job ephemeral by construction.*
-- **Q4.** `tricho-couchdb` image: is the wrapper image (which adds `tricho-entrypoint.sh`) worth shipping as its own GHCR package, or should the deploy host build it locally from the same Dockerfile against the upstream `couchdb:3` base? *Default: ship as a package, for symmetry with `tricho-auth` and to keep cosign verification uniform.*
-- **Q5.** Should the `prod` GitHub Environment forbid pushes from any branch other than `main`? Today there are no such workflow-side branch restrictions. *Default: yes — add `deployment_branch_policy: { protected_branches: true }` on the `production` environment so a hand-edited workflow run can't deploy `dev` to prod by mistake.*
+- **Q1. (open)** What's the off-site backup target — B2, rsync.net, or both? Cost difference is small; choosing now keeps the runbook concrete. *Default if undecided: rsync.net (restic-friendly plan); revisit when the operator picks.*
+- **Q2. (resolved — DEFER)** Continuous CouchDB replication to a warm standby is deferred from v1. Restic + monthly automated restore drill provides sufficient first-iteration posture. Revisit when:
+  - The deploy host is no longer the only CouchDB node (multi-region, active-active needs).
+  - RPO < 24 h becomes a stated user need (today's CouchDB-backed sync is best-effort).
+- **Q3. (resolved — GHCR)** Confirmed GHCR-only image registry. The runner uses the per-job `GITHUB_TOKEN`; no long-lived registry pull credential exists, so no rotation policy is needed. The deploy job's `permissions: { packages: read }` is the access-control surface.
+- **Q4. (resolved — yes, ship as package)** `tricho-couchdb` ships as its own GHCR package (`ghcr.io/beranku/tricho-couchdb`) for symmetry with `tricho-auth` and to keep cosign verification uniform — every running image on the deploy host has a Sigstore signature pinned to this repo's build workflow.
+- **Q5. (resolved — yes)** The `production` GitHub Environment was created with `deployment_branch_policy.protected_branches = true` and a required-reviewer rule. The `dev` environment uses a custom branch policy restricted to `dev`. Both verified via `gh api /repos/beranku/tricho.app/environments`.
