@@ -26,12 +26,12 @@
 
 ## 4. Per-server age key and secrets profiles
 
-- [ ] 4.1 On `o3.tricho.app`: `age-keygen -o /etc/sops/age/o3.tricho.app.key` (mode `0600`, root-owned). Capture the public key.
-- [ ] 4.2 Add the captured public key to `.sops.yaml` as a recipient on the `secrets/sync-prod.sops.yaml` AND `secrets/sync-dev.sops.yaml` rules
-- [ ] 4.3 Create `secrets/sync-prod.sops.yaml` (initially empty values for non-real OAuth/Stripe credentials; real values filled in 9.x just before first prod deploy) using `sops` with the new recipients
-- [ ] 4.4 Create `secrets/sync-dev.sops.yaml` similarly
-- [ ] 4.5 Run `make secrets-rotate-age` to re-encrypt every existing SOPS file under the updated recipient set; verify all files still decrypt locally
-- [ ] 4.6 Configure GitHub Environment secrets: `production` environment → `SOPS_AGE_KEY` (the operator's age private key value, used by the deploy workflow to render the production sync profile); add required reviewer (operator); add `deployment_branch_policy.protected_branches = true`. `dev` environment → `SOPS_AGE_KEY` (same or distinct value); no reviewer required.
+- [x] 4.1 On `o3.tricho.app`: `age-keygen -o /etc/sops/age/o3.tricho.app.key` (mode `0600`, root-owned). Capture the public key.
+- [x] 4.2 Add the captured public key to `.sops.yaml` as a recipient on the `secrets/sync-prod.sops.yaml` AND `secrets/sync-dev.sops.yaml` rules
+- [x] 4.3 Create `secrets/sync-prod.sops.yaml` (initially empty values for non-real OAuth/Stripe credentials; real values filled in 9.x just before first prod deploy) using `sops` with the new recipients
+- [x] 4.4 Create `secrets/sync-dev.sops.yaml` similarly
+- [x] 4.5 Run `make secrets-rotate-age` to re-encrypt every existing SOPS file under the updated recipient set; verify all files still decrypt locally
+- [x] 4.6 Configure GitHub Environment secrets: `production` environment → `SOPS_AGE_KEY` (the operator's age private key value, used by the deploy workflow to render the production sync profile); add required reviewer (operator); add `deployment_branch_policy.protected_branches = true`. `dev` environment → `SOPS_AGE_KEY` (same or distinct value); no reviewer required.
 
 ## 5. Image pipeline (`build-server-images.yml`)
 
@@ -50,7 +50,7 @@
 - [x] 6.2 Author `infrastructure/server/edge/dynamic/middlewares.yml` (file provider): `tricho-security` (HSTS 63072000 + preload + includeSubdomains, `frameDeny`, `nosniff`, `referrerPolicy strict-origin-when-cross-origin`, custom request headers redacting `Authorization`/`Cookie` only in access logs); a `tricho-rate-limit` placeholder; `tricho-cors-prod` (allow only `https://tricho.app`); `tricho-cors-dev` (allow only `https://dev.tricho.app`)
 - [x] 6.3 Author `infrastructure/server/edge/up.sh`: assert root, ensure `tricho-edge` network exists (`docker network create --attachable tricho-edge` if missing), ensure `/srv/tricho/edge/acme` exists with mode `0700`, `docker compose -p tricho-edge up -d --wait`. Include access log JSON config, use LE staging endpoint when env var `TRAEFIK_USE_LE_STAGING=1`, production endpoint otherwise
 - [x] 6.4 Author `infrastructure/server/edge/down.sh` — stop edge project, never delete `/srv/tricho/edge/acme/` data, never `docker network rm tricho-edge`
-- [ ] 6.5 Validate edge stack locally first (in a throwaway VM with synthetic DNS) before deploying to `o3`; verify ACME directory is populated only on first successful issuance and persists across re-`up`s
+- [x] 6.5 Validate edge stack locally first (in a throwaway VM with synthetic DNS) before deploying to `o3`; verify ACME directory is populated only on first successful issuance and persists across re-`up`s
 
 ## 7. Sync stack (`infrastructure/server/sync/`)
 
@@ -82,7 +82,7 @@
 
 ## 10. First dev deploy validation (Phase 6 of design)
 
-- [ ] 10.1 DNS: ensure `sync.dev.tricho.app` A/AAAA points at `o3.tricho.app` (out-of-band, document the IP in the runbook)
+- [x] 10.1 DNS: ensure `sync.dev.tricho.app` A/AAAA points at `o3.tricho.app` (out-of-band, document the IP in the runbook)
 - [ ] 10.2 Push a no-op commit to `dev`; verify `build-server-images.yml` produces the SHA-tagged + signed images (5.x outputs)
 - [ ] 10.3 Verify `deploy-server.yml` auto-runs with `ENVIRONMENT=dev`; verify the three DoD gates pass; verify `https://sync.dev.tricho.app/auth/health` returns 200
 - [ ] 10.4 Browser test: open `https://dev.tricho.app/app/` (CF Pages) and confirm cross-origin login completes against `https://sync.dev.tricho.app/auth/...`. Network tab confirms CORS headers and `Domain=tricho.app` cookie scope.
@@ -90,7 +90,7 @@
 
 ## 11. First prod deploy validation (Phase 7 of design)
 
-- [ ] 11.1 DNS: `sync.tricho.app` A/AAAA → `o3.tricho.app` IP
+- [x] 11.1 DNS: `sync.tricho.app` A/AAAA → `o3.tricho.app` IP
 - [ ] 11.2 Real OAuth credentials populated in `secrets/sync-prod.sops.yaml`; Stripe credentials populated; commit and re-encrypt
 - [ ] 11.3 Operator runs `gh workflow run deploy-server.yml -f ENVIRONMENT=prod -f RUNNER_LABEL=o3.tricho.app` from `main`
 - [ ] 11.4 Required-reviewer prompt fires; operator approves; deploy proceeds
