@@ -58,6 +58,13 @@ echo "==> rendering secrets for sync-${ENVIRONMENT}"
 # secret paths in compose.yml resolve correctly.
 rm -rf "$sync_dir/.secrets-runtime"
 mv "$repo_root/.secrets-runtime" "$sync_dir/.secrets-runtime"
+# Compose `file:` secrets are bind-mounted into /run/secrets/ with the
+# host file's mode preserved on Linux. The Makefile renders 0600
+# owned by ghrunner; the auth container runs as uid 1000 (node) and
+# CouchDB as 5984 — neither can read 0600-ghrunner files. Relax to
+# world-readable now that the files live inside the runner's
+# hardened workspace (only the deploy step has access).
+chmod 0644 "$sync_dir/.secrets-runtime/"*
 
 # Cosign verify both images BEFORE pull. Per server-image-pipeline spec,
 # bypass via --insecure-* MUST NOT exist in this script.

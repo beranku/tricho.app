@@ -89,6 +89,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Wait for both image manifests in GHCR
+        # On push:dev, the build workflow runs in parallel and the image
+        # may not be in GHCR yet when this job starts. Poll for up to 10
+        # minutes so the deploy queues behind the build instead of
+        # racing it. workflow_dispatch with a known-good IMAGE_REF
+        # finishes this step in seconds.
+        env:
+          IMAGE_TAG: ${{ steps.resolve.outputs.image_tag }}
+        run: |
+          set -eu
+          for img in tricho-auth tricho-couchdb; do
+            for i in $(seq 1 60); do
+              if docker manifest inspect "ghcr.io/beranku/${img}:${IMAGE_TAG}" >/dev/null 2>&1; then
+                echo "$img: ready (attempt $i)"
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "::error::ghcr.io/beranku/${img}:${IMAGE_TAG} not present after 10 minutes — build did not finish or did not push"
+                exit 1
+              fi
+              echo "$img: not yet in GHCR (attempt $i/60); sleeping 10s"
+              sleep 10
+            done
+          done
+
       - uses: sigstore/cosign-installer@v3
 
       - name: Deploy
