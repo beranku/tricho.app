@@ -1,515 +1,100 @@
 # Tricho.app — Trichologický deník a CRM
 
-End-to-end šifrovaná PWA pro trichology a kadeřníky: deníkový plán dne,
-detaily klientů, alergeny, before/detail/after fotografie. Veškerá data
-zůstávají na zařízení uživatele a synchronizace přes CouchDB cestuje
-výhradně jako šifrovaný `payload`.
+End-to-end šifrovaná PWA pro tricholožky a kadeřnice: deníkový plán dne,
+karta klientky s anamnézou a alergeny, before/detail/after fotografie.
+Veškerá data zůstávají na zařízení uživatelky a synchronizace přes
+CouchDB cestuje výhradně jako šifrovaný `payload`.
+
+> *Karta klientky, diář — a ticho.*
 
 ## Funkce
 
-- **Denní plán** — Phone A: sticky hlavičky dnů, sluníčko v dnešním headeru,
-  scroll-to-today FAB, sloty `done`/`active`/`scheduled` + dopočítané volné
-  úseky (volno 35 min) v pracovní době.
-- **Detail klienta** — Phone B: kicker `Klient` + jméno v Fraunces, current-head
-  s alergen badge a `zbývá X min` countdownem, cam-card pro before/detail/after
-  zachycení, chip sekce služeb a produktů, ruční poznámky, další termín.
-- **Kamera** — přístup ke kameře, JPEG capture → AES-256-GCM šifrovaný blob
-  uložený jako PouchDB attachment na photo-meta dokumentu.
-- **Lokální úložiště** — PouchDB nad IndexedDB; každý dokument je
+- **Diár** (Phone A): sticky hlavičky dnů, sluníčko v dnešním headeru,
+  scroll-to-today FAB, sloty `done`/`active`/`scheduled` + dopočítané
+  volné úseky (volno 35 min) v pracovní době.
+- **Karta klientky** (Phone B): kicker `Klient` + jméno v Fraunces,
+  current-head s alergen badge a `zbývá X min` countdownem, cam-card pro
+  before/detail/after záznam, chip sekce služeb a produktů, ruční
+  poznámky, další termín.
+- **Kamera**: přístup ke kameře, JPEG capture → AES-256-GCM šifrovaný
+  blob uložený jako PouchDB attachment na photo-meta dokumentu.
+- **Lokální úložiště**: PouchDB nad IndexedDB; každý dokument je
   `{_id, _rev, type, updatedAt, deleted, payload}` a jeho `payload` je
   AEAD ciphertext s AAD vázaným na `{vaultId, docId}`.
-- **Synchronizace** — CouchDB 3 s `couch_peruser` přes JWT-bearer fetch;
-  konflikty řešené deterministicky (newest-wins) bez sémantického merge.
-- **Bottom-sheet menu** — navigace (klienti, statistika, archiv, nastavení),
-  sync status, přepínač motivu (světlý/tmavý), odhlášení.
-- **Hand-drawn akcenty** — ballpoint stroke jen na třech místech (sluníčko,
-  copper check, copper plus); zbytek UI je geometrický.
-- **PWA** — instalace na domovskou obrazovku, plná offline podpora
-  (`@vite-pwa/astro` + workbox; self-hosted fonty).
-- **Recovery Secret** — offline obnova přístupu bez serverového stavu;
+- **Synchronizace**: CouchDB 3 s `couch_peruser` přes JWT-bearer fetch;
+  konflikty řešené deterministicky (newest-wins) bez sémantického
+  merge.
+- **Recovery Secret**: offline obnova přístupu bez serverového stavu;
   WebAuthn + PRF jako každodenní odemykání.
+- **PWA**: instalace na domovskou obrazovku, plná offline podpora
+  (`@vite-pwa/astro` + Workbox; self-hosted fonty).
+- **Hand-drawn akcenty**: ballpoint stroke jen na třech místech
+  (sluníčko, copper check, copper plus); zbytek UI je geometrický.
 
-## Tech Stack
+## Tech stack
 
-- **[Astro](https://astro.build/)** v5 - statický site builder
-- **TypeScript** - typově bezpečný JavaScript
-- **IndexedDB** - klientská databáze pro ukládání blobů
-- **Service Worker** - offline cache a PWA funkcionalita
-- **GitHub Pages** - hosting
+Astro 5 + React 18 + TypeScript v PWA shellu; PouchDB v prohlížeči,
+CouchDB 3 na serveru, `tricho-auth` Node service pro OIDC + JWT, Traefik
+(dev/ci) / Cloudflare Pages (prod). Detail viz
+[`docs/architecture.md`](docs/architecture.md).
 
-## Struktura projektu
-
-After `marketing-site-and-pwa-split`, the repo is two independent Astro
-packages plus shared assets and build orchestration. There is **no**
-monorepo tooling (Turborepo / Nx / npm workspaces) — each package has its
-own `package.json`, lockfile, and `node_modules`.
+## Struktura repa
 
 ```
 tricho-app/
-├── app/                     # PWA shell (served at /app/, base: '/app/')
-│   ├── src/                 #   Astro + React + vite-pwa
-│   ├── public/
-│   ├── astro.config.mjs
-│   ├── package.json
-│   ├── playwright.config.ts
-│   ├── vitest.config.*.ts
-│   └── tests/
-│
-├── web/                     # Marketing site (served at /, apex)
-│   ├── src/
-│   │   ├── pages/           #   index, about, pricing, blog, help, legal, 404
-│   │   ├── content/         #   blog/ + help/ MDX collections
-│   │   ├── layouts/         #   Base.astro owns <head> SEO + manifest link
-│   │   ├── components/      #   InstallBanner, LaunchAppLink, header, footer
-│   │   └── styles/
-│   ├── public/              #   robots.txt, fonts/
-│   ├── astro.config.mjs
-│   └── package.json
-│
-├── shared/                  # Single source of truth for both surfaces
-│   ├── manifest.webmanifest #   start_url: /app/, scope: /app/
-│   ├── sw.js                #   thin pass-through SW (root scope, no caching)
-│   ├── icons/               #   192/512 + maskable + favicon
-│   └── og/                  #   default Open Graph image
-│
-├── scripts/                 # Build orchestration (Node 22+ built-ins only)
-│   ├── merge-dist.mjs       #   web/dist + app/dist + shared → dist/
-│   └── validate-build.mjs   #   pre-deploy assertions
-│
-├── infrastructure/          # Local docker stack (Traefik, Caddy, CouchDB,
-│                            #   tricho-auth, mock-oidc, stripe-mock, ...)
-├── server/                  # tricho-auth-related primitives
-├── secrets/                 # SOPS-encrypted secrets per profile
-├── _headers, _redirects     # Cloudflare Pages routing + caching
-├── compose.yml, Makefile    # Local stack orchestration
-└── openspec/                # Spec-driven changes + capability specs
+├── app/             # PWA shell (served at /app/, base: '/app/')
+├── web/             # Marketing site (served at /, apex)
+├── shared/          # Manifest, thin SW, icons, OG images
+├── server/          # tricho-auth-related primitives
+├── infrastructure/  # Compose stack: Traefik, Caddy, CouchDB, mock-OIDC, ...
+├── scripts/         # merge-dist.mjs, validate-build.mjs
+├── secrets/         # SOPS-encrypted per-profile secrets
+├── prototypes/      # Canonical UI + landing-copy prototypes
+├── openspec/        # Spec-driven changes + capability specs
+├── docs/            # Developer reference (this file, architecture, testing, ...)
+├── _headers, _redirects
+├── compose.yml, Makefile
+└── README.md
 ```
 
-Two service workers, two scopes:
+`app/` and `web/` are independent npm packages (own `package.json`,
+own `node_modules`, no workspace tooling). `scripts/merge-dist.mjs`
+stitches their `dist/` outputs plus `shared/` into the deployable
+`dist/` tree. See [`docs/architecture.md`](docs/architecture.md) for the
+two-surface model and the two service workers (`/sw.js` thin pass-through
+on the apex; `/app/sw.js` Workbox PWA SW under the app scope).
 
-- `/sw.js` (scope `/`, ~15 lines, no caching) — satisfies install criteria
-  on the apex so Chrome/Edge surface the install prompt from the marketing
-  landing.
-- `/app/sw.js` (scope `/app/`, generated by `@vite-pwa/astro`) — owns
-  offline cache + asset versioning + the user-controlled update prompt.
-
-## Development
-
-Each package is built independently:
+## Quick start
 
 ```bash
-# Marketing site (Astro static, port 4321)
-cd web && npm install && npm run dev
+# Verify host wiring (Docker, SOPS, age, /etc/hosts).
+make doctor
 
-# PWA shell (Astro + Vite-PWA, port 4321 — base: /app/)
-cd app && npm install && npm run dev
+# Bring up the dev stack (CouchDB + tricho-auth + Traefik) on
+# http://tricho.localhost.
+make dev
+
+# Browser-only iteration (no backend) — Astro dev server only.
+cd app && npm install && npm run dev   # PWA at /app/
+cd web && npm install && npm run dev   # marketing at /
 ```
 
-To produce the merged production layout locally:
+For full local setup, IDE config, day-to-day flow, and release
+mechanics see [`docs/developer-guide.md`](docs/developer-guide.md) and
+[`docs/build-and-deploy.md`](docs/build-and-deploy.md).
+
+## Documentation
+
+- [`CLAUDE.md`](CLAUDE.md) — guidance for AI coding assistants
+  (invariants, voice, design system).
+- [`docs/`](docs/) — developer reference (architecture, dev guide, build
+  & deploy, testing, secrets, voice).
+- [`openspec/`](openspec/) — capability specs (source of truth for
+  behaviour) + in-flight changes.
+- [`prototypes/landing-page-prototype/COPY.md`](prototypes/landing-page-prototype/COPY.md)
+  — canonical brand voice & landing copy.
+- [`prototypes/ui-prototype/tricho-north-star.md`](prototypes/ui-prototype/tricho-north-star.md)
+  — canonical UI spec.
+- [`web/src/content/help/`](web/src/content/help/) — end-user help portal
+  (rendered at `tricho.app/help`).
 
-```bash
-cd web && npm install && npm run build && cd ..
-cd app && npm install && npm run build && cd ..
-node scripts/merge-dist.mjs
-node scripts/validate-build.mjs
-# dist/ is now ready to serve as Cloudflare Pages would.
-```
-
-## Deployment
-
-Cloudflare Pages, single project named `tricho`. Direct Upload from GitHub
-Actions (`.github/workflows/ci.yml`) — Cloudflare does not poll the repo.
-
-**One-time operator setup** (before CI can deploy):
-
-1. Create `CLOUDFLARE_API_TOKEN` (Cloudflare dashboard → My Profile →
-   API Tokens → Create Token → Custom token → scope: Cloudflare Pages — Edit,
-   account: target account only). Add as repo secret.
-2. Find `CLOUDFLARE_ACCOUNT_ID` (Cloudflare dashboard sidebar). Add as repo secret.
-3. Create the Pages project locally:
-   ```bash
-   npx wrangler login
-   npx wrangler pages project create tricho --production-branch=main
-   ```
-4. After the first successful production deploy, attach `tricho.app` and
-   `www.tricho.app` (with 301 redirect to apex) as custom domains in the
-   Cloudflare dashboard → Workers & Pages → tricho → Custom domains.
-5. Disable GitHub Pages in repo settings → Pages → source = None.
-6. Configure branch protection on `main`: require status checks `Test web`,
-   `Test app`, `Build merged dist & deploy`; require linear history;
-   restrict direct pushes.
-
-**Staging:** every push to `dev` deploys to `dev.tricho.app` via the
-Cloudflare Pages branch alias. This is the everyday integration target
-in the solo direct-to-`dev` flow (see
-[docs/DEVELOPER.md → Day-to-day development](./docs/DEVELOPER.md#day-to-day-development-solo-flow)).
-
-**Production deploys:** the `Promote dev → main` workflow fast-forwards
-`main` to `dev`'s tip after four preflight gates (linear history,
-ahead-of-main, no merge commits, green staging CI), tags the released
-SHA `prod-YYYY-MM-DD-<shortsha>`, and dispatches `ci.yml` on `main` to
-build + deploy `tricho.app`. Trigger from the GitHub Actions UI
-("Promote dev → main" → type `RELEASE` → Run) or the CLI:
-
-```sh
-gh workflow run "Promote dev → main" --ref dev -f confirm=RELEASE
-```
-
-Rollback is one click in the Cloudflare dashboard
-(Workers & Pages → tricho → Deployments → "Rollback to this deployment").
-See [docs/DEVELOPER.md → Production releases](./docs/DEVELOPER.md#production-releases-promote-dev--main)
-for the full runbook.
-
-**Per-PR previews (rarely used in solo flow):** if you do open a PR
-against `main`, Cloudflare Pages will deploy it to a unique
-`<branch>.tricho.pages.dev` URL and the URL is posted as a PR comment.
-
-## Releasing the PWA
-
-The PWA follows semver. Tags are namespaced `app-v*` so the marketing site
-can later add `web-v*` if it wants.
-
-```bash
-cd app
-npm version --no-git-tag-version patch    # or minor / major
-git add app/package.json app/package-lock.json
-git commit -m "chore(app): release v$(node -p "require('./package.json').version")"
-git tag "app-v$(node -p "require('./package.json').version")"
-git push origin main --follow-tags
-```
-
-`.github/workflows/release-app.yml` triggers on the `app-v*` tag and
-publishes a GitHub Release with auto-generated notes from `app/`-scoped
-commits since the previous `app-v*` tag.
-
-The in-app Settings → "O aplikaci" displays version, build time, commit
-short-hash, and a "Co je nového" link to the GitHub Release.
-
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the topology and
-[`openspec/changes/marketing-site-and-pwa-split/`](./openspec/changes/marketing-site-and-pwa-split/)
-for the canonical spec.
-
-## Komponenty (`src/components/`)
-
-| Soubor | Popis |
-|--------|-------|
-| `Header.astro` | Hlavička aplikace s názvem a StatusBar |
-| `StatusBar.astro` | Online/offline indikátor, režim aplikace, tlačítko nastavení |
-| `CameraPanel.astro` | Hlavní panel s video elementem a ovládacími prvky |
-| `CameraOverlay.astro` | UI vrstva nad videem (tlačítka, status chip) |
-| `SidePanel.astro` | Pravý panel - instalace, výběr kamery, galerie |
-| `Gallery.astro` | Galerie fotek se seznamem sezení a mřížkou fotek |
-| `SettingsModal.astro` | Modální dialog pro nastavení aplikace |
-| `Footer.astro` | Patička s informacemi |
-
-## TypeScript moduly (`src/scripts/`)
-
-### `settings.ts` - Správa nastavení
-
-Definuje typy a funkce pro práci s nastavením aplikace.
-
-```typescript
-interface AppSettings {
-  sessionGapMinutes: number;    // Pauza pro oddělení sezení (min)
-  jpegQuality: number;          // Kvalita JPEG (50-100)
-  maxResolution: number;        // Max rozlišení (px)
-  maxPhotos: number;            // Max počet fotek
-  maxStorageMB: number;         // Max velikost úložiště (MB)
-  defaultCamera: 'environment' | 'user';  // Výchozí kamera
-  autoRestartCamera: boolean;   // Restart kamery po návratu
-  confirmDelete: boolean;       // Potvrzení mazání
-}
-```
-
-**Funkce:**
-- `loadSettings()` - načte nastavení z localStorage
-- `saveSettings(settings)` - uloží nastavení
-- `getSettings()` - vrátí aktuální nastavení
-- `resetSettings()` - obnoví výchozí hodnoty
-- `getSessionGapMs()`, `getJpegQuality()`, `getMaxWidth()`, `getMaxHeight()`, `getMaxPhotos()`, `getMaxBytes()` - computed getters
-
-**localStorage klíč:** `appSettings`
-
----
-
-### `storage.ts` - IndexedDB operace
-
-Ukládání a načítání fotografií z IndexedDB.
-
-```typescript
-interface PhotoRecord {
-  id?: number;          // Auto-increment ID
-  createdAt: number;    // Timestamp vytvoření
-  blob: Blob;           // JPEG data
-  size: number;         // Velikost v bytes
-}
-```
-
-**Funkce:**
-- `openDb()` - otevře/vytvoří databázi
-- `savePhotoBlob(blob)` - uloží novou fotku
-- `loadPhotos()` - načte všechny fotky
-- `deletePhoto(id)` - smaže fotku podle ID
-- `computeTotals(photos)` - spočítá statistiky (count, bytes)
-- `formatBytes(bytes)` - formátuje velikost ("1,5 MB")
-
-**IndexedDB:**
-- Databáze: `pwa-camera-db`
-- Object store: `photos`
-- Verze: 1
-
----
-
-### `camera.ts` - Správa kamery
-
-Inicializace kamery, pořizování snímků, správa oprávnění.
-
-**Funkce:**
-- `initCameraElements(elements)` - nastaví reference na DOM elementy
-- `initCamera(deviceId?)` - spustí kameru
-- `stopCamera()` - zastaví stream
-- `switchCamera()` - přepne na další kameru
-- `selectCamera(deviceId)` - vybere konkrétní kameru
-- `capturePhoto()` - pořídí snímek a uloží do DB
-- `checkCameraPermission()` - zkontroluje stav oprávnění
-- `markPermissionGranted()` / `clearPermissionStatus()` - správa stavu oprávnění
-- `listVideoDevices(selectedId?)` - naplní select s kamerami
-
-**localStorage klíče:**
-- `preferredCameraDeviceId` - ID preferované kamery
-- `cameraPermissionGranted` - cache stavu oprávnění
-
----
-
-### `gallery.ts` - Galerie a sezení
-
-Organizace fotek do sezení, vykreslování galerie.
-
-```typescript
-interface Session {
-  start: number;           // Timestamp začátku sezení
-  photos: PhotoRecord[];   // Fotky v sezení
-}
-```
-
-**Funkce:**
-- `initGalleryElements(elements)` - nastaví DOM reference
-- `buildSessions(photos)` - rozdělí fotky do sezení podle časové mezery
-- `renderGallery()` - vykreslí celou galerii
-- `renderSessionList()` - vykreslí seznam sezení
-- `renderSessionPhotos()` - vykreslí fotky aktivního sezení
-- `cleanupOlderThanMonths()` - smaže staré fotky
-- `enforceLimits()` - automaticky smaže fotky při překročení limitů
-- `showGallery()` / `hideGallery()` - zobrazí/skryje galerii
-
-**Logika sezení:** Fotky pořízené s mezerou větší než `sessionGapMinutes` spadají do nového sezení.
-
----
-
-### `pwa.ts` - PWA funkcionalita
-
-Instalace aplikace, service worker, online/offline stav.
-
-**Funkce:**
-- `initPwaElements(elements)` - nastaví DOM reference
-- `setupInstallHandlers(basePath)` - nastaví SW a install prompt
-- `isStandalonePwa()` - detekuje standalone režim
-- `detectPlatformInstallHint()` - vrátí text nápovědy pro instalaci
-- `updateOnlineStatus(dot, status)` - aktualizuje online indikátor
-- `updateModeStatus(label)` - aktualizuje label režimu
-
----
-
-### `main.ts` - Hlavní inicializace
-
-Vstupní bod aplikace, propojuje všechny moduly.
-
-**Funkce:**
-- `initApp(basePath)` - hlavní inicializace:
-  1. Načte nastavení
-  2. Získá DOM reference
-  3. Inicializuje moduly
-  4. Nastaví event listenery
-  5. Spustí kameru
-  6. Registruje service worker
-
-## Styly (`src/styles/global.css`)
-
-Obsahuje:
-- **CSS proměnné** - barvy, stíny, border-radius, blur
-- **Základní reset** - box-sizing, body styly
-- **Layout** - header, main, footer, grid layout
-- **Komponenty** - panely, tlačítka, formuláře, modály
-- **Responzivita** - breakpointy pro mobile/desktop
-
-### CSS proměnné
-
-```css
-:root {
-  --bg: #f2f2f7;                    /* Pozadí */
-  --bg-elevated: rgba(255,255,255,0.9);
-  --border: rgba(0,0,0,0.06);
-  --accent: #007aff;                /* Modrá akcent */
-  --text: #111827;
-  --text-soft: #6b7280;
-  --danger: #ff3b30;                /* Červená */
-  --radius-xl: 26px;
-  --radius-lg: 20px;
-  --radius-md: 14px;
-  --radius-pill: 999px;
-  --blur-backdrop: 24px;
-}
-```
-
-## PWA (`public/`)
-
-### `manifest.webmanifest`
-
-```json
-{
-  "name": "PWA Kamera",
-  "short_name": "Kamera",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "background_color": "#f2f2f7",
-  "theme_color": "#f2f2f7"
-}
-```
-
-### `sw.js` - Service Worker
-
-- **Cache name:** `pwa-camera-cache-v2`
-- **Strategie:** Cache-first s network fallback
-- **Offline:** Vrací cached `index.html` pro navigační requesty
-
-## Konfigurace
-
-### `astro.config.mjs`
-
-```javascript
-export default defineConfig({
-  site: 'https://tricho.app',
-});
-```
-
-- `site` - produkční URL (custom doména)
-
-### TypeScript
-
-Používá `astro/tsconfigs/strict` pro přísnou typovou kontrolu.
-
-## Testing
-
-TrichoApp uses a six-tier test pyramid — pure unit / component / backend unit / backend integration / E2E / smoke. `npm test` runs the fast unit + component loop (< 15 s, no Docker). See [`docs/TESTING.md`](./docs/TESTING.md) for the pyramid contract, per-tier budgets, the "which tier does my test belong to?" decision tree, and coverage baseline procedure.
-
-Quick commands:
-
-```bash
-npm test                         # fast loop: unit + component
-npm run test:backend             # Node-side unit tests
-npm run test:backend:integration # testcontainers-backed real-CouchDB tests
-npm run test:e2e                 # Playwright (requires `make ci` up)
-npm run test:smoke               # compose + secrets + healthcheck smoke
-npm run test:coverage            # per-tier coverage + HTML report
-npm run test:all                 # everything
-```
-
-## Running the stack
-
-The whole stack — CouchDB, `tricho-auth`, Traefik, the PWA — lives behind one root `compose.yml` and one `Makefile`. Three profiles select which subset runs:
-
-| Profile | Use case | Hostname |
-|---|---|---|
-| `dev` | Local development with live reload (section 2+ wires the in-container PWA) | `tricho.localhost` |
-| `prod` | Production-equivalent local smoke test (Let's Encrypt + Caddy + built `dist/`) | `${APP_HOST}` |
-| `ci` | GitHub Actions / E2E (self-signed TLS + mock OIDC provider) | `tricho.test` |
-
-### Common commands
-
-```bash
-make help          # list every target
-make dev           # bring up the dev profile
-make prod-local    # bring up the prod profile (requires APP_HOST, ACME_EMAIL)
-make ci            # bring up the ci profile (for running Playwright locally)
-make down          # stop everything and wipe runtime secrets
-make logs          # tail logs
-make e2e           # run the Playwright suite (wired in section 7)
-```
-
-### Tooling
-
-The stack runs on stock Docker + Docker Compose. For the encrypted-secrets workflow:
-
-| Tool | Install (macOS) | Install (Linux) |
-|---|---|---|
-| Docker Compose v2 | Docker Desktop | [docs.docker.com/compose](https://docs.docker.com/compose/install/) |
-| SOPS | `brew install sops` | [github.com/getsops/sops/releases](https://github.com/getsops/sops/releases) |
-| age | `brew install age` | Ships with recent distros or from releases |
-| jq | `brew install jq` | `apt install jq` |
-| openssl | preinstalled | preinstalled |
-
-### Environment files
-
-Configuration is layered, lowest to highest precedence:
-
-1. `.env` — **committed**, non-sensitive defaults (ports, hostnames). Read by `docker compose` natively.
-2. `secrets/<profile>.sops.yaml` — **committed, SOPS-encrypted** with age recipients. Decrypted by `make _render-secrets` into `.secrets-runtime/` and consumed as Docker Compose `secrets:` (mounted at `/run/secrets/*`). Wired in section 5.
-3. `.env.local` — **gitignored**, your personal host overrides. Loaded after `.env` so it wins on conflict. Copy from `.env.example` if you need one.
-
-Secrets never go into `.env*` files. Long-lived material (OAuth client secrets, JWT private key, CouchDB admin password) moves to the SOPS flow.
-
-### Legacy entrypoints
-
-The old `infrastructure/couchdb/docker-compose.yml` and `infrastructure/traefik/docker-compose.yml` still work as a fallback during rollout of the `unified-stack-orchestration` change. They will be deleted / redirected in section 9.
-
-### Quick browser-only dev (no backend)
-
-If you're only editing static PWA content and don't care about the backend:
-
-```bash
-npm install
-npm run dev              # Astro dev server on http://localhost:4321 (no CouchDB, no auth)
-npm run build            # produces dist/
-npm run preview          # serves dist/
-```
-
-## Datový tok
-
-```
-[Kamera] → getUserMedia → <video> → canvas.drawImage → toBlob → IndexedDB
-                                                                    ↓
-[Galerie] ← URL.createObjectURL ← loadPhotos ← ─────────────────────┘
-```
-
-## Důležité poznámky
-
-### Base Path
-Aplikace běží na root path `/` (custom doména `tricho.app`):
-- V Astro: `import.meta.env.BASE_URL` vrací `/`
-- V JS: předáno jako parametr `initApp(basePath)`
-- V manifestu/SW: všechny cesty jsou absolutní od root (`/`)
-
-### Oprávnění kamery
-- Vyžaduje HTTPS nebo localhost
-- Stav oprávnění se cachuje v localStorage
-- Při zamítnutí se zobrazí chybová hláška
-
-### Limity úložiště
-- IndexedDB má limit závislý na prohlížeči (obvykle 50% volného místa)
-- Aplikace má vlastní limity (maxPhotos, maxStorageMB)
-- Při překročení se automaticky mažou nejstarší fotky
-
-### Sezení (Sessions)
-- Fotky se automaticky seskupují do sezení
-- Mezera větší než `sessionGapMinutes` = nové sezení
-- V galerii se zobrazuje seznam sezení + fotky aktivního sezení
-
-## Budoucí vylepšení
-
-- [ ] Export/import dat
-- [ ] Sdílení fotek
-- [ ] Filtry a úpravy fotek
-- [ ] Lepší ikony pro PWA manifest
-- [ ] Push notifikace
-- [ ] Sync napříč zařízeními

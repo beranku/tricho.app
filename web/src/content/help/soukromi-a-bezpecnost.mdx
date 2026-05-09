@@ -1,0 +1,97 @@
+---
+title: "Soukromí a bezpečnost"
+description: "Co server vidí, co nevidí, a proč je to celé takhle navržené."
+category: "soukromí"
+order: 7
+---
+
+Tricho je end-to-end šifrovaná aplikace. To znamená, že **mezi tvým
+zařízením a serverem cestují jen nečitelná data**. Server nikdy nedrží
+klíč. Tahle stránka popisuje, co to znamená v praxi.
+
+## Co server vidí
+
+| Položka | V jaké podobě | Kdo to umí přečíst |
+|---|---|---|
+| Karty klientek | Šifrovaný `payload` | Pouze ty (s klíčem ve tvém zařízení) |
+| Návštěvy a poznámky | Šifrovaný `payload` | Pouze ty |
+| Fotografie | Šifrovaný blob attachment | Pouze ty |
+| Tvoje Apple/Google ID | Plain text | My, jen pro správu předplatného |
+| Veřejné klíče tvých passkeyů | Plain text | Kdokoliv — *jsou veřejné* |
+| Kdy ses naposledy synchronizovala | Časové razítko | My, pro provoz |
+
+To je všechno. Jména klientek, jejich kontakty, anamnézy, alergeny,
+fotky vlasové pokožky — to všechno *cestuje jako nečitelná data* a
+dešifruje se až u tebe.
+
+## Co server nikdy nevidí
+
+- ❌ Tvůj **Recovery Secret** (server o jeho existenci ani neví).
+- ❌ Tvůj **šifrovací klíč** (DEK).
+- ❌ Otevřené texty karet, návštěv, poznámek.
+- ❌ Originální fotografie.
+- ❌ Hesla, PINy ani biometrika.
+
+Pokud by server někdo prolomil, dostal by **šifrované balíky bez klíče**
+— jako kdyby ukradl trezor, ke kterému nemá kombinaci.
+
+## Jak je to možné
+
+Při zakládání trezoru ti zařízení vygeneruje **DEK** — Data Encryption
+Key. Ten klíč šifruje vše, co se uloží.
+
+DEK se ukládá lokálně **dvakrát zabalený**:
+
+- *Wrap přes Recovery Secret* — dostane se k němu jen Recovery Secret.
+- *Wrap přes passkey (PRF)* — dostane se k němu jen tvoje biometrika.
+
+Žádná z těch dvou cest neprochází přes server. *DEK ani v jedné podobě
+server nevidí.*
+
+To je ta technická pravda za naším *„nemůžeme ti pomoct si zapomenuté
+heslo resetovat"*. Není to design choice — je to matematika.
+
+## A když mě někdo úředně požádá o data?
+
+Můžeme ti vystavit **vyexportovaný šifrovaný `payload`**, ke kterému
+nemáme klíč. Stejně tak ho můžeme vydat úřadům, pokud po něm legálně
+půjdou.
+
+Ale rozšifrovat ho neumíme. Recovery Secret má jen klientka. Proto je
+ten model takhle navržený.
+
+## GDPR
+
+- **Právo na export.** Kdykoliv si stáhni šifrovanou ZIP zálohu;
+  Recovery Secret slouží jako tvůj klíč.
+- **Právo na výmaz.** Bottom-sheet → Nastavení → *Trvale smazat účet*.
+  Server promaže refresh tokeny, tvou per-user databázi, doklad o
+  předplatném. Lokální IndexedDB se vymaže taky. Operace je nevratná.
+- **Právo na opravu osobních údajů.** Karta klientky je kompletně tvoje
+  — uprav cokoliv, kdykoliv chceš.
+- **Souhlas se zpracováním.** Nezpracováváme tvoje data v původním
+  tvaru, protože je vůbec nevidíme. Souhlas se vztahuje pouze na účetní
+  údaje (Apple/Google ID, IP adresu při sync).
+
+Detaily najdeš v dokumentu [Ochrana osobních údajů](/legal/privacy).
+
+## Časté obavy
+
+**„Co když Tricho zkrachuje?"**
+Tvoje data zůstávají na zařízení a v zálohovém ZIPu. Stačí jednou
+exportovat — z tvého trezoru se dostaneš i bez nás.
+
+**„Co když mě někdo nahackne?"**
+Útočník by získal **šifrovaný balík bez klíče**. Bez Recovery Secretu
+se k obsahu nedostane ani on, ani my, ani nikdo jiný.
+
+**„Bere mi to víc dat než stará SQL aplikace?"**
+Bere míň. Stará aplikace tvoje karty *posílá v původním tvaru*. Tricho
+posílá jen `payload`, který nikdo kromě tebe nepřečte.
+
+## Co dál
+
+- [Obnova přístupu](/help/obnova-pristupu) — proč se vyplatí Recovery
+  Secret hned uložit.
+- [Synchronizace a zálohy](/help/synchronizace-a-zalohy) — jak data
+  putují, aniž by je server viděl.

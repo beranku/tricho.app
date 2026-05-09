@@ -1,0 +1,76 @@
+---
+title: "Každodenní práce s diářem a kartou"
+description: "Jak vypadá běžný den v Tricho — odemknutí, diár, sloty, karta klientky."
+category: "denní práce"
+order: 2
+---
+
+Tricho má dvě obrazovky: **diár** (plán dne) a **kartu klientky** (detail
+jedné klientky). Mezi nimi se přepínáš ťuknutím na slot.
+
+## Odemknutí
+
+Tricho se po každém zavření i po pár minutách bez aktivity zamkne. Když
+se vrátíš:
+
+1. Otevři ikonu Tricho na ploše.
+2. Ověř se Face ID, otiskem prstu nebo PINem — to, co se ti při zakládání
+   nabídlo. Telefon nebo tablet si pamatuje, kterým způsobem se přihlašuješ.
+3. Pokud passkey nezareaguje (nový otisk, restart zařízení, nebo prostě
+   jeden z těch dnů), pod hlavním tlačítkem je ghost-styled odkaz na
+   **Recovery Secret**. Naskenuješ QR — a jsi uvnitř.
+
+*Recovery Secret zůstává jako záchranná cesta vždycky*, i když je primární
+unlock něco jiného. Bez něj se po ztrátě zařízení k datům nedostaneš —
+to je ta tichá cena za to, že na server ničí klíč nikdy nedoputuje.
+
+## Diár — Phone A
+
+Hlavní obrazovka. Sloty na den, sticky hlavička dne, sluníčko označuje
+dnešek.
+
+| Stav slotu | Co znamená |
+|---|---|
+| **Done** (ticho šedé) | Návštěva proběhla. Ťukni pro zápis poznámek. |
+| **Active** (teal) | Klientka je teď u tebe. Countdown ukazuje *zbývá X min*. |
+| **Scheduled** (okrajová obrysovka) | Naplánovaný slot, ještě nezačal. |
+| **Volno 35 min** (Patrick Hand) | Dopočítaná pauza mezi sloty. |
+
+Drobnosti, které ulehčují den:
+
+- Když odscrolluješ daleko od dneška, dole vyskočí **scroll-to-today FAB**
+  — copper kruh se sluníčkem. Ťukni a vrátíš se.
+- Hlavička dne má **kicker** v copper barvě — *Zítra*, *Pátek*, *Příští
+  pondělí*. To je jediné místo, kde se objevuje copper jako akcent.
+- Čas a jméno klientky jsou v **Fraunces** (s nadpisovou velikostí pro
+  jméno) — diár je deník, ne tabulka.
+
+## Karta klientky — Phone B
+
+Ťukneš na slot a otevře se karta. Co je na ní:
+
+- **Kicker `Klient`** + jméno ve Fraunces.
+- **Current-head** — alergen badge (amber, *Caveat* font, jen pokud je co
+  ohlásit) a *zbývá X min* countdown teal-700.
+- **Cam-card** — kartička s čtyřmi tlačítky: *před*, *detail*, *po*,
+  *náhled*. Fotka se uloží zašifrovaně přímo k návštěvě.
+- **Chip sekce** — služby a produkty z této návštěvy.
+- **Ruční poznámky** — Patrick Hand, jak by sis je psala perem do sešitu.
+- **Další termín** — pokud je naplánovaný.
+
+Zpět do diáře šipkou vlevo nahoře nebo gestem zpět.
+
+## Status v dolní liště
+
+Spodní bottom-sheet menu skrývá:
+
+- **Online / Offline** indikátor.
+- *Naposledy synchronizováno před X min* (jenom když máš zaplacený plán).
+- Přepínač **světlý / tmavý motiv**. Volba zůstává jen na tomhle zařízení.
+- Odhlášení (zamkne app, nesmaže data).
+
+## Co dál
+
+- [Karta klientky a návštěvy](/help/klientky-a-navstevy) — anamnéza, alergeny, fotografie.
+- [Synchronizace a zálohy](/help/synchronizace-a-zalohy) — víc zařízení, ZIP zálohy.
+- [Obnova přístupu](/help/obnova-pristupu) — když passkey selže, nebo měníš zařízení.

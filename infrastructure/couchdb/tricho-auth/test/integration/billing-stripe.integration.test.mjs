@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // `localstripe`).
 //
 // IMAGE PIN: stripemock/stripe-mock:latest — bump quarterly to track
-// Stripe's published OpenAPI. See docs/TESTING.md → "Bumping mocks".
+// Stripe's published OpenAPI. See docs/testing.md → "Bumping mocks".
 
 const STRIPE_MOCK_IMAGE = 'stripemock/stripe-mock:latest';
 

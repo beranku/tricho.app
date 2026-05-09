@@ -1,10 +1,12 @@
-# Tricho.app — Copy v češtině
+# Voice & copy — čeština
 
 Pravidla, hlas a slovník pro psaní textů — webové stránky, blog, aplikace, e-maily, oznámení v UI.
 
-Tento dokument vznikl postupně, jak jsme dolaďovali landing page přes osm iterací. Cílem nebylo vymyslet pravidla od stolu — všechna jsou výsledkem konkrétních situací, kdy jsme něco napsali a po přečtení nahlas to drhlo. Dokument je proto plný **dobrých a špatných příkladů z praxe**, ne teorie.
+Tento dokument je **rozcestník pro psaní novou copy**. Vznikl postupně, jak jsme dolaďovali landing page přes osm iterací. Pravidla nejsou teorie — všechna jsou výsledkem konkrétních situací, kdy jsme něco napsali a po přečtení nahlas to drhlo. Dokument je proto plný **dobrých a špatných příkladů z praxe**.
 
-Je psaný jako rozcestník. Když budeš psát novou copy, otevři ho a najdi sekci, která řeší tvůj typ rozhodnutí. Když nejsi jistý, přečti si **Filozofii hlasu** a **Persoinu Petru** — to jsou dva základní filtry, kterými projde každý další text.
+Pro **konkrétní hotové texty landing page** (nadpisy, lede, CTA, FAQ) sáhni do [`prototypes/landing-page-prototype/COPY.md`](../prototypes/landing-page-prototype/COPY.md) — to je závazný zdroj toho, **co tam doslova stojí**. Tento soubor je o tom, **jak nové texty psát**, ne o tom, jaké texty už máme.
+
+Když budeš psát novou copy, najdi sekci, která řeší tvůj typ rozhodnutí. Když nejsi jistý, přečti si **Filozofii hlasu** a **Personu Petru** — to jsou dva základní filtry, kterými projde každý další text.
 
 ---
 

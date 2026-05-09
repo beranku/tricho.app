@@ -1,0 +1,102 @@
+---
+title: "Karta klientky a návštěvy"
+description: "Jak založit kartu, zapsat anamnézu, zaznamenat návštěvu a fotografie."
+category: "denní práce"
+order: 3
+---
+
+Karta klientky je *celý sešit o jedné klientce* na jednom místě —
+kontakt, anamnéza, alergeny, historie návštěv, fotografie, poznámky. Vše
+se ukládá lokálně a šifrovaně. Server vidí jen nečitelný `payload`.
+
+## Založit novou klientku
+
+1. V diáři ťukni na **+ klientka** (pravý dolní roh, FAB).
+2. Vyplň, co máš po ruce. Povinné je jen jméno; všechno ostatní můžeš
+   doplnit kdykoliv.
+
+| Pole | Poznámka |
+|---|---|
+| **Jméno** | Povinné. Tak ji budeš v diáři vyhledávat. |
+| **Telefon** | Volitelné. |
+| **E-mail** | Volitelné. |
+| **Datum narození** | Volitelné — pomáhá u dlouhodobé péče. |
+| **Anamnéza** | Vlasová pokožka, citlivost, dřívější diagnózy. |
+| **Alergeny** | Krátký seznam. Zobrazí se jako amber badge nahoře v kartě. |
+| **Preference** | Oblíbené produkty, čeho se naopak vyhýbat. |
+| **Volné poznámky** | Cokoliv, co chceš mít při ruce. |
+
+3. Ťukni **Uložit**.
+
+*Čím podrobnější anamnéza, tím rychleji se klientce příště přizpůsobíš* —
+ne abys ji zahltila daty, ale aby ses nemusela ptát na věci, které ti
+už jednou řekla.
+
+## Najít klientku
+
+- **Hledání** — ťukni na vyhledávací pole nahoře a začni psát.
+- **Procházení** — sjeď seznam, řadit můžeš podle posledního termínu
+  nebo abecedně.
+
+Hledání běží přímo nad lokální databází — funguje **i offline**.
+
+## Upravit nebo smazat
+
+- **Upravit:** otevři kartu → ťukni *Upravit* → změň → *Uložit*.
+- **Smazat:** otevři kartu → odscrolluj dolů → *Smazat klientku*. Smazání
+  je nevratné a zruší i celou historii návštěv a fotografií. App tě
+  proto požádá, abys do potvrzovacího pole napsala jméno klientky.
+
+## Zaznamenat návštěvu
+
+Návštěva je zápis o tom, co jsi konkrétní den s klientkou dělala.
+
+1. V kartě klientky ťukni **+ návštěva** (FAB nebo v sekci Historie).
+2. Vyplň:
+
+| Pole | Příklad |
+|---|---|
+| **Datum** | Předvyplněno na dnešek. |
+| **Služby** | *Stříhání*, *trichologické vyšetření*, *masáž vlasové pokožky* |
+| **Produkty** | *Olaplex 3*, *Nioxin sérum* |
+| **Cena** | V Kč. |
+| **Délka** | Třeba *45 min*. |
+| **Poznámky** | Pozorování, formule barvy, doporučení do dalšího termínu. |
+
+3. Ťukni **Uložit**.
+
+Návštěvu otevřeš a upravíš ťuknutím v sekci Historie. Pokud jsi se ve
+slotu spletla v ceně nebo službě, oprav to — záznam se přepíše a
+synchronizuje na ostatní zařízení.
+
+## Fotografie before / detail / after
+
+Mikrokamera je v kartě klientky jako **cam-card** — kartička se čtyřmi
+tlačítky.
+
+1. Ťukni *před*, *detail* nebo *po*.
+2. Povol přístup ke kameře (jenom poprvé na zařízení).
+3. Pořiď snímek.
+
+Co se stane:
+
+- Fotka se okamžitě **zašifruje** AES-256-GCM klíčem, který má jenom
+  tvoje zařízení.
+- Šifrovaný blob se uloží jako attachment k záznamu fotografie. Putuje
+  se synchronizací **stejně jako texty** — jako nečitelná data.
+- Server fotku nikdy nevidí v původní podobě, ani kdyby chtěl.
+
+### Tipy pro užitečné fotky
+
+- *Před* a *po* dělej za stejných světelných podmínek — pak má smysl
+  porovnání.
+- *Detail* je na vlasovou pokožku, kořínky, struktury. Mikrokamera je
+  v Tricho speciálně pro tohle.
+- Stará fotka může být důkaz v případě reklamace — *fotky nahrazují
+  paměť*, ne ji nahrazují.
+
+## Co dál
+
+- [Synchronizace a zálohy](/help/synchronizace-a-zalohy) — sdílení karet mezi telefonem a tabletem.
+- [Obnova přístupu](/help/obnova-pristupu) — když ztratíš zařízení.
+- [Soukromí a bezpečnost](/help/soukromi-a-bezpecnost) — co server vidí a co ne.

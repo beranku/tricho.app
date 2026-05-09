@@ -1,0 +1,107 @@
+---
+title: "Obnova přístupu"
+description: "Když passkey selže, měníš zařízení nebo ti ukradli telefon — Recovery Secret tě dostane zpátky."
+category: "obnova"
+order: 6
+---
+
+Recovery Secret je **jediná univerzální cesta zpátky k tvým datům**. Ne
+heslo k účtu, ne reset přes e-mail — Recovery Secret. Server ho nikdy
+neviděl, takže ho ani na server poslat zpátky neumí.
+
+*To je proč Tricho funguje*: jediný klíč k tvému diáři máš jen ty.
+
+## Kdy ho budeš potřebovat
+
+- Ztratíš nebo si rozbiješ telefon.
+- Resetuješ zařízení do továrního nastavení.
+- Změníš biometriku (nový otisk, reset Face ID) a passkey přestane
+  fungovat.
+- Nastavuješ Tricho na novém zařízení (telefon + tablet).
+
+## Obnova krok po kroku
+
+1. Na novém (nebo zresetovaném) zařízení otevři tricho.app a nainstaluj
+   ji jako PWA.
+2. Přihlas se stejným Apple/Google ID jako předtím.
+3. App nabídne *„Obnovit přístup"*.
+4. **Naskenuj** uložený QR kód, nebo ťukni *„Zadat ručně"* a vepiš
+   12 slov.
+5. Counter ti potvrdí, že kontrolní součet sedí.
+6. Zaregistruj nový passkey pro tohle zařízení.
+7. Data se stáhnou a dešifrují.
+
+Hotovo. Stará karta klientky vypadá přesně stejně, jako ji znáš.
+
+## Když passkey nereaguje, ale máš zařízení v ruce
+
+Občas se passkey rozbije, aniž bys o zařízení přišla. Důvody bývají:
+
+- Reset Face ID nebo otisku v systému.
+- Změna v Apple/iCloud Keychain.
+- Smazaný passkey v nastavení zařízení.
+
+Co s tím:
+
+1. Na zamykací obrazovce ťukni **Recovery Secret** (ghost-styled odkaz
+   pod hlavním tlačítkem).
+2. Naskenuj QR.
+3. Po odemknutí zaregistruj **nový passkey** — bottom-sheet → Nastavení
+   → Bezpečnost → *Přidat passkey*.
+4. Starý passkey můžeš v zařízení smazat.
+
+*Recovery Secret je vždycky na zamykací obrazovce dostupný*, i když je
+primární unlock něco jiného.
+
+## Zobrazit Recovery Secret znovu
+
+Pokud jsi v aplikaci přihlášená a chceš si Recovery Secret znova uložit
+(nový password manager, nová tiskárna):
+
+1. Bottom-sheet → **Nastavení → Bezpečnost → Zobrazit Recovery Secret**.
+2. App tě požádá zadat aktuální Recovery Secret. Ověří ho lokálně —
+   z disku totiž nic nemůže přečíst, dokud sám tajný kód nezadáš.
+3. Pak zobrazí stejný QR a Base32 fingerprint jako při zakládání.
+
+Recovery Secret se na zařízení **nikdy neukládá** — vždycky ho musíš
+zadat. To je úmysl.
+
+## Vyměnit Recovery Secret za nový
+
+Bottom-sheet → **Nastavení → Bezpečnost → Vyměnit Recovery Secret**.
+App tě provede stejnými třemi kroky jako při zakládání:
+
+1. **Vygeneruje** nový.
+2. **Zobrazí** ti ho a počká, až si ho uložíš.
+3. **Ověří**, že jsi ho opravdu zachytila — naskenuješ QR nebo zadáš
+   poslední 4 znaky.
+4. Teprve **po potvrzení** se starý Recovery Secret nahradí novým.
+
+> Jakmile potvrdíš nový Recovery Secret, **starý okamžitě přestává
+> fungovat**. Nový si bezpečně ulož ještě než ťukneš *Potvrdit*.
+
+Pokud cokoliv zruší, starý kód funguje dál — žádný "polovičatý" stav.
+
+## Když ztratíš zařízení i Recovery Secret
+
+Tahle situace nemá řešení. Není to chyba — je to *ten důvod, proč to
+funguje*.
+
+End-to-end šifrování znamená, že:
+
+- Klíč ke tvým datům máš pouze ty.
+- Server ti neumí pomoct, protože nemá z čeho.
+- Žádné *„Zapomenuté heslo"* tlačítko nikde nečeká.
+
+To je celá filozofie. *Cena za naprosté soukromí: ztrátu klíče si
+hlídáš sama.*
+
+Proto: **Recovery Secret si ulož při zakládání**. A nejlépe ne na to
+samé zařízení, kde běží Tricho.
+
+## Co dál
+
+- [Synchronizace a zálohy](/help/synchronizace-a-zalohy) — jak mít data
+  na víc zařízeních současně, takže ztráta jednoho není ztráta všeho.
+- [Soukromí a bezpečnost](/help/soukromi-a-bezpecnost) — celý myšlenkový
+  rámec za touhle politikou.

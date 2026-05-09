@@ -512,7 +512,7 @@ services:
   # SDK-shape contract tests at the backend-integration tier.
   # `localstripe` (port 8420) is stateful and ships a `/js.stripe.com/v3/`
   # shim so Playwright e2e flows can exercise Checkout + Elements end-to-end.
-  # Bump these images quarterly per docs/TESTING.md.
+  # Bump these images quarterly per docs/testing.md.
   stripe-mock:
     image: stripemock/stripe-mock:latest
     container_name: tricho_stripe_mock

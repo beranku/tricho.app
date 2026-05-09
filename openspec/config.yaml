@@ -13,7 +13,7 @@ context: |
     - AAD binds every payload to {vaultId, docId}.
     - Recovery Secret is the last offline-recovery fallback.
 
-  Authoritative current-state doc: docs/ARCHITECTURE_CHANGES.md.
+  Authoritative current-state doc: docs/architecture.md.
 
 rules:
   proposal:

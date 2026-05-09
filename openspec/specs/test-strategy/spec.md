@@ -4,7 +4,7 @@
 
 The authoritative testing contract for TrichoApp: the pyramid tiers, speed budgets, coverage thresholds, tagging rules, CI layering, and the decision tree for "which tier does this test belong to". Defines the rules every test file in the repo MUST follow so that the suite stays fast, layered, and meaningful as the codebase grows.
 
-Source files: `docs/TESTING.md`, `vitest.config.unit.ts`, `vitest.config.component.ts`, `vitest.config.backend.ts`, `vitest.config.integration.ts`, `package.json` test scripts, `Makefile` test targets, `.github/workflows/tests.yml`, `src/test/fixtures/`.
+Source files: `docs/testing.md`, `vitest.config.unit.ts`, `vitest.config.component.ts`, `vitest.config.backend.ts`, `vitest.config.integration.ts`, `package.json` test scripts, `Makefile` test targets, `.github/workflows/tests.yml`, `src/test/fixtures/`.
 ## Requirements
 ### Requirement: Six-tier test pyramid
 The test suite MUST be organised as six tiers, each with a distinct purpose, runtime budget, and invocation command. A test's tier is declared by its filename suffix and its placement on disk:
@@ -50,7 +50,7 @@ Each tier MUST meet a coverage floor enforced by `@vitest/coverage-v8`:
 | Backend unit | ≥ 85 % | ≥ 80 % | ≥ 85 % |
 | Backend integration | — (exempt — measured via call-site contracts, not lines) | — | — |
 
-Coverage SHALL be enforced in CI. A PR that reduces any covered metric by more than 0.5 percentage points MUST either restore it or carry an explicit reviewer-acknowledged exception comment referencing `docs/TESTING.md`.
+Coverage SHALL be enforced in CI. A PR that reduces any covered metric by more than 0.5 percentage points MUST either restore it or carry an explicit reviewer-acknowledged exception comment referencing `docs/testing.md`.
 
 #### Scenario: Coverage drop fails CI
 - GIVEN a PR that deletes tests for `src/crypto/envelope.ts` without touching the source
@@ -86,7 +86,7 @@ A central fixture directory (`src/test/fixtures/` for frontend, `infrastructure/
 - AND they do not repeat the ~20 lines of boilerplate the existing tests already contain
 
 ### Requirement: Decision-tree documentation
-`docs/TESTING.md` MUST include a "which tier does my test belong to?" decision tree that answers:
+`docs/testing.md` MUST include a "which tier does my test belong to?" decision tree that answers:
 1. Does it touch browser APIs or React? → component or e2e.
 2. Does it need a real database, container, or network? → integration or e2e.
 3. Is it pure logic? → unit.
@@ -97,7 +97,7 @@ Each branch MUST point at a concrete example file in the repo.
 
 #### Scenario: New contributor onboarding
 - GIVEN a contributor who has never written a test in this repo
-- WHEN they open `docs/TESTING.md`
+- WHEN they open `docs/testing.md`
 - THEN within 2 minutes they can identify where their new test belongs
 - AND they can point at an in-repo example that matches their use case
 

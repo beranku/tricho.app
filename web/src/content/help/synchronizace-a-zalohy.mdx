@@ -1,0 +1,110 @@
+---
+title: "Synchronizace mezi zařízeními a zálohy"
+description: "Jak víc zařízení sdílí stejné karty, jak fungují šifrované ZIP zálohy a kdy je potřebuješ."
+category: "synchronizace"
+order: 5
+---
+
+Zdarma napořád ti **Free** plán dává plně použitelnou aplikaci na jednom
+zařízení. Když chceš mít stejné karty na telefonu i tabletu, nebo bezpečné
+cloudové zálohy, sáhneš po **Pro** (2 zařízení, 12 měsíců cloud) nebo
+**Max** (5 zařízení, 5 let cloud).
+
+## Jak synchronizace funguje
+
+1. Na zařízení A vytvoříš návštěvu (nebo upravíš kartu).
+2. Změna se **zašifruje lokálně** — server uvidí jen nečitelný `payload`.
+3. Při připojení k internetu šifrovaná data odejdou na server.
+4. Zařízení B si je stáhne a *teprve u tebe* je dešifruje.
+
+To je *end-to-end šifrování — od jednoho tvého zařízení k druhému*. Server
+v ničem neumí číst.
+
+## Ruční synchronizace
+
+App synchronizuje sama, ale občas se to hodí spustit hned:
+
+- **Tahem dolů** v diáři — pull-to-refresh.
+- **Bottom-sheet → Synchronizovat teď.**
+
+## iOS — co je dobré vědět
+
+iOS u webových aplikací **neumožňuje synchronizaci na pozadí**. Tricho to
+řeší tak, že:
+
+- Synchronizuje při **otevření aplikace.**
+- Synchronizuje při **návratu z jiné aplikace.**
+- Necháva tě synchronizaci spustit **ručně** kdykoliv.
+
+Pokud máš pocit, že "se to neaktualizuje", **otevři Tricho** a počkej pár
+sekund. Sync se rozjede sám.
+
+## Přidat další zařízení
+
+Předpoklad: máš zaplacený plán Pro nebo Max a aspoň jedno zařízení už
+funguje.
+
+1. Na novém zařízení otevři tricho.app a [nainstaluj jako PWA](/help/getting-started).
+2. Přihlas se stejným Apple/Google ID jako na původním zařízení.
+3. Oskenuješ **Recovery Secret QR** (nebo zadáš ručně).
+4. App si stáhne šifrovaná data a u tebe je dešifruje.
+5. Zaregistruj nový passkey **pro tohle zařízení** (každé má svůj).
+
+Hotovo — od teď jsou obě zařízení na stejné kartotéce.
+
+## Konflikty mezi zařízeními
+
+Pokud upravíš stejnou kartu na dvou zařízeních současně, vyhrává **ta
+novější verze** (last-write-wins podle časového razítka). Stará verze
+se měkce smaže, ale zůstává v historii revizí — kontaktuj nás, pokud bys
+ji potřebovala vrátit.
+
+## Šifrované ZIP zálohy
+
+Každý plán *včetně Free* obsahuje **šifrovanou souborovou zálohu** —
+ZIP soubor, který si kdykoliv vyexportuješ a uložíš kam chceš (iCloud,
+USB klíčenka, e-mail sama sobě).
+
+### Jak ji vytvořit
+
+Bottom-sheet → **Nastavení → Vytvořit zálohu**.
+
+App ti nabídne stáhnout `tricho-backup-YYYY-MM-DD.zip`. Soubor je
+šifrovaný stejným klíčem jako vaše data; bez Recovery Secretu ho nikdo
+neotevře.
+
+### Kdy zálohovat
+
+- Před cestou na delší dovolenou.
+- Před prodejem nebo změnou zařízení.
+- *Tak často, jak ti přijde rozumné* — Pro/Max plán to dělá automaticky
+  do cloudu, Free plán je v tvé režii.
+
+### Obnovit ze ZIPu
+
+Dvě cesty:
+
+1. **Při zakládání na novém zařízení** — ve welcome wizardu, když nemáš
+   funkční Recovery Secret pro normální cestu, ťukni *„Mám zálohovací
+   ZIP"* a vyber jeden nebo víc souborů (typicky jeden za měsíc). Zadáš
+   Recovery Secret a app ZIPy aplikuje v pořadí podle data.
+2. **Z otevřené aplikace** — Nastavení → *Obnovit ze zálohy*. Užitečné,
+   když potřebuješ načíst starší měsíce, které už nejsou v cloudu.
+
+Ani v jedné cestě se data po síti nedešifrují. Recovery Secret ti
+prokazuje, že jsi vlastník tohoto trezoru.
+
+## Co když sync nejede
+
+| Symptom | Zkus |
+|---|---|
+| *„Offline"* i s funkčním internetem | Tahem dolů obnov; zkontroluj v Nastavení status sync. |
+| Sync „uvázne" | Zavři a znova otevři Tricho. |
+| Změny se neobjevují na druhém zařízení | Počkej minutu, případně Sync teď v menu. |
+| Velká fotka se nepřenáší | Velké blob attachmenty trvají déle — nech to běžet. |
+| *„Plán vypršel"* uprostřed zápisu | App zůstává plně funkční offline. Sync se obnoví po prodloužení. |
+
+## Co dál
+
+- [Obnova přístupu](/help/obnova-pristupu) — co dělat, když ztratíš všechna zařízení.
+- [Soukromí a bezpečnost](/help/soukromi-a-bezpecnost) — proč je to celé takhle navržené.

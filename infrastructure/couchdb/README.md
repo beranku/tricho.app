@@ -1,12 +1,24 @@
-# CouchDB + tricho-auth stack
+# CouchDB + tricho-auth
 
-**Legacy entrypoint.** The unified `unified-stack-orchestration` change replaced this two-file compose flow with a single root `compose.yml` + `Makefile`. See the root `README.md` → "Running the stack".
+This directory holds the application-level pieces of the server stack.
+They are built and run by the root [`compose.yml`](../../compose.yml)
+under the `dev` / `ci` / `prod` profiles — invoke via `make dev` /
+`make ci` / `make prod-local` from the repo root.
 
-This file and its sibling `docker-compose.yml` are kept during rollout so the old recipe still works:
+| Path | Purpose |
+|---|---|
+| `Dockerfile` | CouchDB 3 image with the project's entrypoint shim. |
+| `entrypoint.sh` | Adds JWT public-key bootstrap and `couch_peruser` setup before launching CouchDB. |
+| `local.ini` | CouchDB configuration mounted into the container. |
+| `tricho-auth/` | Node service: OIDC (Google/Apple) → RS256 JWT + rotated refresh tokens, plus the CouchDB JWT proxy. See [`tricho-auth/BILLING.md`](tricho-auth/BILLING.md) for paid-plans deploy & reconciliation. |
+| `docker-compose.yml` | Legacy two-file compose flow, superseded by the root `compose.yml`. Kept only as a fallback during recovery from broken root-stack setups. |
 
-```sh
-cd infrastructure/couchdb
-COUCHDB_PASSWORD=choose-something-strong docker compose up -d
-```
+Specs that govern this directory:
 
-but new work should use `make dev` from the repo root. This directory will be slimmed to just the application-level bits (local.ini, entrypoint shim, tricho-auth source) after the rollout settles.
+- `openspec/specs/jwt-session/`
+- `openspec/specs/jwt-key-bootstrap/`
+- `openspec/specs/oauth-identity/`
+- `openspec/specs/billing-plans/`
+- `openspec/specs/stripe-recurring-billing/`
+- `openspec/specs/bank-transfer-billing/`
+- `openspec/specs/stack-orchestration/`
