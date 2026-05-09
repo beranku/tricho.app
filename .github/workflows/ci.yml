@@ -100,6 +100,11 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      # ESLint config is intentionally narrow — the headline rule is
+      # `react-hooks/rules-of-hooks`. A useCallback after an early return
+      # in AppShell.tsx caused React #310 in production (post-wizard black
+      # screen, May 2026). This step gates such regressions.
+      - run: npm run lint
       - run: npm run test
       - run: npm run build
         env:

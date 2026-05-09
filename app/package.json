@@ -20,7 +20,8 @@
     "test:smoke": "bash scripts/smoke/run-all.sh",
     "test:all": "npm run test:unit && npm run test:component && npm run test:backend && npm run test:backend:integration && npm run test:smoke && npm run test:e2e",
     "test:coverage": "vitest run --config vitest.config.unit.ts --coverage && vitest run --config vitest.config.component.ts --coverage && vitest run --config vitest.config.backend.ts --coverage",
-    "typecheck": "astro check && tsc --noEmit"
+    "typecheck": "astro check && tsc --noEmit",
+    "lint": "eslint src --max-warnings=200"
   },
   "dependencies": {
     "@astrojs/react": "^4.1.0",
@@ -52,9 +53,13 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "fake-indexeddb": "^6.2.5",
+    "globals": "^17.6.0",
     "jsdom": "^26.0.0",
     "testcontainers": "^11.14.0",
+    "typescript-eslint": "^8.59.2",
     "vitest": "^3.0.0"
   }
 }
