@@ -19,6 +19,9 @@ on:
     branches: [main, dev]
     paths:
       - 'infrastructure/couchdb/**'
+      # Include sync compose so image-format-only changes (e.g. compose
+      # secret syntax) get a matching SHA tag for the deploy step.
+      - 'infrastructure/server/sync/compose.yml'
       - '.github/workflows/build-server-images.yml'
 
 concurrency:
