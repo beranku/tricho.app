@@ -321,6 +321,18 @@ The Traefik file-provider middleware `tricho-cors-<env>@file` is what sets the C
 
 The header is emitted by `tricho-auth`'s `/health` route from the `IMAGE_TAG` env. If the header is absent, the running image was built before the X-Build-Sha change shipped — redeploy with the latest SHA.
 
+### Known shakedown gotchas (recorded May 2026)
+
+These are the issues that surfaced during the first dev deployment to `o3.tricho.app`. The bootstrap scripts and workflows now handle them — captured here so a future operator hitting the same symptom can recognize it.
+
+- **Cloud-provider VCN ingress** must allow tcp/80 + tcp/443 on the subnet — the host's iptables/ufw rules are not enough on Oracle Cloud (or any provider that wraps the instance in a virtual firewall). Symptom: `curl https://sync.<env>.tricho.app/` times out, but `curl http://localhost/` from the host works. Fix in the cloud console, not on the host.
+- **Docker Engine 29.x raised the minimum API version to 1.40**. Traefik v3.x's embedded Docker SDK negotiates v1.24, so the docker provider fails with "client version 1.24 is too old". `install-host.sh` now writes `"min-api-version": "1.24"` to `/etc/docker/daemon.json` to keep older clients working. Drop this when Traefik ships a newer SDK.
+- **macOS `._*` AppleDouble files leak into bind mounts** when transferring the bootstrap tree from a Mac via `tar` over SSH. Traefik's file provider then chokes ("yaml: control characters are not allowed") and the entire dynamic config fails to load. `infrastructure/server/edge/up.sh` should keep the dynamic dir clean. If you hit this, `sudo rm -f /tmp/tricho-bootstrap/infrastructure/server/edge/dynamic/._*` and recreate.
+- **`PrivateTmp=yes` on the runner systemd unit** isolates `/tmp`, but processes spawned via `make`/`bash` subshells sometimes see "mktemp: No such file or directory". The deploy workflow pins `TMPDIR=${runner.temp}` so secret rendering survives.
+- **Runner version churn**: GitHub deprecates `actions/runner` versions on a ~30-day cadence. v2.323.0 was rejected on first registration with "version is deprecated and cannot receive messages." Keep `infrastructure/server/runner-version.txt` current via Renovate or manual review.
+- **HEAD requests to `/auth/health` return 404**. tricho-auth's router only handles GET; a `curl -I` smoke test from the operator's laptop will mislead. The deploy workflow's `smoke.sh` uses `curl -fsS` (GET) which works correctly.
+- **Compose `name:` on `external: true` networks/volumes** is required to refer to externally-managed resources (the `tricho-edge` network in our case). The `infrastructure-lint` script knows to allow this and only flags `name:` on internal resources.
+
 ### Force a fresh ACME order (last resort)
 
 Only when you've already confirmed it's safe to consume the rate limit:

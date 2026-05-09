@@ -42,7 +42,7 @@
 - [x] 5.5 Pre-push existence check: skip the push step if `docker manifest inspect ghcr.io/beranku/tricho-{auth,couchdb}:sha-${{ github.sha }}` already returns a manifest (re-run idempotence)
 - [x] 5.6 `docker/build-push-action@v6` with `platforms: linux/arm64`, `push: true`, `provenance: true`
 - [x] 5.7 `sigstore/cosign-installer@v3`; sign each image digest with `cosign sign --yes ghcr.io/beranku/tricho-{auth,couchdb}@${digest}`
-- [ ] 5.8 Smoke-run the workflow once via `workflow_dispatch` on `main`; verify both packages exist in GHCR with `sha-<full>` tag and a Sigstore signature artifact
+- [x] 5.8 Smoke-run the workflow once via `workflow_dispatch` on `main`; verify both packages exist in GHCR with `sha-<full>` tag and a Sigstore signature artifact
 
 ## 6. Edge stack (`infrastructure/server/edge/`)
 
@@ -83,10 +83,10 @@
 ## 10. First dev deploy validation (Phase 6 of design)
 
 - [x] 10.1 DNS: ensure `sync.dev.tricho.app` A/AAAA points at `o3.tricho.app` (out-of-band, document the IP in the runbook)
-- [ ] 10.2 Push a no-op commit to `dev`; verify `build-server-images.yml` produces the SHA-tagged + signed images (5.x outputs)
-- [ ] 10.3 Verify `deploy-server.yml` auto-runs with `ENVIRONMENT=dev`; verify the three DoD gates pass; verify `https://sync.dev.tricho.app/auth/health` returns 200
+- [x] 10.2 Push a no-op commit to `dev`; verify `build-server-images.yml` produces the SHA-tagged + signed images (5.x outputs)
+- [x] 10.3 Verify `deploy-server.yml` auto-runs with `ENVIRONMENT=dev`; verify the three DoD gates pass; verify `https://sync.dev.tricho.app/auth/health` returns 200
 - [ ] 10.4 Browser test: open `https://dev.tricho.app/app/` (CF Pages) and confirm cross-origin login completes against `https://sync.dev.tricho.app/auth/...`. Network tab confirms CORS headers and `Domain=tricho.app` cookie scope.
-- [ ] 10.5 Capture any rough edges in `docs/server-deploy.md` Troubleshooting section
+- [x] 10.5 Capture any rough edges in `docs/server-deploy.md` Troubleshooting section
 
 ## 11. First prod deploy validation (Phase 7 of design)
 
