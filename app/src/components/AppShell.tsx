@@ -547,11 +547,22 @@ export function AppShell(): JSX.Element {
     }
   }, [dek, vaultId, pendingOAuth]);
 
+  // Two cleanup phases. closeVaultDb() MUST only run on real unmount —
+  // its cleanup with deps [tokenStore] would otherwise fire when tokenStore
+  // flips null → store inside onUnlocked(), closing the freshly-opened
+  // VaultDb out from under the still-running seedFromOAuth() (visible as
+  // [AppShell] onUnlocked failed Error: database is closed).
+  // stopSync + tokenStore.dispose belong with the tokenStore lifecycle —
+  // when tokenStore swaps, dispose the previous one and stop its sync.
+  useEffect(() => {
+    return () => {
+      void closeVaultDb();
+    };
+  }, []);
   useEffect(() => {
     return () => {
       stopSync();
       tokenStore?.dispose();
-      void closeVaultDb();
     };
   }, [tokenStore]);
 
