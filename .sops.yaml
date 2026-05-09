@@ -48,10 +48,10 @@ creation_rules:
     key_groups:
       - age:
           - age122p0m0nhdlz0ehagm8npdp4lhafzlezpm9xxsuvm0j0prx0cypqq0k32g7  # honza (laptop)
-          # - age1o3...            # o3.tricho.app — added after `infrastructure/server/bootstrap.sh`
+          - age1vsgrt7ccrq7e74k2ys6mqgkmgk8p5pp9d0naugs37h5gym4kf98sf34akk  # o3.tricho.app — added after `infrastructure/server/bootstrap.sh`
 
   - path_regex: secrets/sync-dev\.sops\.yaml$
     key_groups:
       - age:
           - age122p0m0nhdlz0ehagm8npdp4lhafzlezpm9xxsuvm0j0prx0cypqq0k32g7  # honza (laptop)
-          # - age1o3...            # o3.tricho.app
+          - age1vsgrt7ccrq7e74k2ys6mqgkmgk8p5pp9d0naugs37h5gym4kf98sf34akk  # o3.tricho.app
