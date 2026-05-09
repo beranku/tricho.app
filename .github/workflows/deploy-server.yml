@@ -123,6 +123,10 @@ jobs:
           # SOPS_AGE_KEY is read from the GitHub Environment's secret store
           # (production env: required reviewer; dev env: no reviewer).
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+          # When set on the env (typically dev only), smoke.sh accepts
+          # the LE staging chain via curl -k. Production leaves this
+          # unset so curl validates against system trust store.
+          TRAEFIK_USE_LE_STAGING: ${{ vars.TRAEFIK_USE_LE_STAGING }}
         run: |
           set -eu
           # Per secrets-management spec, MUST NOT echo $SOPS_AGE_KEY.

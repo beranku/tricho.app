@@ -19,9 +19,11 @@ on:
     branches: [main, dev]
     paths:
       - 'infrastructure/couchdb/**'
-      # Include sync compose so image-format-only changes (e.g. compose
-      # secret syntax) get a matching SHA tag for the deploy step.
-      - 'infrastructure/server/sync/compose.yml'
+      # Include the entire sync stack tree so any deploy-relevant change
+      # (compose.yml, up/down/smoke.sh, config/<env>/.env) gets a
+      # matching sha-<...> image in GHCR. Without this the deploy
+      # workflow's wait-for-image step times out after 10 minutes.
+      - 'infrastructure/server/sync/**'
       - '.github/workflows/build-server-images.yml'
 
 concurrency:

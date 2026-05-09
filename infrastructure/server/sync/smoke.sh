@@ -37,7 +37,14 @@ resp_headers="$(mktemp)"; trap 'rm -f "$resp_headers"' EXIT
 attempts=0
 max_attempts=12
 delay=5
-until curl -fsS -D "$resp_headers" -o /dev/null \
+# Allow self-signed-ish certs when TRAEFIK_USE_LE_STAGING=1 (staging CA
+# is not in the system trust store). Production uses real LE certs and
+# leaves the flag unset, so curl validates strictly.
+curl_tls=""
+if [ "${TRAEFIK_USE_LE_STAGING:-0}" = "1" ]; then
+  curl_tls="-k"
+fi
+until curl -fsS $curl_tls -D "$resp_headers" -o /dev/null \
         --max-time 10 \
         "https://${APP_HOST}/auth/health"; do
   attempts=$((attempts + 1))
@@ -82,7 +89,7 @@ if [ -z "$cors_origin" ]; then
   exit 1
 fi
 
-response_status="$(curl -s -o /dev/null -w '%{http_code}' \
+response_status="$(curl -s $curl_tls -o /dev/null -w '%{http_code}' \
   --max-time 10 \
   -H "Origin: $cors_origin" \
   -H "Authorization: Bearer probe.invalid.token" \

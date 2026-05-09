@@ -68,14 +68,28 @@ chmod 0644 "$sync_dir/.secrets-runtime/"*
 
 # Cosign verify both images BEFORE pull. Per server-image-pipeline spec,
 # bypass via --insecure-* MUST NOT exist in this script.
+#
+# Retry loop handles the small race window where the build job pushes the
+# image manifest then signs it as a separate step (typically <10s gap).
+# A genuinely missing or wrong-identity signature still fails after the
+# retry budget runs out.
 echo "==> cosign verify"
 COSIGN_IDENTITY_REGEX='^https://github\.com/beranku/tricho\.app/\.github/workflows/build-server-images\.yml@refs/heads/(main|dev)$'
 for img in tricho-auth tricho-couchdb; do
-  cosign verify \
-    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    --certificate-identity-regexp "$COSIGN_IDENTITY_REGEX" \
-    "ghcr.io/beranku/${img}:${IMAGE_TAG}" >/dev/null
-  echo "    OK: ghcr.io/beranku/${img}:${IMAGE_TAG}"
+  for attempt in 1 2 3 4 5 6; do
+    if cosign verify \
+        --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+        --certificate-identity-regexp "$COSIGN_IDENTITY_REGEX" \
+        "ghcr.io/beranku/${img}:${IMAGE_TAG}" >/dev/null 2>&1; then
+      echo "    OK: ghcr.io/beranku/${img}:${IMAGE_TAG} (attempt $attempt)"
+      break
+    fi
+    if [ "$attempt" -eq 6 ]; then
+      echo "::error::cosign verify failed for ghcr.io/beranku/${img}:${IMAGE_TAG} after 6 attempts"
+      exit 1
+    fi
+    sleep 10
+  done
 done
 
 # Capture the previous SHA for rollback before we overwrite it.
