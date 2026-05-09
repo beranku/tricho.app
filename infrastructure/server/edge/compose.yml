@@ -1,0 +1,65 @@
+# Edge Traefik — its own compose project on the deploy host.
+#
+# Persistent: stays up across sync stack redeploys. Owns ports 80/443
+# and the Let's Encrypt ACME state (bound from /srv/tricho/edge/acme/).
+#
+# Per-environment sync stacks (tricho-sync-prod, tricho-sync-dev) attach
+# to the `tricho-edge` external network this project creates.
+#
+# Run via: infrastructure/server/edge/up.sh
+
+name: tricho-edge
+
+networks:
+  tricho-edge:
+    external: true
+    name: tricho-edge
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: tricho_edge_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - tricho-edge
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /srv/tricho/edge/acme:/etc/traefik/acme
+      - ./dynamic:/etc/traefik/dynamic:ro
+    command:
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --log.format=json
+      - --accesslog=true
+      - --accesslog.format=json
+      # Redact Authorization + Cookie in access logs. Per the
+      # traefik-edge/server-stack-deploy specs, the edge MUST NOT leak
+      # credentials into the access log.
+      - --accesslog.fields.headers.defaultmode=keep
+      - --accesslog.fields.headers.names.Authorization=drop
+      - --accesslog.fields.headers.names.Cookie=drop
+      - --accesslog.fields.headers.names.Set-Cookie=drop
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=tricho-edge
+      - --providers.file.watch=true
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/etc/traefik/acme/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      # Staging endpoint when TRAEFIK_USE_LE_STAGING=1; default is prod LE.
+      # The conditional flag is appended by edge/up.sh — keeping config out
+      # of compose.yml means we don't need a separate compose for staging.
+    labels:
+      # Edge owns no business routes — every router is per-stack via labels
+      # on the sync project's containers. Just enable Traefik for itself
+      # so the docker provider doesn't surprise.
+      traefik.enable: "false"

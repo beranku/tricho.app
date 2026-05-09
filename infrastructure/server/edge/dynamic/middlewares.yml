@@ -1,0 +1,75 @@
+# Traefik dynamic configuration — file provider.
+#
+# Hot-reloaded by Traefik (no restart) on edits; mounted read-only inside
+# the container at /etc/traefik/dynamic/.
+#
+# Per traefik-edge spec, security headers + per-environment CORS are
+# defined here so the per-stack docker labels only need to reference them
+# by name — drift across stacks is bounded by code review of this file.
+
+http:
+  middlewares:
+
+    # Applied to every server-deploy router. HSTS preload-eligible. Frames
+    # blocked. CSP intentionally loose (`frame-ancestors 'none'`); the
+    # tricho-auth response shape is JSON only — no script execution path
+    # on the sync host.
+    tricho-security:
+      headers:
+        # 2 years; sub-domains; preload-eligible.
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        # Belt + braces against legacy clickjacking.
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        contentSecurityPolicy: "default-src 'none'; frame-ancestors 'none'"
+        # Permissions-Policy (formerly Feature-Policy) — sync host serves
+        # only JSON, no surface for these capabilities anyway.
+        customResponseHeaders:
+          Permissions-Policy: "geolocation=(), microphone=(), camera=(), payment=()"
+
+    # Per-environment CORS. The Allow-Origin is exact (no wildcard) per
+    # the traefik-edge spec's cross-origin requirement. Allow-Credentials
+    # is true so the PWA's credentialed fetch round-trips the cookie.
+    tricho-cors-prod:
+      headers:
+        accessControlAllowOriginList:
+          - "https://tricho.app"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Requested-With
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 600
+        addVaryHeader: true
+
+    tricho-cors-dev:
+      headers:
+        accessControlAllowOriginList:
+          - "https://dev.tricho.app"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Requested-With
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 600
+        addVaryHeader: true
+
+    # Conservative rate limit — well above legitimate per-user fetch
+    # rates, well below abuse. Tune in production if needed.
+    tricho-rate-limit:
+      rateLimit:
+        average: 200
+        period: 1m
+        burst: 400

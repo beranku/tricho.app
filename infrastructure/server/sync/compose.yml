@@ -1,0 +1,197 @@
+# Per-environment sync stack: tricho-auth + couchdb (no PWA — that ships
+# to Cloudflare Pages, see docs/server-deploy.md).
+#
+# Run via infrastructure/server/sync/up.sh, which sets:
+#   COMPOSE_PROJECT_NAME=tricho-sync-${ENVIRONMENT}      e.g. tricho-sync-prod
+#   IMAGE_TAG=sha-<full-sha>                             from the deploy workflow
+#   APP_HOST, APP_ORIGIN, TRAEFIK_ACME_EMAIL, OAuth IDs  from config/<env>/.env
+#   TRICHO_AUTH_CORS_MIDDLEWARE=tricho-cors-prod|tricho-cors-dev
+#
+# Per server-stack-deploy spec:
+#   - NO `name:` fields on volumes/networks (project prefix is the only
+#     isolation primitive). scripts/infrastructure-lint.sh enforces this.
+#   - CouchDB is on `internal` only (private to the project). tricho-auth
+#     is on `tricho-edge` (external) AND `internal`.
+#   - Bind mount CouchDB data to /srv/tricho/${ENVIRONMENT}/couchdb/data
+#     so an accidental `docker volume prune` cannot destroy it.
+#   - Resource limits + cap_drop + security_opt + log rotation
+#     applied to every service.
+
+# COMPOSE_PROJECT_NAME is set by up.sh; this `name:` is a fallback only
+# (compose v2 still requires top-level name when using --project-name on CLI).
+# It is NOT a `name:` on a network/volume — those are forbidden — and the
+# CLI override takes precedence per the compose spec.
+name: tricho-sync
+
+networks:
+  tricho-edge:
+    external: true
+    name: tricho-edge
+  internal: {}
+
+volumes:
+  couchdb-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      # Resolved per environment by up.sh via COMPOSE_PROJECT_NAME indirection.
+      device: /srv/tricho/${ENVIRONMENT}/couchdb/data
+  jwt-shared:
+    # Project-prefixed by Compose. Lives in /var/lib/docker/volumes/ under
+    # the prefix. Holds only the public JWT key — not sensitive on its own.
+
+secrets:
+  couchdb_password:    { file: ./.secrets-runtime/couchdb_password    }
+  cookie_secret:       { file: ./.secrets-runtime/cookie_secret       }
+  google_client_secret:{ file: ./.secrets-runtime/google_client_secret}
+  apple_client_secret: { file: ./.secrets-runtime/apple_client_secret }
+  jwt_private_pem:     { file: ./.secrets-runtime/jwt_private_pem     }
+
+x-deploy-defaults: &deploy-defaults
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  stop_grace_period: 30s
+
+services:
+  couchdb:
+    <<: *deploy-defaults
+    image: ghcr.io/beranku/tricho-couchdb:${IMAGE_TAG}
+    container_name: ${COMPOSE_PROJECT_NAME}_couchdb
+    entrypoint: ["/usr/bin/tini", "--", "/opt/couchdb/tricho-entrypoint.sh"]
+    command: ["/opt/couchdb/bin/couchdb"]
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD_FILE: /run/secrets/couchdb_password
+    secrets:
+      - couchdb_password
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      - jwt-shared:/shared/jwt:ro
+    networks:
+      internal:
+        aliases: [couchdb]
+    depends_on:
+      tricho-auth:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.5"
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5984/_up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      # CouchDB is exposed via tricho-auth's path proxy (entitlement-gated).
+      # The Traefik couch router below points at couchdb's internal alias —
+      # but tricho-auth is the actual proxy and CouchDB has no edge network.
+      # Per server-stack-deploy spec, CouchDB MUST NOT be on tricho-edge.
+      traefik.enable: "false"
+
+  tricho-auth:
+    <<: *deploy-defaults
+    image: ghcr.io/beranku/tricho-auth:${IMAGE_TAG}
+    container_name: ${COMPOSE_PROJECT_NAME}_auth
+    environment:
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_ADMIN_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_ADMIN_PASSWORD_FILE: /run/secrets/couchdb_password
+      TRICHO_AUTH_COOKIE_SECRET_FILE: /run/secrets/cookie_secret
+      GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      APPLE_CLIENT_SECRET_FILE: /run/secrets/apple_client_secret
+      TRICHO_AUTH_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_pem
+      TRICHO_META_DB: ${TRICHO_META_DB:-tricho_meta}
+      PORT: "4545"
+      APP_ORIGIN: ${APP_ORIGIN}
+      TRICHO_AUTH_SHARED_JWT_DIR: /shared/jwt
+      TRICHO_AUTH_DEV_KEY_DIR: /var/lib/tricho-auth
+      # Surface the deploying SHA as a header so the deploy workflow's smoke
+      # gate (server-stack-deploy spec, three-gate DoD #2) can verify the
+      # running image matches what was just deployed.
+      TRICHO_BUILD_SHA: ${IMAGE_TAG}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_ISSUER_URL: ${GOOGLE_ISSUER_URL:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_REDIRECT_URI: ${APPLE_REDIRECT_URI:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      BILLING_ENABLED: ${BILLING_ENABLED:-true}
+      PLAN_PRO_MONTHLY_STRIPE_PRICE_ID: ${PLAN_PRO_MONTHLY_STRIPE_PRICE_ID:-}
+      PLAN_PRO_YEARLY_STRIPE_PRICE_ID: ${PLAN_PRO_YEARLY_STRIPE_PRICE_ID:-}
+      PLAN_MAX_MONTHLY_STRIPE_PRICE_ID: ${PLAN_MAX_MONTHLY_STRIPE_PRICE_ID:-}
+      PLAN_MAX_YEARLY_STRIPE_PRICE_ID: ${PLAN_MAX_YEARLY_STRIPE_PRICE_ID:-}
+    secrets:
+      - couchdb_password
+      - cookie_secret
+      - google_client_secret
+      - apple_client_secret
+      - jwt_private_pem
+    volumes:
+      - jwt-shared:/shared/jwt:rw
+    networks:
+      internal:
+        aliases: [tricho-auth]
+      tricho-edge: {}
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -qO- http://localhost:4545/health >/dev/null 2>&1 || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: tricho-edge
+
+      # /auth/* → tricho-auth
+      traefik.http.routers.auth.rule: Host(`${APP_HOST}`) && PathPrefix(`/auth`)
+      traefik.http.routers.auth.entrypoints: websecure
+      traefik.http.routers.auth.tls: "true"
+      traefik.http.routers.auth.tls.certresolver: le
+      traefik.http.routers.auth.service: auth
+      traefik.http.routers.auth.middlewares: tricho-security@file,${TRICHO_AUTH_CORS_MIDDLEWARE}@file,tricho-rate-limit@file
+      traefik.http.services.auth.loadbalancer.server.port: "4545"
+
+      # /userdb-<hex> and /_replicator → tricho-auth (which proxies to CouchDB
+      # only after JWT + entitlement validation). External traffic NEVER
+      # reaches CouchDB directly — see server-stack-deploy spec.
+      traefik.http.routers.couch.rule: |-
+        Host(`${APP_HOST}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
+      traefik.http.routers.couch.entrypoints: websecure
+      traefik.http.routers.couch.tls: "true"
+      traefik.http.routers.couch.tls.certresolver: le
+      traefik.http.routers.couch.service: auth
+      traefik.http.routers.couch.middlewares: tricho-security@file,${TRICHO_AUTH_CORS_MIDDLEWARE}@file,tricho-rate-limit@file

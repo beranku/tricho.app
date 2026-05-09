@@ -98,10 +98,14 @@ e2e: _check-prereqs ## Run Playwright end-to-end suite against the ci profile st
 	cd app && npx playwright test
 
 .PHONY: secrets-edit
-secrets-edit: ## Edit secrets/$(PROFILE).sops.yaml with sops (wired in section 5)
+secrets-edit: ## Edit secrets/$(PROFILE).sops.yaml with sops (PROFILE=dev|ci|prod|sync-prod|sync-dev)
 	@command -v sops >/dev/null || { echo "sops not installed — see secrets/README.md"; exit 1; }
 	@test -f secrets/$(PROFILE).sops.yaml || { echo "secrets/$(PROFILE).sops.yaml missing — bootstrap in section 5"; exit 1; }
 	sops secrets/$(PROFILE).sops.yaml
+
+.PHONY: infrastructure-lint
+infrastructure-lint: ## Lint server-deploy compose for forbidden `name:` pins (per server-stack-deploy spec)
+	@bash scripts/infrastructure-lint.sh
 
 .PHONY: secrets-rotate-age
 secrets-rotate-age: ## Rewrite every SOPS-encrypted secret with the current .sops.yaml recipient set (wired in section 5)
@@ -139,7 +143,7 @@ _check-prereqs:
 	@$(COMPOSE) version >/dev/null 2>&1 || { echo "'docker compose' subcommand missing"; exit 1; }
 
 .PHONY: _render-secrets
-_render-secrets:
+_render-secrets: ## (advanced) Decrypt SOPS profile to .secrets-runtime/ — accepts PROFILE=dev|ci|prod|sync-prod|sync-dev (default: dev)
 	@set -eu; \
 	profile="$${PROFILE:-dev}"; \
 	mkdir -p $(SECRETS_DIR) && chmod 700 $(SECRETS_DIR); \

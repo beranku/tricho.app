@@ -1,0 +1,21 @@
+# Pinned SHA256 checksums for actions/runner releases.
+# One line per supported (version, architecture) pair.
+#
+# Source: https://github.com/actions/runner/releases — each release page
+# has a "SHA-256 Checksums" expander listing the values below.
+#
+# Update procedure:
+#   1. Bump infrastructure/server/runner-version.txt.
+#   2. Look up the checksum for actions-runner-linux-arm64-<VERSION>.tar.gz
+#      from the matching release page.
+#   3. Add the new line below; do not delete old lines (so emergency
+#      rollback to a previous version remains possible without git churn).
+#
+# Format: <sha256>  actions-runner-linux-arm64-<version>.tar.gz
+#
+# When this file ships with placeholder checksums, the runner installer
+# refuses to proceed until a real value lands here. The first operator
+# who bootstraps a host MUST verify and commit the actual checksum.
+
+# 2.323.0  PLACEHOLDER — replace with sha256 from the v2.323.0 release page
+PLACEHOLDER_REPLACE_BEFORE_BOOTSTRAP  actions-runner-linux-arm64-2.323.0.tar.gz
