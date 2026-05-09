@@ -76,6 +76,61 @@ describe('detectLaunchMode', () => {
   });
 });
 
+describe('detectLaunchMode × dev-only force-pwa bypass', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    window.history.replaceState(null, '', '/');
+  });
+
+  function stubLocation(href: string): void {
+    const parsed = new URL(href);
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...window.location,
+        href: parsed.href,
+        hostname: parsed.hostname,
+        pathname: parsed.pathname,
+        search: parsed.search,
+        hash: parsed.hash,
+      },
+    });
+  }
+
+  it('does NOT activate the bypass on the production hostname even with the flag set', () => {
+    stubLocation('https://tricho.app/app/?tricho-dev-force-pwa-mode=1');
+    localStorage.setItem('tricho-dev-force-pwa-mode', '1');
+    stubMatchMedia(false);
+    stubNavigator({ ua: DESKTOP_UA, standalone: false });
+    expect(detectLaunchMode()).toBe('browser');
+  });
+
+  it('activates the bypass on dev.tricho.app when the URL param is present', () => {
+    stubLocation('https://dev.tricho.app/app/?tricho-dev-force-pwa-mode=1');
+    stubMatchMedia(false);
+    stubNavigator({ ua: DESKTOP_UA, standalone: false });
+    expect(detectLaunchMode()).toBe('pwa');
+    expect(localStorage.getItem('tricho-dev-force-pwa-mode')).toBe('1');
+  });
+
+  it('keeps the bypass active across reloads via localStorage on dev hosts', () => {
+    stubLocation('https://dev.tricho.app/app/');
+    localStorage.setItem('tricho-dev-force-pwa-mode', '1');
+    stubMatchMedia(false);
+    stubNavigator({ ua: DESKTOP_UA, standalone: false });
+    expect(detectLaunchMode()).toBe('pwa');
+  });
+
+  it('also activates on localhost', () => {
+    stubLocation('http://localhost:4321/app/');
+    localStorage.setItem('tricho-dev-force-pwa-mode', '1');
+    stubMatchMedia(false);
+    stubNavigator({ ua: DESKTOP_UA, standalone: false });
+    expect(detectLaunchMode()).toBe('pwa');
+  });
+});
+
 describe('detectBrowser', () => {
   afterEach(() => {
     // Reset UA / standalone to avoid leakage.

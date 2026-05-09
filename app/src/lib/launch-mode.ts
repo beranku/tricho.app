@@ -15,6 +15,12 @@ export type BrowserFamily = 'ios' | 'android' | 'other';
  * (`pwa`) or from a regular browser tab (`browser`).
  *
  * Order of checks:
+ * 0. **Dev-only bypass** — see {@link isDevEnvironment}. When the
+ *    browser is on a dev/preview origin AND the page URL contains
+ *    `?tricho-dev-force-pwa-mode=1` (or the localStorage flag is set
+ *    from a prior visit), this returns `pwa` without an actual install.
+ *    Lets us debug the post-install flow in a regular browser tab. The
+ *    hostname allowlist makes the flag a no-op on `tricho.app` (prod).
  * 1. `display-mode: standalone` — the modern matchMedia query supported
  *    by Android Chrome and iOS Safari ≥ 11.3.
  * 2. `navigator.standalone` — the legacy iOS Safari flag (≤ 11.2). Still
@@ -24,6 +30,41 @@ export type BrowserFamily = 'ios' | 'android' | 'other';
  */
 export function detectLaunchMode(): LaunchMode {
   if (typeof window === 'undefined') return 'browser';
+
+  if (isDevEnvironment()) {
+    // One-shot URL activation: `?tricho-dev-force-pwa-mode=1` flips on the
+    // localStorage flag, then we strip the query param so future reloads
+    // keep the bypass without polluting the URL bar. Each step is in its
+    // own try/catch so a hostile URL or a Safari Private Mode localStorage
+    // throw can't block the localStorage-flag check below.
+    try {
+      const params = new URL(window.location.href).searchParams;
+      if (params.get('tricho-dev-force-pwa-mode') === '1') {
+        window.localStorage?.setItem('tricho-dev-force-pwa-mode', '1');
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('tricho-dev-force-pwa-mode');
+          window.history.replaceState(null, '', url.toString());
+        } catch {
+          // history.replaceState may fail if `window.location` was stubbed
+          // by a test runner; harmless, the flag is already persisted.
+        }
+      }
+    } catch {
+      // URL parsing or localStorage access threw — skip URL activation.
+    }
+    try {
+      if (window.localStorage?.getItem('tricho-dev-force-pwa-mode') === '1') {
+        // Loud-but-not-fatal so the developer can confirm the bypass is active.
+        // eslint-disable-next-line no-console
+        console.warn('[tricho:dev] launch-mode forced to "pwa" via localStorage flag (clear with: localStorage.removeItem("tricho-dev-force-pwa-mode"))');
+        return 'pwa';
+      }
+    } catch {
+      // Safari Private Mode can refuse localStorage; fall through.
+    }
+  }
+
   try {
     if (window.matchMedia?.('(display-mode: standalone)').matches) return 'pwa';
   } catch {
@@ -33,6 +74,22 @@ export function detectLaunchMode(): LaunchMode {
     return 'pwa';
   }
   return 'browser';
+}
+
+/**
+ * Allowlist of hostnames where the dev-only bypass is permitted to fire.
+ * `tricho.app` (production) is intentionally absent — even a malicious URL
+ * with the activation param does nothing on prod.
+ */
+function isDevEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return (
+    host === 'dev.tricho.app' ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.endsWith('.tricho.pages.dev') // CF Pages PR previews
+  );
 }
 
 /**
