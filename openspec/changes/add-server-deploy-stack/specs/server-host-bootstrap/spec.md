@@ -66,23 +66,23 @@ The host MUST organize all persistent server-deploy state under `/srv/tricho/`. 
 - **THEN** no data under `/srv/tricho/**` is deleted
 - **AND** the next `compose up` reuses the existing CouchDB data and ACME state
 
-### Requirement: Self-hosted runner registered with JIT tokens and ephemeral mode
+### Requirement: Self-hosted runner registered with a single-use registration token in ephemeral mode
 
-The bootstrap MUST register the host as a self-hosted GitHub Actions runner using a just-in-time configuration obtained at install time via `POST /repos/beranku/tricho.app/actions/runners/generate-jitconfig` (or the org-level equivalent). The runner MUST run with `--ephemeral` so each job acquires a fresh registration. The runner's label MUST equal the host's fully-qualified DNS name (e.g., `o3.tricho.app`). The script MUST NOT persist a long-lived registration token on disk.
+The bootstrap MUST register the host as a self-hosted GitHub Actions runner using a single-use registration token obtained at install time via `POST /repos/beranku/tricho.app/actions/runners/registration-token` (~1 h TTL). The bootstrap MUST invoke `config.sh --ephemeral --unattended --replace --disableupdate` so the resulting registration is ephemeral (one job per `run.sh` invocation). The runner's label MUST equal the host's fully-qualified DNS name (e.g., `o3.tricho.app`). The script MUST NOT persist the registration token to disk after `config.sh` consumes it; the persistent runner credentials in `/opt/actions-runner/.credentials` are mode `0600` and owned by the dedicated runner user.
 
 #### Scenario: Runner registers with the host's hostname as label
 
-- **GIVEN** the bootstrap script run with a one-shot installation token
+- **GIVEN** the bootstrap script run with `RUNNER_REGISTRATION_TOKEN` set
 - **WHEN** the registration step finishes
 - **THEN** the GitHub repository's runners list shows a runner whose label set includes the host's fully-qualified hostname
-- **AND** no plain-text registration token remains under `/opt/actions-runner/`, `/etc/`, or any history file
+- **AND** no plain-text registration token remains under `/opt/actions-runner/`, `/etc/`, or any shell history file
 
 #### Scenario: Runner exits cleanly after each job
 
 - **GIVEN** the runner is healthy and idle
 - **WHEN** the runner picks up and completes one workflow job
 - **THEN** the runner process exits with status 0
-- **AND** the systemd unit re-spawns the runner with a fresh JIT registration before the next job arrives
+- **AND** systemd respawns `run.sh`, which re-registers ephemerally using the persistent runner credentials (no new registration token needed) before the next job arrives
 - **AND** `/opt/actions-runner/_work/` is wiped or reset so the next job starts on a clean tree
 
 ### Requirement: Hardened systemd unit for the runner

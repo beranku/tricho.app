@@ -56,16 +56,13 @@ rsync -avz --delete \
   infrastructure/server/ \
   ubuntu@$HOST:/tmp/tricho-server/
 
-# 2) Mint a JIT runner registration token (1h TTL, single-use).
-JITCONFIG=$(gh api -X POST \
-  /repos/beranku/tricho.app/actions/runners/generate-jitconfig \
-  -f name="$HOST" \
-  -f labels="[\"$HOST\"]" \
-  -f runner_group_id=1 \
-  --jq .encoded_jit_config)
+# 2) Mint a runner registration token (~1h TTL).
+RUNNER_TOKEN=$(gh api -X POST \
+  /repos/beranku/tricho.app/actions/runners/registration-token \
+  --jq .token)
 
 # 3) Run bootstrap on the host.
-ssh ubuntu@$HOST "sudo RUNNER_JIT_CONFIG='$JITCONFIG' bash /tmp/tricho-server/bootstrap.sh"
+ssh ubuntu@$HOST "sudo RUNNER_REGISTRATION_TOKEN='$RUNNER_TOKEN' bash /tmp/tricho-server/bootstrap.sh"
 ```
 
 Verify:
@@ -298,7 +295,7 @@ ssh ubuntu@$HOST 'systemctl status actions.runner.beranku-tricho.app.*.service'
 ssh ubuntu@$HOST 'sudo journalctl --namespace=ghrunner -u actions.runner.beranku-tricho.app.* -n 200'
 ```
 
-If the runner won't re-register, the JIT token may have expired (1h TTL). Re-mint and re-bootstrap the runner via SSH (the runner-only path of `bootstrap.sh`).
+If `.runner` / `.credentials` files were lost, re-mint a registration token (`gh api -X POST .../actions/runners/registration-token --jq .token`) and re-run `install-runner.sh` with `RUNNER_REGISTRATION_TOKEN=<token>` to re-configure.
 
 ### CouchDB stuck or unhealthy
 

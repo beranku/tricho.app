@@ -5,11 +5,16 @@
 # Idempotent. Re-running upgrades the runner version (if changed) without
 # losing in-flight jobs (the unit drains then restarts).
 #
-# Inputs (env):
-#   - RUNNER_JIT_CONFIG   one-shot JIT configuration blob from
-#       `gh api -X POST /repos/.../actions/runners/generate-jitconfig`.
-#       Required on first run. Subsequent runs read the previously-saved
-#       config from /opt/actions-runner/.runner so this can be empty.
+# Inputs (env, required on first run):
+#   RUNNER_REGISTRATION_TOKEN   one-shot registration token from
+#       `gh api -X POST /repos/beranku/tricho.app/actions/runners/registration-token`
+#       Token TTL is ~1 hour. config.sh consumes it once to provision
+#       persistent runner credentials in /opt/actions-runner/.credentials.
+#       After config.sh succeeds the token is no longer needed for the
+#       lifetime of this runner.
+#
+# Inputs (env, optional):
+#   RUNNER_LABEL                runner label override (default: hostname -f)
 #
 # Reads:
 #   - infrastructure/server/runner-version.txt
@@ -39,10 +44,13 @@ fi
 
 RUNNER_HOME="/opt/actions-runner"
 HOST="$(hostname -f)"
+LABEL="${RUNNER_LABEL:-$HOST}"
+REPO_URL="https://github.com/beranku/tricho.app"
+UNIT_NAME="actions.runner.beranku-tricho.app.${HOST}.service"
 
-# Fetch + verify tarball into a temp dir; only extract if version changed.
+# ── Tarball install / upgrade ───────────────────────────────────────────────
 needs_install=0
-if [ ! -f "$RUNNER_HOME/.runner-version" ] || [ "$(cat "$RUNNER_HOME/.runner-version")" != "$VERSION" ]; then
+if [ ! -f "$RUNNER_HOME/.runner-version" ] || [ "$(cat "$RUNNER_HOME/.runner-version" 2>/dev/null || echo)" != "$VERSION" ]; then
   needs_install=1
 fi
 
@@ -54,37 +62,46 @@ if [ $needs_install -eq 1 ]; then
   curl -fsSL -o "$tmp/$TARBALL" \
     "https://github.com/actions/runner/releases/download/v${VERSION}/${TARBALL}"
   echo "$EXPECTED_SHA  $tmp/$TARBALL" | sha256sum --check --status
-  # If a runner is already running, stop it before extracting; svc.sh handles
-  # this through systemd, but on first install we don't have a unit yet.
-  if systemctl list-unit-files | grep -q '^actions.runner\.'; then
-    systemctl stop 'actions.runner.beranku-tricho.app.*.service' 2>/dev/null || true
+  # If a runner unit is already running, stop it so we can replace files.
+  if systemctl list-unit-files | grep -q "^${UNIT_NAME}"; then
+    systemctl stop "$UNIT_NAME" 2>/dev/null || true
   fi
   tar -xzf "$tmp/$TARBALL" -C "$RUNNER_HOME"
   chown -R ghrunner:ghrunner "$RUNNER_HOME"
   echo "$VERSION" > "$RUNNER_HOME/.runner-version"
 fi
 
-# Configure the runner if not already configured.
+# ── Configure (one-shot) ────────────────────────────────────────────────────
+# config.sh exchanges the registration token for persistent runner credentials
+# (.credentials, .runner). After this step the registration token is no
+# longer needed and is NOT persisted to disk by us.
 if [ ! -f "$RUNNER_HOME/.runner" ]; then
-  if [ -z "${RUNNER_JIT_CONFIG:-}" ]; then
-    echo "first-time install requires RUNNER_JIT_CONFIG (one-shot JIT blob from gh api)" >&2
-    echo "fix: see docs/server-deploy.md §First-run host bootstrap" >&2
+  if [ -z "${RUNNER_REGISTRATION_TOKEN:-}" ]; then
+    echo "first-time install requires RUNNER_REGISTRATION_TOKEN" >&2
+    echo "mint one with:" >&2
+    echo "  gh api -X POST /repos/beranku/tricho.app/actions/runners/registration-token --jq .token" >&2
+    echo "(token has ~1h TTL; config.sh consumes it once)" >&2
     exit 1
   fi
-  echo "==> registering runner with JIT config"
-  # `runsvc.sh` is what GitHub's svc.sh starts; passing --jitconfig directly
-  # avoids any persisted long-lived registration token.
-  sudo -u ghrunner -- "$RUNNER_HOME/run.sh" --jitconfig "$RUNNER_JIT_CONFIG" --once &
-  bootstrap_pid=$!
-  # The first registered run exits after one job; that's the registration.
-  # We don't want to actually wait for a job — kill after registration finishes.
-  # Instead, we use config.sh in a separate path:
-  kill "$bootstrap_pid" 2>/dev/null || true
-  wait "$bootstrap_pid" 2>/dev/null || true
+  echo "==> registering runner '$LABEL' against $REPO_URL"
+  sudo -u ghrunner -- "$RUNNER_HOME/config.sh" \
+    --url "$REPO_URL" \
+    --token "$RUNNER_REGISTRATION_TOKEN" \
+    --name "$HOST" \
+    --labels "$LABEL" \
+    --runnergroup default \
+    --work _work \
+    --ephemeral \
+    --unattended \
+    --replace \
+    --disableupdate
+  unset RUNNER_REGISTRATION_TOKEN
 fi
 
-# Install hardened systemd unit (replace any default svc.sh-generated one).
-unit_path="/etc/systemd/system/actions.runner.beranku-tricho.app.${HOST}.service"
+# ── Hardened systemd unit ───────────────────────────────────────────────────
+# Replace any default unit svc.sh would have written. ExecStart calls run.sh
+# without --ephemeral (config.sh already persisted that flag).
+unit_path="/etc/systemd/system/${UNIT_NAME}"
 new_unit="[Unit]
 Description=GitHub Actions runner (${HOST})
 After=network-online.target docker.service
@@ -96,7 +113,7 @@ Type=simple
 User=ghrunner
 Group=ghrunner
 WorkingDirectory=${RUNNER_HOME}
-ExecStart=${RUNNER_HOME}/run.sh --ephemeral --disableupdate
+ExecStart=${RUNNER_HOME}/run.sh
 Restart=always
 RestartSec=5
 TimeoutStopSec=5min
@@ -128,16 +145,14 @@ if [ "$current_unit" != "$new_unit" ]; then
   echo "==> writing hardened systemd unit at $unit_path"
   printf '%s' "$new_unit" > "$unit_path"
   systemctl daemon-reload
-  systemctl enable "actions.runner.beranku-tricho.app.${HOST}.service" >/dev/null
+  systemctl enable "$UNIT_NAME" >/dev/null
 fi
 
-# (Re)start the runner unit. If it's already running an --ephemeral run, the
-# unit's Restart=always will respawn after the current job ends.
-if ! systemctl is-active --quiet "actions.runner.beranku-tricho.app.${HOST}.service"; then
-  systemctl start "actions.runner.beranku-tricho.app.${HOST}.service"
+if ! systemctl is-active --quiet "$UNIT_NAME"; then
+  systemctl start "$UNIT_NAME"
 fi
 
 echo "==> install-runner.sh OK"
 echo "    runner version: $VERSION"
-echo "    unit:           actions.runner.beranku-tricho.app.${HOST}.service"
-echo "    label:          $HOST"
+echo "    unit:           $UNIT_NAME"
+echo "    label:          $LABEL"
