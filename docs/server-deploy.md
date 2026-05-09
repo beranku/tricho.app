@@ -219,31 +219,47 @@ Capacity outgrows one host, or you want isolation between dev and prod, or a war
 
 ### Off-site target
 
-Pick one — the runbook supports both:
+Pick one. Both are supported by the same scripts (restic abstracts the backend behind `RESTIC_REPOSITORY`):
 
-- **Backblaze B2** — pay-per-GB, no minimum, restic-friendly. Cheapest for small data.
-- **rsync.net** — flat fee, restic on a special low-cost plan. Already used by some operators.
+- **Backblaze B2** — pay-per-GB, no minimum, restic-friendly. Cheapest for small data. Provision a bucket via the B2 console; create an application key scoped to that bucket.
+- **rsync.net** — flat-fee SSH/SFTP storage with a restic-friendly plan. Provision an account; install your `~/.ssh/id_rsa.pub` into the rsync.net key store.
 
-Provision the bucket / account out-of-band. Record credentials on the host:
+The deploy host's installer takes the choice as env vars and writes a `0600`-mode `/etc/tricho/restic-creds.env`. Run it once after host bootstrap:
 
 ```bash
-ssh ubuntu@$HOST 'sudo install -d -m 0700 /etc/tricho && sudo $EDITOR /etc/tricho/restic-creds.env'
-# B2 example:
-#   B2_ACCOUNT_ID=...
-#   B2_ACCOUNT_KEY=...
-#   RESTIC_REPOSITORY=b2:tricho-backup:o3
-# rsync.net example:
-#   RESTIC_REPOSITORY=sftp:tricho@xxx.rsync.net:tricho-backup
+# B2:
+ssh ubuntu@$HOST "sudo \
+  RESTIC_REPOSITORY=b2:tricho-backup:o3 \
+  B2_ACCOUNT_ID=... \
+  B2_ACCOUNT_KEY=... \
+  bash /tmp/tricho-bootstrap/infrastructure/server/backup/install-backup.sh"
+
+# OR rsync.net:
+ssh ubuntu@$HOST "sudo \
+  RESTIC_REPOSITORY=sftp:user@xxx.rsync.net:tricho-backup \
+  bash /tmp/tricho-bootstrap/infrastructure/server/backup/install-backup.sh"
 ```
 
-### Restic password
+The installer:
+1. Generates a 32-byte restic password if `/etc/tricho/restic.pw` doesn't exist (and prints it to stderr exactly once — copy into your password manager NOW).
+2. Initializes the restic repository if empty.
+3. Installs `/etc/cron.daily/tricho-backup` and `/etc/cron.monthly/tricho-restore-drill`.
+4. Wires `/etc/logrotate.d/tricho-backup` for the log files.
+5. Dry-runs the daily backup once to fail loudly on misconfigured creds.
 
+### Restic password recovery
+
+The restic password lives only at `/etc/tricho/restic.pw` (mode `0600`, root-only) and in the operator's password manager. **There is no provider-side recovery path.** Restic's encryption is client-side; the off-site provider sees only ciphertext.
+
+If the password is lost AND the host is intact: read it back from `$HOST:/etc/tricho/restic.pw` and re-store in the password manager. If both are lost: existing snapshots are unrecoverable; rotate to a fresh repository (run `install-backup.sh` again with no preserved state) and accept the data-loss window from the most recent successful restore drill.
+
+To rotate the password proactively:
 ```bash
-ssh ubuntu@$HOST 'sudo bash -c "openssl rand -hex 32 > /etc/tricho/restic.pw && chmod 0600 /etc/tricho/restic.pw"'
-ssh ubuntu@$HOST 'sudo cat /etc/tricho/restic.pw'
-# COPY this value into your password manager. Losing it loses the backups.
-
-ssh ubuntu@$HOST 'sudo bash -c "set -a; . /etc/tricho/restic-creds.env; restic --password-file /etc/tricho/restic.pw init"'
+ssh ubuntu@$HOST "sudo bash -c '
+  set -a; . /etc/tricho/restic-creds.env; set +a
+  restic key add --new-password-file <(openssl rand -hex 32)  # add new
+  # Then update /etc/tricho/restic.pw and remove the old key id.
+'"
 ```
 
 ### Backup sensitivity
@@ -252,7 +268,7 @@ ssh ubuntu@$HOST 'sudo bash -c "set -a; . /etc/tricho/restic-creds.env; restic -
 
 ### Daily snapshot + retention
 
-The bootstrap installs `/etc/cron.daily/tricho-backup`. Verify the next-day snapshot:
+`install-backup.sh` installs `/etc/cron.daily/tricho-backup` (sourced from `infrastructure/server/backup/tricho-backup.sh`). Verify the next-day snapshot:
 
 ```bash
 ssh ubuntu@$HOST 'sudo bash -c "set -a; . /etc/tricho/restic-creds.env; restic --password-file /etc/tricho/restic.pw snapshots --latest 5"'
@@ -262,7 +278,9 @@ Retention policy: 30 daily, 12 monthly, 2 yearly snapshots (`forget --keep-daily
 
 ### Monthly restore drill
 
-`/etc/cron.monthly/tricho-restore-drill` validates restorability into a throwaway `tricho-restoretest` compose project. Failure paths the operator via the existing notification channel (email or Telegram). Run it manually once after install to confirm green-path:
+`install-backup.sh` also installs `/etc/cron.monthly/tricho-restore-drill` (sourced from `infrastructure/server/backup/tricho-restore-drill.sh`). It spins up a throwaway `COMPOSE_PROJECT_NAME=tricho-restoretest` stack from `infrastructure/server/sync/compose.yml`, restores the most recent prod snapshot into `/srv/tricho/restoretest/couchdb/data`, validates `_up` + `_all_dbs`, then tears down (data path is wiped on every run — no leftovers under `/srv/tricho/restoretest/`).
+
+Failure paths via cron's MAILTO until the operator wires a Telegram/email notifier. Run it manually once after install to confirm green-path:
 
 ```bash
 ssh ubuntu@$HOST 'sudo /etc/cron.monthly/tricho-restore-drill'
