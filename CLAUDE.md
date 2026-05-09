@@ -119,6 +119,7 @@ Full system: `prototypes/ui-prototype/tricho-north-star.md` and `openspec/specs/
 - `docs/architecture.md` — current-state architecture: surfaces, modules, flows, ZK properties.
 - `docs/developer-guide.md` — local setup, day-to-day flow, IDE, code conventions.
 - `docs/build-and-deploy.md` — build pipeline, promote workflow, rollback, versioning.
+- `docs/server-deploy.md` — server-side stack runbook (CouchDB + tricho-auth on a self-hosted Ubuntu host, GitOps deploy via self-hosted runner).
 - `docs/testing.md` — six-tier pyramid, per-tier commands, speed budgets.
 - `docs/voice-czech.md` — Czech voice, grammar, vocabulary.
 - `docs/secrets.md` + `secrets/README.md` — SOPS + age workflow.

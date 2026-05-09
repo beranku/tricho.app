@@ -35,3 +35,23 @@ creation_rules:
           # Example:
           #   - age1prod...          # production host
           #   - age1breakglass...    # password-manager-stored recovery
+
+  # Server-deploy sync profiles. One file per environment hosted on the
+  # deploy server (see docs/server-deploy.md). Recipients:
+  #   - the operator's laptop key (so render works locally too)
+  #   - the per-server age key on the host that runs the deploy
+  #     (private at /etc/sops/age/<hostname>.key, mode 0600, root-only)
+  # When decommissioning a host, remove its public key here AND run
+  # `make secrets-rotate-age` so the decommissioned key cannot decrypt
+  # past or future revisions.
+  - path_regex: secrets/sync-prod\.sops\.yaml$
+    key_groups:
+      - age:
+          - age122p0m0nhdlz0ehagm8npdp4lhafzlezpm9xxsuvm0j0prx0cypqq0k32g7  # honza (laptop)
+          # - age1o3...            # o3.tricho.app — added after `infrastructure/server/bootstrap.sh`
+
+  - path_regex: secrets/sync-dev\.sops\.yaml$
+    key_groups:
+      - age:
+          - age122p0m0nhdlz0ehagm8npdp4lhafzlezpm9xxsuvm0j0prx0cypqq0k32g7  # honza (laptop)
+          # - age1o3...            # o3.tricho.app

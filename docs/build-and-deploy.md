@@ -4,6 +4,15 @@ How tricho.app gets from a local checkout to `tricho.app`. Behavioural
 specs live in `openspec/specs/cloudflare-pages-deploy/`,
 `release-promotion/`, and `app-release-versioning/`.
 
+This document covers the **frontend** (PWA + marketing site, Cloudflare
+Pages). For the **server-side stack** — `tricho-auth` proxy, CouchDB,
+edge Traefik on a self-hosted Ubuntu host — see
+[`docs/server-deploy.md`](./server-deploy.md). The two surfaces deploy
+independently: pushing to `dev` ships the frontend dev alias to
+`dev.tricho.app` AND auto-deploys the server-side dev stack to
+`sync.dev.tricho.app`; production server deploys are manual-only via
+`workflow_dispatch`.
+
 ## Build pipeline
 
 ```
