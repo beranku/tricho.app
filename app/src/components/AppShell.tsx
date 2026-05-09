@@ -708,6 +708,24 @@ export function AppShell(): JSX.Element {
     return wrapped;
   }, [dek, vaultId, db]);
 
+  // useCallback MUST be declared before any early `return` below — otherwise
+  // the previous render (which returned early on view='welcome') and the
+  // subsequent render (which reaches the bottom on view='unlocked') call a
+  // different number of hooks. React then throws #310 "Rendered more hooks
+  // than during the previous render", the tree unmounts, and the user sees
+  // a blank/black screen — first reported when the wizard advanced from
+  // 'welcome' to 'unlocked' on macOS PWA.
+  const onLogout = useCallback(async () => {
+    await wipeSession({ tokenStore });
+    setDek(null);
+    setVaultId(null);
+    setDb(null);
+    setTokenStore(null);
+    setPendingOAuth(null);
+    setServerVaultState(null);
+    setView('welcome');
+  }, [tokenStore]);
+
   // ── Rendering ─────────────────────────────────────────────────────────
   if (view === 'loading') {
     return <div style={{ padding: 32 }}>Loading keystore…</div>;
@@ -867,17 +885,6 @@ export function AppShell(): JSX.Element {
       />
     );
   }
-
-  const onLogout = useCallback(async () => {
-    await wipeSession({ tokenStore });
-    setDek(null);
-    setVaultId(null);
-    setDb(null);
-    setTokenStore(null);
-    setPendingOAuth(null);
-    setServerVaultState(null);
-    setView('welcome');
-  }, [tokenStore]);
 
   return (
     <UnlockedShell
