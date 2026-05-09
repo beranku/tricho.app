@@ -13,9 +13,9 @@ import { BackupExportScreen } from './BackupExportScreen';
 import { RestoreFromZipScreen } from './RestoreFromZipScreen';
 import { loadSubscription } from '../lib/store/subscription';
 
-// Vite exposes env vars prefixed with VITE_; we treat the literal "true" as
-// the only truthy value so the default-empty-string falls back to disabled.
-const BILLING_UI_ENABLED = (import.meta.env?.VITE_BILLING_ENABLED as string | undefined) === 'true';
+// Astro 5 envPrefix is PUBLIC_ for client-bundled env vars. We treat the
+// literal "true" as the only truthy value; default-undefined → disabled.
+const BILLING_UI_ENABLED = (import.meta.env.PUBLIC_BILLING_ENABLED as string | undefined) === 'true';
 import { ChromeButtons } from './islands/ChromeButtons';
 import { BottomSheet } from './islands/BottomSheet';
 import { MenuSheet, FabAddSheet } from './islands/MenuSheet';

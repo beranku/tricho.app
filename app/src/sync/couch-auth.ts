@@ -7,7 +7,8 @@
  * DB URL derived from the hex-encoded username.
  */
 
-const COUCHDB_URL = (import.meta.env?.VITE_COUCHDB_URL as string | undefined) ?? 'http://localhost:5984';
+// Astro 5 envPrefix is PUBLIC_ — must use PUBLIC_* for client-bundled vars.
+const COUCHDB_URL = (import.meta.env.PUBLIC_COUCHDB_URL as string | undefined) ?? 'http://localhost:5984';
 
 export function getCouchdbUrl(): string {
   return COUCHDB_URL;

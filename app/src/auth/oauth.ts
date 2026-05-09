@@ -8,7 +8,10 @@
  * kicking off the redirects and reading the result on re-entry.
  */
 
-const AUTH_ORIGIN = (import.meta.env?.VITE_AUTH_PROXY_URL as string | undefined) ?? 'http://localhost:4545';
+// Astro 5's envPrefix is `PUBLIC_` (not Vite's default `VITE_`). Client-
+// bundled env vars MUST start with PUBLIC_ to be statically replaced at
+// build time; anything else resolves to undefined at runtime.
+const AUTH_ORIGIN = (import.meta.env.PUBLIC_AUTH_PROXY_URL as string | undefined) ?? 'http://localhost:4545';
 const SESSION_STORAGE_KEY = 'tricho-oauth-result';
 export const AUTH_COMPLETE_HASH = '#tricho-auth-complete';
 
