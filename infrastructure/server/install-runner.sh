@@ -144,6 +144,14 @@ if [ ! -f "$RUNNER_HOME/.runner" ]; then
   # Ensure the unit isn't actively trying (and failing) to run an
   # unconfigured agent while we're configuring.
   systemctl stop "$UNIT_NAME" 2>/dev/null || true
+  # Persistent runner (NOT --ephemeral). The --ephemeral pattern requires
+  # an external orchestrator (e.g. Actions Runner Controller) to mint a
+  # fresh JIT config per job — systemd's Restart=always alone restarts the
+  # runner with no config and infinite-loops "Not configured". Persistent
+  # mode keeps the same registration alive across many jobs; the systemd
+  # hardening (User=ghrunner, ProtectSystem=strict, etc.) preserves the
+  # core security posture. See openspec/specs/server-host-bootstrap/ for
+  # the full rationale.
   sudo -u ghrunner -- "$RUNNER_HOME/config.sh" \
     --url "$REPO_URL" \
     --token "$RUNNER_REGISTRATION_TOKEN" \
@@ -151,7 +159,6 @@ if [ ! -f "$RUNNER_HOME/.runner" ]; then
     --labels "$LABEL" \
     --runnergroup default \
     --work _work \
-    --ephemeral \
     --unattended \
     --replace \
     --disableupdate

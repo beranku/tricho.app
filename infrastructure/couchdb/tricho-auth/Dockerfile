@@ -1,9 +1,11 @@
 FROM node:22-alpine
 WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund
-COPY server.mjs meta.mjs routes.mjs jwt.mjs ./
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+COPY server.mjs meta.mjs routes.mjs jwt.mjs env-guard.mjs ./
 COPY providers ./providers
+COPY billing ./billing
+COPY scripts ./scripts
 # Pre-create the shared-JWT mountpoint and the dev key dir with the `node`
 # user owning them. Docker's named-volume init preserves this ownership on
 # first creation, so we can drop to an unprivileged user while still writing

@@ -66,9 +66,11 @@ The host MUST organize all persistent server-deploy state under `/srv/tricho/`. 
 - **THEN** no data under `/srv/tricho/**` is deleted
 - **AND** the next `compose up` reuses the existing CouchDB data and ACME state
 
-### Requirement: Self-hosted runner registered with a single-use registration token in ephemeral mode
+### Requirement: Self-hosted runner registered with a single-use registration token, persistent across restarts
 
-The bootstrap MUST register the host as a self-hosted GitHub Actions runner using a single-use registration token obtained at install time via `POST /repos/beranku/tricho.app/actions/runners/registration-token` (~1 h TTL). The bootstrap MUST invoke `config.sh --ephemeral --unattended --replace --disableupdate` so the resulting registration is ephemeral (one job per `run.sh` invocation). The runner's label MUST equal the host's fully-qualified DNS name (e.g., `o3.tricho.app`). The script MUST NOT persist the registration token to disk after `config.sh` consumes it; the persistent runner credentials in `/opt/actions-runner/.credentials` are mode `0600` and owned by the dedicated runner user.
+The bootstrap MUST register the host as a self-hosted GitHub Actions runner using a single-use registration token obtained at install time via `POST /repos/beranku/tricho.app/actions/runners/registration-token` (~1 h TTL). The bootstrap MUST invoke `config.sh --unattended --replace --disableupdate` (without `--ephemeral`) so the registration persists across systemd restarts. The runner's label MUST equal the host's fully-qualified DNS name (e.g., `o3.tricho.app`). The script MUST NOT persist the registration token to disk after `config.sh` consumes it; the persistent runner credentials in `/opt/actions-runner/.credentials` are mode `0600` and owned by the dedicated runner user.
+
+`--ephemeral` is intentionally NOT used in v1: it requires an external orchestrator (Actions Runner Controller or equivalent) to mint a fresh JIT config per job, since `--ephemeral` causes the runner to deregister after one job and `Restart=always` would then loop on "Not configured". The security trade-off is accepted: the systemd hardening (`User=ghrunner`, `ProtectSystem=strict`, narrow `ReadWritePaths`, capability drops, `NoNewPrivileges`) preserves the core post-RCE confinement even without per-job re-registration.
 
 #### Scenario: Runner registers with the host's hostname as label
 
@@ -77,13 +79,20 @@ The bootstrap MUST register the host as a self-hosted GitHub Actions runner usin
 - **THEN** the GitHub repository's runners list shows a runner whose label set includes the host's fully-qualified hostname
 - **AND** no plain-text registration token remains under `/opt/actions-runner/`, `/etc/`, or any shell history file
 
-#### Scenario: Runner exits cleanly after each job
+#### Scenario: Runner survives systemd restart and picks up the next job
 
-- **GIVEN** the runner is healthy and idle
-- **WHEN** the runner picks up and completes one workflow job
-- **THEN** the runner process exits with status 0
-- **AND** systemd respawns `run.sh`, which re-registers ephemerally using the persistent runner credentials (no new registration token needed) before the next job arrives
-- **AND** `/opt/actions-runner/_work/` is wiped or reset so the next job starts on a clean tree
+- **GIVEN** the runner is healthy and has just completed one job
+- **WHEN** systemd restarts `run.sh` (e.g. after a job finishes or after a reboot)
+- **THEN** the runner re-attaches to the same registration via `.runner` and `.credentials` (no new token needed)
+- **AND** the runner's status returns to `online` in GitHub
+- **AND** the next queued job for label `o3.tricho.app` is picked up within seconds
+
+#### Scenario: `_work/` is wiped between jobs to prevent cross-job leakage
+
+- **GIVEN** a completed job that wrote to `/opt/actions-runner/_work/<repo>/`
+- **WHEN** the next job for this runner starts
+- **THEN** the runner agent re-clones the repo into `/opt/actions-runner/_work/<repo>/` (default behavior) so any working-tree-resident artifacts from the prior job are overwritten
+- **AND** `/opt/actions-runner/_diag/` log rotation prevents unbounded growth (host-side `logrotate` covers this)
 
 ### Requirement: Hardened systemd unit for the runner
 
