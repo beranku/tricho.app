@@ -165,25 +165,18 @@ async function hasRemoteVault(meta, couchdbUsername) {
   return res.status === 200;
 }
 
-// Callback HTML: inlines result JSON, stores in sessionStorage, redirects.
-function buildCallbackHtml(result, appOrigin) {
-  const json = JSON.stringify(result).replace(/</g, '\\u003c');
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Signing you in…</title></head>
-<body style="font-family:-apple-system,system-ui,sans-serif;padding:40px;">
-<p>Completing sign in…</p>
-<script id="tricho-auth-result" type="application/json">${json}</script>
-<script>
-try {
-  var data = JSON.parse(document.getElementById('tricho-auth-result').textContent);
-  sessionStorage.setItem('tricho-oauth-result', JSON.stringify(data));
-  var target = ${JSON.stringify(appOrigin)} + '/#tricho-auth-complete';
-  location.replace(target);
-} catch (e) {
-  document.body.textContent = 'Sign-in completed but redirect failed. You can close this tab.';
-}
-</script>
-</body></html>`;
+// Build the cross-origin redirect target carrying the OAuth result back to
+// the PWA. Must work cross-origin (PWA on tricho.app, callback on
+// sync.tricho.app), so we encode the result into the URL fragment — browsers
+// preserve fragments through 302 redirects, and fragments are not sent to
+// servers (no leak in access logs) nor in the Referer header. Base64url
+// because fragments can contain non-ASCII otherwise URL-encoded ad nauseam.
+//
+// The same approach is used for both Google and Apple callbacks. Apple's
+// form_post mode lands here too because the start handler converted it.
+function buildAuthCompleteRedirect(result, appOrigin) {
+  const encoded = Buffer.from(JSON.stringify(result), 'utf8').toString('base64url');
+  return `${appOrigin}/app/#tricho-auth-complete=${encoded}`;
 }
 
 export function createRouter({ meta, signer, env, entitlements = null }) {
@@ -319,13 +312,13 @@ export function createRouter({ meta, signer, env, entitlements = null }) {
       tokens: tokensOut,
     };
 
-    const htmlBody = buildCallbackHtml(body, APP_ORIGIN);
-    res.writeHead(200, {
+    const target = buildAuthCompleteRedirect(body, APP_ORIGIN);
+    res.writeHead(302, {
       ...CORS_HEADERS,
-      'content-type': 'text/html; charset=utf-8',
       'set-cookie': extraCookies,
+      location: target,
     });
-    res.end(htmlBody);
+    res.end();
   }
 
   return async (req, res) => {

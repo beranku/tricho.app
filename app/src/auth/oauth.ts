@@ -12,8 +12,13 @@
 // bundled env vars MUST start with PUBLIC_ to be statically replaced at
 // build time; anything else resolves to undefined at runtime.
 const AUTH_ORIGIN = (import.meta.env.PUBLIC_AUTH_PROXY_URL as string | undefined) ?? 'http://localhost:4545';
-const SESSION_STORAGE_KEY = 'tricho-oauth-result';
+// Cross-origin OAuth completion: tricho-auth's callback 302's the user to
+// `${APP_ORIGIN}/app/#tricho-auth-complete=<base64url(JSON)>`. The fragment
+// crosses origins through the redirect (browser preserves fragments) and
+// stays client-side (not sent to servers, not in Referer). We parse it on
+// PWA mount and immediately replaceState the hash away.
 export const AUTH_COMPLETE_HASH = '#tricho-auth-complete';
+const AUTH_COMPLETE_PREFIX = `${AUTH_COMPLETE_HASH}=`;
 
 export type OAuthProvider = 'google' | 'apple';
 
@@ -99,28 +104,41 @@ export function startProviderLogin(provider: OAuthProvider): void {
 }
 
 /**
- * Reads the result the callback HTML stashed in sessionStorage. Returns null
- * if no pending OAuth completion is present. Idempotent: calling it twice
- * gives null on the second call.
+ * Reads the OAuth result the callback redirected back to us with. The
+ * result is base64url-encoded JSON in `window.location.hash`, of the form
+ * `#tricho-auth-complete=<base64url(JSON)>`. Returns null if no pending
+ * OAuth completion is present in the URL. Idempotent: calling it twice
+ * after `clearAuthCompleteHash` gives null on the second call.
  */
 export function consumePendingOAuthResult(): OAuthResult | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    return JSON.parse(raw) as OAuthResult;
+    if (typeof window === 'undefined') return null;
+    const hash = window.location.hash;
+    if (!hash.startsWith(AUTH_COMPLETE_PREFIX)) return null;
+    const encoded = hash.slice(AUTH_COMPLETE_PREFIX.length);
+    if (!encoded) return null;
+    // base64url → standard base64 → utf-8 string → JSON.
+    const standard = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = standard + '='.repeat((4 - (standard.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const json = new TextDecoder().decode(bytes);
+    return JSON.parse(json) as OAuthResult;
   } catch {
     return null;
   }
 }
 
 /**
- * If the current URL carries the auth-complete hash, remove it — call this
- * right after reading the pending result so the hash doesn't linger in
- * browser history.
+ * Strip the auth-complete payload from `window.location.hash` once
+ * `consumePendingOAuthResult` has read it, so the access token doesn't
+ * linger in browser history or page-share dialogs. Matches both the bare
+ * `#tricho-auth-complete` flag (legacy) and the fragment-with-payload form.
  */
 export function clearAuthCompleteHash(): void {
-  if (window.location.hash === AUTH_COMPLETE_HASH) {
+  if (typeof window === 'undefined') return;
+  if (window.location.hash.startsWith(AUTH_COMPLETE_HASH)) {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 }

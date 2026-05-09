@@ -12,7 +12,17 @@ import {
 } from './oauth';
 import { fakeOAuthResult } from '../test/fixtures/oauth';
 
-const SESSION_KEY = 'tricho-oauth-result';
+function encodeAuthCompleteHash(payload: unknown): string {
+  // Mirror tricho-auth's buildAuthCompleteRedirect: base64url-encoded JSON
+  // in #tricho-auth-complete=...
+  const json = JSON.stringify(payload);
+  // btoa works on binary strings; encode UTF-8 first.
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  const b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `#tricho-auth-complete=${b64}`;
+}
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -71,28 +81,34 @@ describe('consumePendingOAuthResult', () => {
     expect(consumePendingOAuthResult()).toBeNull();
   });
 
-  it('returns the stashed result and removes it on consume', () => {
+  it('returns the result encoded in #tricho-auth-complete=<base64url(json)>', () => {
     const payload = fakeOAuthResult({ email: 'consume@tricho.test' });
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    window.history.replaceState(null, '', '/' + encodeAuthCompleteHash(payload));
 
     const result = consumePendingOAuthResult();
     expect(result?.email).toBe('consume@tricho.test');
-    // Idempotent: second call returns null.
+    // Idempotent: a second call after clearAuthCompleteHash returns null.
+    clearAuthCompleteHash();
     expect(consumePendingOAuthResult()).toBeNull();
-    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
   });
 
-  it('returns null on malformed JSON without throwing', () => {
-    sessionStorage.setItem(SESSION_KEY, '}{not-json');
+  it('returns null on malformed base64 payload without throwing', () => {
+    window.history.replaceState(null, '', '/#tricho-auth-complete=}{not-base64{}');
     expect(() => consumePendingOAuthResult()).not.toThrow();
     expect(consumePendingOAuthResult()).toBeNull();
   });
 });
 
 describe('clearAuthCompleteHash', () => {
-  it('removes the hash when it matches', () => {
+  it('removes the bare hash when it matches', () => {
     window.history.replaceState(null, '', `/${AUTH_COMPLETE_HASH}`);
     expect(window.location.hash).toBe(AUTH_COMPLETE_HASH);
+    clearAuthCompleteHash();
+    expect(window.location.hash).toBe('');
+  });
+
+  it('also removes the hash when it carries a payload (#tricho-auth-complete=...)', () => {
+    window.history.replaceState(null, '', '/#tricho-auth-complete=abc');
     clearAuthCompleteHash();
     expect(window.location.hash).toBe('');
   });
