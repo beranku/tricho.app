@@ -71,34 +71,10 @@ if [ $needs_install -eq 1 ]; then
   echo "$VERSION" > "$RUNNER_HOME/.runner-version"
 fi
 
-# ── Configure (one-shot) ────────────────────────────────────────────────────
-# config.sh exchanges the registration token for persistent runner credentials
-# (.credentials, .runner). After this step the registration token is no
-# longer needed and is NOT persisted to disk by us.
-if [ ! -f "$RUNNER_HOME/.runner" ]; then
-  if [ -z "${RUNNER_REGISTRATION_TOKEN:-}" ]; then
-    echo "first-time install requires RUNNER_REGISTRATION_TOKEN" >&2
-    echo "mint one with:" >&2
-    echo "  gh api -X POST /repos/beranku/tricho.app/actions/runners/registration-token --jq .token" >&2
-    echo "(token has ~1h TTL; config.sh consumes it once)" >&2
-    exit 1
-  fi
-  echo "==> registering runner '$LABEL' against $REPO_URL"
-  sudo -u ghrunner -- "$RUNNER_HOME/config.sh" \
-    --url "$REPO_URL" \
-    --token "$RUNNER_REGISTRATION_TOKEN" \
-    --name "$HOST" \
-    --labels "$LABEL" \
-    --runnergroup default \
-    --work _work \
-    --ephemeral \
-    --unattended \
-    --replace \
-    --disableupdate
-  unset RUNNER_REGISTRATION_TOKEN
-fi
-
 # ── Hardened systemd unit ───────────────────────────────────────────────────
+# Authored BEFORE the registration step so that re-running the script to
+# upgrade the unit (e.g. after editing the hardening overlay) is a no-op
+# even when no registration token is provided.
 # Replace any default unit svc.sh would have written. ExecStart calls run.sh
 # without --ephemeral (config.sh already persisted that flag).
 unit_path="/etc/systemd/system/${UNIT_NAME}"
@@ -113,6 +89,10 @@ Type=simple
 User=ghrunner
 Group=ghrunner
 WorkingDirectory=${RUNNER_HOME}
+# Redirect HOME from /var/lib/ghrunner (which ProtectSystem=strict makes
+# read-only) to the runner's working tree. Tools like \`docker login\` and
+# \`gh auth\` write to \$HOME/.docker, \$HOME/.config/gh, etc.
+Environment=HOME=${RUNNER_HOME}
 ExecStart=${RUNNER_HOME}/run.sh
 Restart=always
 RestartSec=5
@@ -146,6 +126,36 @@ if [ "$current_unit" != "$new_unit" ]; then
   printf '%s' "$new_unit" > "$unit_path"
   systemctl daemon-reload
   systemctl enable "$UNIT_NAME" >/dev/null
+fi
+
+# ── Configure (one-shot) ────────────────────────────────────────────────────
+# config.sh exchanges the registration token for persistent runner credentials
+# (.credentials, .runner). After this step the registration token is no
+# longer needed and is NOT persisted to disk by us.
+if [ ! -f "$RUNNER_HOME/.runner" ]; then
+  if [ -z "${RUNNER_REGISTRATION_TOKEN:-}" ]; then
+    echo "==> systemd unit installed; runner not yet configured"
+    echo "    re-run with RUNNER_REGISTRATION_TOKEN=... to register, e.g.:"
+    echo "      gh api -X POST /repos/beranku/tricho.app/actions/runners/registration-token --jq .token"
+    echo "    (token has ~1h TTL; config.sh consumes it once)"
+    exit 0
+  fi
+  echo "==> registering runner '$LABEL' against $REPO_URL"
+  # Ensure the unit isn't actively trying (and failing) to run an
+  # unconfigured agent while we're configuring.
+  systemctl stop "$UNIT_NAME" 2>/dev/null || true
+  sudo -u ghrunner -- "$RUNNER_HOME/config.sh" \
+    --url "$REPO_URL" \
+    --token "$RUNNER_REGISTRATION_TOKEN" \
+    --name "$HOST" \
+    --labels "$LABEL" \
+    --runnergroup default \
+    --work _work \
+    --ephemeral \
+    --unattended \
+    --replace \
+    --disableupdate
+  unset RUNNER_REGISTRATION_TOKEN
 fi
 
 if ! systemctl is-active --quiet "$UNIT_NAME"; then
