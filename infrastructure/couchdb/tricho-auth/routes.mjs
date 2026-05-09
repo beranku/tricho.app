@@ -340,7 +340,10 @@ export function createRouter({ meta, signer, env, entitlements = null }) {
 
     try {
       if (req.method === 'GET' && (path === '/health' || path === '/auth/health')) {
-        return json(res, 200, { ok: true });
+        const buildShaHeader = process.env.TRICHO_BUILD_SHA
+          ? { 'x-build-sha': process.env.TRICHO_BUILD_SHA }
+          : {};
+        return json(res, 200, { ok: true }, buildShaHeader);
       }
 
       // ── Google OAuth ───────────────────────────────────────────────────

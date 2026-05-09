@@ -1,0 +1,93 @@
+name: Server bootstrap
+
+# Operator-driven host maintenance: re-run install-host.sh, upgrade the
+# runner, or bring up the shared edge stack. Requires the host's runner
+# to already exist (use the SSH bootstrap path for the first install —
+# see docs/server-deploy.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      RUNNER_LABEL:
+        type: string
+        description: Self-hosted runner label (= host's FQDN)
+        required: true
+        default: o3.tricho.app
+      MODE:
+        type: choice
+        description: What to run on the host
+        options: [install-host, runner-upgrade, edge-up]
+        required: true
+        default: install-host
+
+concurrency:
+  group: server-bootstrap-${{ inputs.RUNNER_LABEL }}
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: ${{ inputs.MODE }} on ${{ inputs.RUNNER_LABEL }}
+    runs-on: ${{ inputs.RUNNER_LABEL }}
+    environment: ${{ inputs.MODE == 'install-host' && 'production' || 'dev' }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install-host
+        if: inputs.MODE == 'install-host'
+        run: sudo bash infrastructure/server/install-host.sh
+
+      - name: runner-upgrade
+        if: inputs.MODE == 'runner-upgrade'
+        run: sudo bash infrastructure/server/install-runner.sh
+        # Note: install-runner.sh is idempotent; it only re-extracts the
+        # runner tarball when runner-version.txt has changed. Re-running
+        # without a version bump is a no-op.
+
+      - name: edge-up
+        if: inputs.MODE == 'edge-up'
+        env:
+          # Read from the production environment when applicable; the
+          # workflow's `environment:` selector above gates this.
+          TRAEFIK_ACME_EMAIL: ${{ vars.TRAEFIK_ACME_EMAIL }}
+          TRAEFIK_USE_LE_STAGING: ${{ vars.TRAEFIK_USE_LE_STAGING || '' }}
+        run: |
+          set -eu
+          if [ -z "$TRAEFIK_ACME_EMAIL" ]; then
+            echo "::error::TRAEFIK_ACME_EMAIL is not set as an environment variable in the GitHub Environment"
+            exit 1
+          fi
+          # Run as ghrunner (same user as the runner) so docker access works
+          # without sudo. (Bootstrap added ghrunner to the docker group.)
+          bash infrastructure/server/edge/up.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Bootstrap: ${{ inputs.MODE }}"
+            echo
+            echo "- runner: ${{ inputs.RUNNER_LABEL }}"
+            if [ "${{ inputs.MODE }}" = "install-host" ]; then
+              echo
+              echo "### docker"
+              echo '```'
+              docker --version 2>&1 || true
+              docker compose version 2>&1 || true
+              echo '```'
+            elif [ "${{ inputs.MODE }}" = "runner-upgrade" ]; then
+              echo
+              echo "### runner"
+              echo '```'
+              cat /opt/actions-runner/.runner-version 2>/dev/null || echo '(no version file)'
+              echo '```'
+            elif [ "${{ inputs.MODE }}" = "edge-up" ]; then
+              echo
+              echo "### edge"
+              echo '```'
+              docker compose -p tricho-edge ps 2>&1 || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

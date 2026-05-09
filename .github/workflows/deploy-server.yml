@@ -1,0 +1,119 @@
+name: Deploy server
+
+# Deploys one environment's sync stack (tricho-sync-prod or tricho-sync-dev)
+# to the self-hosted runner whose label matches the input. Reads the
+# already-built+signed images from GHCR.
+#
+# Triggers:
+#   - workflow_dispatch — manual; required for prod deploys (Environment
+#     gate enforces required reviewer + protected branch policy).
+#   - push to dev — auto-deploy for dev environment only.
+#
+# Per server-stack-deploy spec:
+#   - Concurrency group prevents overlapping deploys for the same env+host;
+#     never cancel-in-progress (a half-applied deploy is worse than a queue).
+#   - Three-gate DoD: compose --wait, external smoke (X-Build-Sha), data path.
+#   - On failure, up.sh restores /opt/tricho/IMAGE_TAG.<env>.current.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ENVIRONMENT:
+        type: choice
+        description: Target environment
+        options: [prod, dev]
+        required: true
+        default: dev
+      RUNNER_LABEL:
+        type: string
+        description: Self-hosted runner label (= host's FQDN)
+        required: true
+        default: o3.tricho.app
+      IMAGE_REF:
+        type: string
+        description: 'Image tag to deploy (default: deploying SHA). MUST be of the form sha-<full-sha>; mutable tags are rejected by up.sh.'
+        required: false
+        default: ''
+  push:
+    branches: [dev]
+    paths:
+      - 'infrastructure/server/sync/**'
+      - 'infrastructure/couchdb/**'
+      - 'secrets/sync-dev.sops.yaml'
+      - '.github/workflows/deploy-server.yml'
+
+concurrency:
+  # cancel-in-progress: false — never cancel a deploy mid-flight.
+  group: deploy-server-${{ inputs.ENVIRONMENT || 'dev' }}-${{ inputs.RUNNER_LABEL || 'o3.tricho.app' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.ENVIRONMENT || 'dev' }} on ${{ inputs.RUNNER_LABEL || 'o3.tricho.app' }}
+    runs-on: ${{ inputs.RUNNER_LABEL || 'o3.tricho.app' }}
+    environment: ${{ inputs.ENVIRONMENT || 'dev' }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write   # cosign keyless verify uses GH OIDC
+
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: resolve
+        name: Resolve image tag
+        run: |
+          set -eu
+          # Prefer the workflow_dispatch IMAGE_REF (for rollback), else use
+          # the deploying commit SHA. Reject anything not of the form
+          # sha-<full-sha>; up.sh enforces this too but failing fast here
+          # gives the operator a clearer message.
+          ref="${{ inputs.IMAGE_REF }}"
+          if [ -z "$ref" ]; then
+            ref="sha-${{ github.sha }}"
+          fi
+          case "$ref" in
+            sha-*) ;;
+            *) echo "::error::IMAGE_REF must be of the form sha-<full-sha>; got: $ref" ; exit 1 ;;
+          esac
+          echo "image_tag=$ref" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Deploy
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT || 'dev' }}
+          IMAGE_TAG: ${{ steps.resolve.outputs.image_tag }}
+          # SOPS_AGE_KEY is read from the GitHub Environment's secret store
+          # (production env: required reviewer; dev env: no reviewer).
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          set -eu
+          # Per secrets-management spec, MUST NOT echo $SOPS_AGE_KEY.
+          # `set -x` is forbidden in this step.
+          bash infrastructure/server/sync/up.sh "$ENVIRONMENT"
+
+      - name: Summary
+        if: always()
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT || 'dev' }}
+          IMAGE_TAG: ${{ steps.resolve.outputs.image_tag }}
+        run: |
+          {
+            echo "## Deploy ${ENVIRONMENT}"
+            echo
+            echo "- runner: ${{ inputs.RUNNER_LABEL || 'o3.tricho.app' }}"
+            echo "- image:  \`${IMAGE_TAG}\`"
+            echo "- result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
