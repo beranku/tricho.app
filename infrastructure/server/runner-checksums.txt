@@ -17,5 +17,5 @@
 # refuses to proceed until a real value lands here. The first operator
 # who bootstraps a host MUST verify and commit the actual checksum.
 
-# 2.323.0  PLACEHOLDER — replace with sha256 from the v2.323.0 release page
-PLACEHOLDER_REPLACE_BEFORE_BOOTSTRAP  actions-runner-linux-arm64-2.323.0.tar.gz
+# 2.323.0  https://github.com/actions/runner/releases/tag/v2.323.0
+9cb778fffd4c6d8bd74bc4110df7cb8c0122eb62fda30b389318b265d3ade538  actions-runner-linux-arm64-2.323.0.tar.gz
