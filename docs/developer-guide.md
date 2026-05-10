@@ -162,6 +162,44 @@ cd web && npm install && npm run dev   # marketing on http://localhost:4321/
 
 No CouchDB, no auth, no edge — just Astro dev server.
 
+## Manual E2E walkthrough in Chrome (post-install flow)
+
+The welcome wizard normally requires the PWA to actually be installed (`display-mode: standalone`) before it lets you advance past Step 1. That makes browser-driven debugging painful — every iteration would mean reinstalling the PWA. The wizard exposes two dev-only bridges that together let you drive the full install + onboarding + first-unlock flow inside a regular Chrome tab.
+
+**Force-PWA-mode bypass.** Append `?tricho-dev-force-pwa-mode=1` to any app URL on a dev origin and `detectLaunchMode()` returns `'pwa'` even though the page is a regular tab. The flag activates from the URL once, persists in `localStorage` as `tricho-dev-force-pwa-mode=1`, and `?…` is stripped from the address bar so reloads keep working without polluting the URL. Hostname allowlist (defined in `app/src/lib/launch-mode.ts`):
+
+- `dev.tricho.app`
+- `localhost`, `127.0.0.1`
+- `*.tricho.pages.dev` (CF Pages PR previews)
+
+`tricho.app` (production) is **intentionally excluded** — even an attacker URL with the param does nothing on prod. Clear from the console with `localStorage.removeItem('tricho-dev-force-pwa-mode')`.
+
+**E2E bridge for the Recovery Secret checksum.** Set `localStorage.setItem('tricho-e2e-bridge', '1')` before starting Step 3 and the wizard exposes `window.__trichoWizardE2E.generatedRs.{encoded, checksum}`. Read the 4-character checksum directly from the console instead of OCR-ing the QR canvas or extracting it via React fiber inspection.
+
+**PIN fallback is automatic in Chrome.** Browser automation runtimes (Chrome DevTools Protocol, Playwright with default config) don't expose WebAuthn PRF, so the wizard transparently falls back to PIN. For repeated debug sessions, pick a stable PIN (e.g., `1234`) and reuse it — the unlock screen accepts it on every reload as long as the keystore IndexedDB record persists.
+
+**Recommended walkthrough:**
+
+```js
+// In Chrome DevTools console, before navigating to /app/:
+localStorage.setItem('tricho-e2e-bridge', '1');
+// then visit /app/?tricho-dev-force-pwa-mode=1 and proceed through the wizard.
+
+// In Step 3, after the QR renders:
+window.__trichoWizardE2E.generatedRs.checksum  // → "JNIQ" or similar 4 chars
+```
+
+**Resetting state between runs.** A clean restart clears all of:
+
+- The two Service Workers (`/sw.js` and `/app/sw.js`) — DevTools → Application → Service workers → Unregister
+- IndexedDB databases — `tricho-vault-*`, `tricho-keystore`, `_pouch_*`
+- `localStorage` and `sessionStorage`
+- **Cookies survive an IDB clear** — `deviceId`, `tricho-auth` JWT, and the OAuth nonce are all in cookie jar. To fully reset to a "first-time visitor" state, clear cookies for `dev.tricho.app` and the sync host too. Otherwise the next sign-in will reuse or collide with the existing server-side device record (and you'll hit "Device limit reached" sooner than expected).
+
+**Server-side device cleanup.** When you blow away client state but the server still has the old device record, sign in fresh on the new client and the wizard surfaces a "Device limit reached" screen listing active records — revoke the stale one from there. Don't try to mutate `_users`/`tricho_meta` directly via SSH; tricho-auth's auto-mode classifier rejects raw writes by design.
+
+For full local cross-origin alternatives see `make dev-mock` above.
+
 ## IDE setup
 
 VS Code with these extensions:
