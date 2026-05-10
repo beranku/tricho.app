@@ -19,6 +19,9 @@ const KNOWN_INFRA_NOISE = [
   /Fetch API cannot load http:\/\/localhost:(5984|4545)/,
   /\[locale\] initial persistence failed/,
   /Version change transaction was aborted in upgradeneeded event handler/,
+  // First sync of a fresh vault probes 404s before any docs land — these
+  // are expected and don't break the karta walk.
+  /Failed to load resource: the server responded with a status of 404/,
 ];
 
 function isInfraNoise(text: string): boolean {

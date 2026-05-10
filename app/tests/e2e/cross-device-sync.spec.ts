@@ -125,15 +125,18 @@ test('Wrong Recovery Secret on Device B never produces a usable DEK', async ({ b
     joinVaultWithRs(pageB, { sub, recoverySecret: wrongRs }),
   ).rejects.toThrow();
 
-  // The join screen should still be visible with an error region.
-  await expect(pageB.locator('#join-rs-input, [id="join-rs-input"]').first()).toBeVisible();
+  // pageB must NOT be on the unlocked Diár — a wrong RS cannot open the
+  // vault. The Diár's `.phone-inner` is the canonical "unlocked" marker.
+  await expect(pageB.locator('.phone-inner')).toHaveCount(0);
 
-  // No customer plaintext on B.
+  // No customer plaintext on B — the bridge's vault primitives (incl.
+  // listCustomers) only mount once the vault has been opened, so the
+  // missing method here is itself the assertion that B never unlocked.
   const customerCount = await pageB.evaluate(async () => {
     const w = window as unknown as {
-      __trichoE2E?: { listCustomers: () => Promise<unknown[]> };
+      __trichoE2E?: { listCustomers?: () => Promise<unknown[]> };
     };
-    if (!w.__trichoE2E) return 0; // bridge not present → vault never opened
+    if (!w.__trichoE2E?.listCustomers) return 0;
     const list = await w.__trichoE2E.listCustomers();
     return list.length;
   });

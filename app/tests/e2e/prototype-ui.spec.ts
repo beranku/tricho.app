@@ -10,13 +10,20 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('prototype UI golden path (static)', () => {
-  test('cold load lands on /, renders Czech UI shell', async ({ page }) => {
-    await page.goto('/');
-    // Page title is set by Layout.astro.
-    await expect(page).toHaveTitle(/TrichoApp/);
-    // The OAuth screen renders pre-vault — content is Czech.
-    const html = await page.locator('html').getAttribute('lang');
-    expect(html).toBe('cs');
+  test('cold load lands on /, renders Czech UI shell', async ({ browser }) => {
+    // The PWA picks locale from navigator.language at boot. Use a context
+    // with `locale: 'cs-CZ'` (Playwright's preferred override) so Chromium
+    // reports cs to JS at every layer.
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'cs-CZ' });
+    const p = await ctx.newPage();
+    try {
+      await p.goto('/', { waitUntil: 'domcontentloaded' });
+      await expect(p).toHaveTitle(/TrichoApp/, { timeout: 10_000 });
+      const html = await p.locator('html').getAttribute('lang');
+      expect(html).toBe('cs');
+    } finally {
+      await ctx.close();
+    }
   });
 
   test('Layout includes the global paper-grain element + manifest link', async ({ page }) => {
@@ -26,19 +33,31 @@ test.describe('prototype UI golden path (static)', () => {
     expect(manifest).toMatch(/manifest\.webmanifest/);
   });
 
-  test('manifest is reachable and has Czech metadata', async ({ page, baseURL }) => {
-    const res = await page.request.get(`${baseURL}/manifest.webmanifest`);
-    expect(res.ok()).toBe(true);
-    const json = (await res.json()) as Record<string, string>;
+  test('manifest is reachable and has Czech metadata', async ({ page }) => {
+    // Use page.evaluate(fetch(...)) so the request goes through Chromium's
+    // host-resolver override (Node's resolver doesn't see `tricho.test`).
+    await page.goto('/');
+    const json = await page.evaluate(async () => {
+      const r = await fetch('/manifest.webmanifest');
+      return r.json() as Promise<Record<string, string>>;
+    });
     expect(json.lang).toBe('cs');
     expect(json.name).toBe('Tricho');
     expect(json.theme_color).toBe('#FDFAF3');
   });
 
-  test('offline page is reachable and has the Czech fallback copy', async ({ page }) => {
-    await page.goto('/offline');
-    await expect(page.getByText('Bez připojení')).toBeVisible();
-    await expect(page.getByText(/synchronizace/i)).toBeVisible();
+  test('offline page is reachable and has the Czech fallback copy', async ({ browser }) => {
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'cs-CZ' });
+    const p = await ctx.newPage();
+    try {
+      // Caddy serves the prerendered offline page at `/offline/` (trailing
+      // slash). Without it, `try_files` falls back to the PWA shell.
+      await p.goto('/offline/');
+      await expect(p.getByText('Bez připojení')).toBeVisible();
+      await expect(p.getByText(/synchronizace/i)).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
   });
 
   test('design tokens resolve to expected light-mode colors before user toggle', async ({ page }) => {
@@ -69,10 +88,12 @@ test.describe('prototype UI golden path (static)', () => {
     expect(bg).toBe('#211A15');
   });
 
-  test('service worker registers and the precache manifest is served', async ({ page, baseURL }) => {
-    const res = await page.request.get(`${baseURL}/sw.js`);
-    expect(res.status()).toBe(200);
-    const body = await res.text();
+  test('service worker registers and the precache manifest is served', async ({ page }) => {
+    await page.goto('/');
+    const body = await page.evaluate(async () => {
+      const r = await fetch('/sw.js');
+      return r.text();
+    });
     // Workbox-generated sw.js references the precache manifest.
     expect(body).toContain('precacheAndRoute');
   });

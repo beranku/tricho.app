@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createVaultWithRs, joinVaultWithRs } from './fixtures/unlock';
 import { enableTestBridge, waitForBridge } from './fixtures/cross-device';
+import { grandfatherFreeDevices, waitForServerVaultState } from './fixtures/admin';
 
 // Existing-account flow: Device A creates a vault, Device B signs in
 // for the same `sub`, the wizard auto-selects Step 3 existing flow
@@ -16,10 +17,17 @@ test('Device B joins via the wizard existing flow with Device A\'s RS', async ({
   const pageA = await ctxA.newPage();
   let createdRs: string;
   let vaultIdA: string;
+  let usernameA: string;
   try {
     const created = await createVaultWithRs(pageA, { sub });
     createdRs = created.recoverySecret;
+    usernameA = created.user.couchdbUsername;
     vaultIdA = await waitForBridge(pageA);
+    // Free tier is single-device server-side; grandfather the user so the
+    // second device can sign in. Wait for vault-state to land on CouchDB
+    // before B's wizard probes for it.
+    await waitForServerVaultState(usernameA);
+    await grandfatherFreeDevices(usernameA);
   } finally {
     /* keep ctxA open for shared-vault assertion */
   }

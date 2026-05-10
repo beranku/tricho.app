@@ -1,14 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { resolve } from 'node:path';
 
-// Accessibility smoke: pull the axe-core runtime into the page and
-// assert no serious/critical violations on each top-level screen.
-// No @axe-core/playwright dep — we load the script from unpkg via
-// addScriptTag so this stays a zero-dep smoke.
+// Accessibility smoke: inject the axe-core runtime into the page and
+// assert no serious/critical violations on each top-level screen. We
+// load axe from `node_modules` (path-injected by Playwright) instead of
+// a CDN URL — the PWA's `script-src 'self' 'unsafe-inline'` CSP blocks
+// remote loads.
 
-const AXE_CDN = 'https://unpkg.com/axe-core@4/axe.min.js';
+const AXE_LOCAL = resolve(process.cwd(), 'node_modules/axe-core/axe.min.js');
 
 async function runAxe(page: import('@playwright/test').Page): Promise<{ id: string; impact: string; nodes: number }[]> {
-  await page.addScriptTag({ url: AXE_CDN });
+  await page.addScriptTag({ path: AXE_LOCAL });
   return page.evaluate(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const axe = (window as any).axe;

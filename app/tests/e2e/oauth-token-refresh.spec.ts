@@ -38,16 +38,16 @@ test('refresh token rotates the JWT with a new (later) exp claim', async ({ page
   );
 
   expect(refreshed.status).toBe(200);
-  expect(refreshed.body.tokens?.jwt).toBeTruthy();
+  expect(refreshed.body.jwt).toBeTruthy();
 
-  const after = decodeJwtPayload(refreshed.body.tokens.jwt);
+  const after = decodeJwtPayload(refreshed.body.jwt);
   expect(after.exp).toBeGreaterThan(before.exp);
 
   // The newly minted JWT must work on /auth/devices.
   const auth = await page.evaluate(async (jwt) => {
     const res = await fetch('/auth/devices', { headers: { authorization: `Bearer ${jwt}` } });
     return res.status;
-  }, refreshed.body.tokens.jwt);
+  }, refreshed.body.jwt);
   expect(auth).toBe(200);
 });
 

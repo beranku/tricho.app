@@ -5,9 +5,13 @@ import { openAppleVault } from './fixtures/apple-vault';
 // /auth/apple/start returns 503 in that case, signalling the operator hasn't
 // rendered an Apple test key + client id into the CI secret store. The mock
 // infrastructure is in place; the gate is operator-side.
-test.beforeAll(async ({ request }) => {
-  const r = await request.get('/auth/apple/start', { maxRedirects: 0, failOnStatusCode: false });
-  test.skip(r.status() === 503, 'Apple is not configured in this CI environment');
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  const status = await page.evaluate(async () => {
+    const r = await fetch('/auth/apple/start', { redirect: 'manual' });
+    return r.status;
+  });
+  test.skip(status === 503, 'Apple is not configured in this CI environment');
 });
 
 test('Apple OAuth round-trip lands back on the PWA with tokens', async ({ page }) => {

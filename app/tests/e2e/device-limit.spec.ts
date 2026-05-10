@@ -1,38 +1,44 @@
 import { test, expect } from './fixtures/vault';
 import { openVaultAsTestUser } from './fixtures/vault';
+import { grandfatherFreeDevices } from './fixtures/admin';
 
 // Drive three OAuth callbacks with the SAME sub (so all three land on
 // the same user), assert the 3rd is rejected with deviceApproved: false
-// because the free-tier subscription allows 2 devices.
+// because the free-tier subscription tops out at 2 devices (grandfathered).
 
 test('third device on free tier is rejected', async ({ page }) => {
-  const sub = `device-limit-${Date.now()}`;
+  const sub = `device-limit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const email = `${sub}@tricho.test`;
 
-  // Each call opens a new "device" because the browser context is fresh
-  // per login inside openVaultAsTestUser (no tricho_device cookie carry).
-  // But with the same sub, they all map to the same user.
-  await openVaultAsTestUser(page, { sub, email: `${sub}@tricho.test` });
-  // clear cookies to simulate a fresh device
-  await page.context().clearCookies();
-  await openVaultAsTestUser(page, { sub, email: `${sub}@tricho.test` });
-  await page.context().clearCookies();
+  // First device — creates the user.
+  const u1 = await openVaultAsTestUser(page, { sub, email });
+  // Free tier ships at deviceLimit=1; grandfather to lift it to 2 so the
+  // walk has somewhere to overflow.
+  await grandfatherFreeDevices(u1.couchdbUsername);
 
-  // Third attempt — still same sub, no cookies → tricho-auth sees this as
-  // a third device and rejects.
-  const result = await page.evaluate(async (s) => {
+  // Second device — fresh cookies, same sub.
+  await page.context().clearCookies();
+  await openVaultAsTestUser(page, { sub, email });
+
+  // Third device — same sub, no cookies → tricho-auth rejects. Use the
+  // real browser navigation so the URL fragment survives the redirect
+  // chain (fetch() strips fragments from the final URL).
+  await page.context().clearCookies();
+  await page.evaluate(async (s) => {
     await fetch('/mock-oidc/mock/identity', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sub: s, email: `${s}@tricho.test`, email_verified: true }),
     });
-    const r = await fetch('/auth/google/start', { redirect: 'follow', credentials: 'include' });
-    return { status: r.status, body: await r.text() };
   }, sub);
-
-  expect(result.status).toBe(200);
-  const match = result.body.match(/<script id="tricho-auth-result"[^>]*>([\s\S]*?)<\/script>/);
-  expect(match).not.toBeNull();
-  const payload = JSON.parse(match![1]);
+  await page.goto('/auth/google/start');
+  const json = await page.waitForFunction(
+    () => sessionStorage.getItem('tricho-pending-oauth'),
+    null,
+    { timeout: 20_000 },
+  );
+  const raw = (await json.jsonValue()) as string;
+  const payload = JSON.parse(raw) as { deviceApproved: boolean; tokens: unknown };
   expect(payload.deviceApproved).toBe(false);
   expect(payload.tokens).toBeNull();
 });

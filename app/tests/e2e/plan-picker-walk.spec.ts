@@ -93,7 +93,8 @@ test('Plan screen shows Free state and opens picker with Pro + Max tiers', async
     await expect(page.getByRole('tab', { name: 'Měsíčně' }).or(page.getByRole('tab', { name: /měsíčně/i }))).toBeVisible();
     await expect(page.getByRole('tab', { name: /ročně/i })).toBeVisible();
 
-    // Card payment + bank-transfer entries are present.
+    // Selecting a tier surfaces both payment paths.
+    await page.getByTestId('plan-picker-tier-pro').evaluate((el: HTMLElement) => el.click());
     await expect(page.getByText('Platba kartou (opakovaně)')).toBeVisible();
     await expect(page.getByText('Platba bankovním převodem (jednorázově)')).toBeVisible();
   } finally {

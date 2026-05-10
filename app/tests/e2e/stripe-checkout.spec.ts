@@ -1,16 +1,19 @@
 import { test, expect } from './fixtures/vault';
 
-// Skip the file when billing isn't enabled in this CI environment, OR when
-// localstripe + stripe-mock aren't reachable (they live under the ci profile,
-// so missing them is a CI configuration problem to surface explicitly).
-test.beforeAll(async ({ request }) => {
-  // /auth/billing/stripe/checkout returns 503 with `billing_disabled` when
-  // BILLING_ENABLED isn't 'true'. We use the response to gate the suite.
-  const r = await request.post('/auth/billing/stripe/checkout', {
-    failOnStatusCode: false,
-    data: { plan: 'pro-monthly', successUrl: 'https://x/s', cancelUrl: 'https://x/c' },
+// Skip when billing isn't enabled in this environment. Probe via
+// page.evaluate(fetch) — Node's resolver can't see `tricho.test`,
+// only Chromium's `--host-resolver-rules` override does.
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  const status = await page.evaluate(async () => {
+    const r = await fetch('/auth/billing/stripe/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ plan: 'pro-monthly', successUrl: 'https://x/s', cancelUrl: 'https://x/c' }),
+    });
+    return r.status;
   });
-  test.skip(r.status() === 503, 'Billing disabled in this environment');
+  test.skip(status === 503, 'Billing disabled in this environment');
 });
 
 test('creating a Checkout session against stripe-mock returns a checkoutUrl', async ({ page, vaultUser }) => {

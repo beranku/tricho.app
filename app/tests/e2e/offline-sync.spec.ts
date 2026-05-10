@@ -51,15 +51,16 @@ test('offline customer write → syncs up as ciphertext on reconnect', async ({ 
             };
           };
           let pushed = false;
+          let unsub: (() => void) | null = null;
           const timer = setTimeout(() => {
-            unsub();
+            unsub?.();
             reject(new Error(`offline → online push of ${id} did not settle in ${timeoutMs}ms`));
           }, timeoutMs);
-          const unsub = w.__trichoE2E.subscribeSyncEvents((s) => {
+          unsub = w.__trichoE2E.subscribeSyncEvents((s) => {
             if (s.status === 'syncing' && s.pushed > 0) pushed = true;
             if (pushed && s.status === 'paused') {
               clearTimeout(timer);
-              unsub();
+              unsub?.();
               resolve();
             }
           });
@@ -68,7 +69,18 @@ test('offline customer write → syncs up as ciphertext on reconnect', async ({ 
     );
 
     const dbHex = userDbHexFor(user.couchdbUsername);
-    const row = await adminGet<Record<string, unknown>>(`userdb-${dbHex}/${writeResult.id}`);
+    // Server-side replication can lag the client-reported `paused` event
+    // by a beat; poll a few times before giving up.
+    let row: Record<string, unknown> | null = null;
+    for (let i = 0; i < 20 && row === null; i++) {
+      try {
+        row = await adminGet<Record<string, unknown>>(`userdb-${dbHex}/${writeResult.id}`);
+      } catch (err) {
+        if (!String((err as Error).message).includes('404')) throw err;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+    if (row === null) throw new Error(`adminGet 404'd for ${writeResult.id} after 10s of polling`);
 
     const allowedKeys = new Set(['_id', '_rev', 'type', 'updatedAt', 'deleted', 'payload']);
     for (const k of Object.keys(row)) {

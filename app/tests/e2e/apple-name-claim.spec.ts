@@ -1,9 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { openAppleVault } from './fixtures/apple-vault';
 
-test.beforeAll(async ({ request }) => {
-  const r = await request.get('/auth/apple/start', { maxRedirects: 0, failOnStatusCode: false });
-  test.skip(r.status() === 503, 'Apple is not configured in this CI environment');
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  const status = await page.evaluate(async () => {
+    const r = await fetch('/auth/apple/start', { redirect: 'manual' });
+    return r.status;
+  });
+  test.skip(status === 503, 'Apple is not configured in this CI environment');
 });
 
 test('Apple name arrives on first login and persists across a returning login', async ({ page }) => {
