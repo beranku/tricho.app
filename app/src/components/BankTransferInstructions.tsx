@@ -9,7 +9,19 @@ import {
 import { refreshSubscription } from '../lib/store/subscription';
 import type { TokenStore } from '../auth/token-store';
 
-const POLL_INTERVAL_MS = 30_000;
+const DEFAULT_POLL_INTERVAL_MS = 30_000;
+
+// E2E tests override this via `__trichoE2E.setBankTransferPollMs(ms)`
+// to keep round-trip specs under the 30 s e2e tier budget. Production
+// has no path to mutate it (the bridge is gated by a localStorage
+// sentinel that never fires on the deployed surface).
+let bankTransferPollMs: number = DEFAULT_POLL_INTERVAL_MS;
+export function getBankTransferPollMs(): number {
+  return bankTransferPollMs;
+}
+export function setBankTransferPollMs(ms: number): void {
+  bankTransferPollMs = Math.max(50, Math.floor(ms));
+}
 
 export interface BankTransferInstructionsProps {
   tokenStore: TokenStore;
@@ -43,7 +55,7 @@ export function BankTransferInstructions({
       }
     };
     void tick();
-    const id = setInterval(tick, POLL_INTERVAL_MS);
+    const id = setInterval(tick, getBankTransferPollMs());
     return () => {
       stopped = true;
       clearInterval(id);
@@ -93,7 +105,13 @@ export function BankTransferInstructions({
   const planLabel = renderPlanLabel(intent.plan);
 
   return (
-    <section style={containerStyle} aria-labelledby="bt-instructions-title">
+    <section
+      style={containerStyle}
+      aria-labelledby="bt-instructions-title"
+      data-testid="bank-transfer-instructions"
+      data-intent-id={intent.intentId}
+      data-intent-status={intent.status}
+    >
       <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={onBack} style={iconBtnStyle} aria-label={m.billing_back()}>←</button>
         <h2 id="bt-instructions-title" style={{ margin: 0 }}>{planLabel}</h2>
@@ -107,6 +125,7 @@ export function BankTransferInstructions({
           value={formatAmount(intent.amountMinor, intent.currency, locale)}
           onCopy={() => onCopy('amount', String(intent.amountMinor / 100))}
           copied={copied === 'amount'}
+          testId="bank-transfer-amount"
         />
         <Row
           label={m.billing_iban()}
@@ -114,6 +133,7 @@ export function BankTransferInstructions({
           onCopy={() => onCopy('iban', intent.iban)}
           copyLabel={m.billing_copyIban()}
           copied={copied === 'iban'}
+          testId="bank-transfer-iban"
         />
         <Row
           label={m.billing_account()}
@@ -121,6 +141,7 @@ export function BankTransferInstructions({
           onCopy={() => onCopy('account', intent.accountNumber)}
           copyLabel={m.billing_copyAccount()}
           copied={copied === 'account'}
+          testId="bank-transfer-account"
         />
         <Row
           label={m.billing_vs()}
@@ -128,23 +149,38 @@ export function BankTransferInstructions({
           onCopy={() => onCopy('vs', intent.vs)}
           copyLabel={m.billing_copyVs()}
           copied={copied === 'vs'}
+          testId="bank-transfer-vs"
         />
       </dl>
 
       <p style={{ margin: 0, fontSize: 13, color: '#888' }}>{m.billing_orScanQr()}</p>
-      <canvas ref={canvasRef} aria-label={m.billing_qrAlt()} style={{ alignSelf: 'center' }} />
+      <canvas
+        ref={canvasRef}
+        aria-label={m.billing_qrAlt()}
+        style={{ alignSelf: 'center' }}
+        data-testid="bank-transfer-qr"
+      />
 
       <p style={{ margin: 0, fontSize: 13, color: '#888' }}>
         {m.billing_intentExpiresAt({ date: new Date(intent.expiresAt).toLocaleDateString() })}
       </p>
 
       {intent.status === 'pending' && (
-        <p style={{ margin: 0, fontSize: 13, color: '#666', fontStyle: 'italic' }}>
+        <p
+          style={{ margin: 0, fontSize: 13, color: '#666', fontStyle: 'italic' }}
+          data-testid="bank-transfer-pending"
+        >
           {m.billing_pendingPolling()}
         </p>
       )}
 
-      <button onClick={onCancelIntent} style={cancelBtnStyle}>{m.billing_cancelIntent()}</button>
+      <button
+        onClick={onCancelIntent}
+        style={cancelBtnStyle}
+        data-testid="bank-transfer-cancel-intent"
+      >
+        {m.billing_cancelIntent()}
+      </button>
     </section>
   );
 }
@@ -155,18 +191,20 @@ function Row({
   onCopy,
   copyLabel,
   copied,
+  testId,
 }: {
   label: string;
   value: string;
   onCopy: () => void;
   copyLabel?: string;
   copied: boolean;
+  testId?: string;
 }): JSX.Element {
   return (
-    <div style={rowStyle}>
+    <div style={rowStyle} data-testid={testId}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <dt style={dtStyle}>{label}</dt>
-        <dd style={ddStyle}>{value}</dd>
+        <dd style={ddStyle} data-testid={testId ? `${testId}-value` : undefined}>{value}</dd>
       </div>
       <button onClick={onCopy} style={copyBtnStyle} aria-label={copyLabel ?? label}>
         {copied ? m.billing_copied() : '⎘'}

@@ -8,10 +8,11 @@ import type { RecoverySecretResult } from '../auth/recovery';
 import { SettingsScreen } from './SettingsScreen';
 import { DeviceLimitScreen } from './DeviceLimitScreen';
 import { PlanScreen } from './PlanScreen';
-import { BankTransferInstructions } from './BankTransferInstructions';
+import { BankTransferInstructions, setBankTransferPollMs } from './BankTransferInstructions';
 import { BackupExportScreen } from './BackupExportScreen';
 import { RestoreFromZipScreen } from './RestoreFromZipScreen';
-import { loadSubscription } from '../lib/store/subscription';
+import { loadSubscription, subscriptionStore } from '../lib/store/subscription';
+import type { Subscription } from '../auth/subscription';
 
 // Astro 5 envPrefix is PUBLIC_ for client-bundled env vars. We treat the
 // literal "true" as the only truthy value; default-undefined → disabled.
@@ -177,6 +178,10 @@ export function AppShell(): JSX.Element {
   const [authHint, setAuthHint] = useState<string | null>(null);
   const [serverVaultState, setServerVaultState] = useState<VaultStateDoc | null>(null);
   const [syncGateState, setSyncGateState] = useState<{ gated: boolean }>({ gated: false });
+  // E2E override: when set true via the test bridge, gated stays true even if
+  // subsequent sync events would otherwise reset it. No-op in production
+  // (bridge is sentinel-gated).
+  const e2eGatedOverrideRef = useRef<boolean>(false);
   const routedOnceRef = useRef(false);
 
   // On mount: probe local state, pick up any OAuth callback result, route.
@@ -575,11 +580,44 @@ export function AppShell(): JSX.Element {
       if (s.status === 'gated') {
         if (tokenStore) void loadSubscription(tokenStore.jwt());
         setSyncGateState({ gated: true });
-      } else {
+      } else if (!e2eGatedOverrideRef.current) {
         setSyncGateState({ gated: false });
       }
     });
   }, [tokenStore]);
+
+  // E2E navigation bridge — always available when the bridge sentinel is
+  // set, regardless of the current view. Tests use this to skip menu
+  // drilling when they only care about the destination view's rendering
+  // (e.g. PlanScreen state, GatedSheet, DeviceLimitScreen). Production
+  // users never see the bridge — `tricho-e2e-bridge` cannot be set from
+  // the deployed surface.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('tricho-e2e-bridge') !== '1') return;
+    const w = window as unknown as {
+      __trichoE2E?: Record<string, unknown>;
+    };
+    const existing = w.__trichoE2E ?? {};
+    const nav = {
+      setView: (v: View) => setView(v),
+      setBankTransferPollMs: (ms: number) => setBankTransferPollMs(ms),
+      setGated: (gated: boolean) => {
+        e2eGatedOverrideRef.current = gated;
+        setSyncGateState({ gated });
+      },
+      setSubscription: (sub: Subscription | null) => subscriptionStore.set(sub),
+    };
+    w.__trichoE2E = { ...existing, ...nav };
+    return () => {
+      const cur = w.__trichoE2E;
+      if (cur) {
+        const next: Record<string, unknown> = { ...cur };
+        for (const k of Object.keys(nav)) delete next[k];
+        w.__trichoE2E = next;
+      }
+    };
+  }, []);
 
   // E2E test bridge — gated on a localStorage sentinel so production users
   // never see it. Tests opt in by setting `tricho-e2e-bridge` to "1" before
@@ -644,9 +682,19 @@ export function AppShell(): JSX.Element {
         return rows.map((r) => ({ id: r._id, data: r.data }));
       },
     };
-    (window as unknown as { __trichoE2E?: typeof bridge }).__trichoE2E = bridge;
+    // Merge with any pre-existing bridge methods (e.g. setView from the
+    // navigation effect above) so attaching the vault primitives doesn't
+    // clobber them. On cleanup, drop only the keys this effect added.
+    const w = window as unknown as { __trichoE2E?: Record<string, unknown> };
+    const existing = w.__trichoE2E ?? {};
+    w.__trichoE2E = { ...existing, ...bridge };
     return () => {
-      delete (window as unknown as { __trichoE2E?: typeof bridge }).__trichoE2E;
+      const cur = w.__trichoE2E;
+      if (cur) {
+        const next: Record<string, unknown> = { ...cur };
+        for (const k of Object.keys(bridge)) delete next[k];
+        w.__trichoE2E = next;
+      }
     };
   }, [view, db, vaultId, username]);
 

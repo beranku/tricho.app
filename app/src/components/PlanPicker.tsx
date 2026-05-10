@@ -76,11 +76,22 @@ export function PlanPicker({ tokenStore, onClose, onBankTransferIntent }: PlanPi
   const maxPlan = plans.find((p) => p.id === `max-${selectedPeriod === 'month' ? 'monthly' : 'yearly'}`);
 
   return (
-    <div role="dialog" aria-modal="true" style={overlayStyle} onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={overlayStyle}
+      onClick={onClose}
+      data-testid="plan-picker"
+    >
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <h3 style={{ margin: 0, flex: 1 }}>{m.plan_pickerTitle()}</h3>
-          <button onClick={onClose} aria-label={m.common_close()} style={iconBtnStyle}>×</button>
+          <button
+            onClick={onClose}
+            aria-label={m.common_close()}
+            style={iconBtnStyle}
+            data-testid="plan-picker-close"
+          >×</button>
         </header>
 
         {/* Period toggle */}
@@ -90,6 +101,7 @@ export function PlanPicker({ tokenStore, onClose, onBankTransferIntent }: PlanPi
             aria-selected={selectedPeriod === 'month'}
             onClick={() => setSelectedPeriod('month')}
             style={tabStyle(selectedPeriod === 'month')}
+            data-testid="plan-picker-period-month"
           >
             {m.plan_period_monthly()}
           </button>
@@ -98,6 +110,7 @@ export function PlanPicker({ tokenStore, onClose, onBankTransferIntent }: PlanPi
             aria-selected={selectedPeriod === 'year'}
             onClick={() => setSelectedPeriod('year')}
             style={tabStyle(selectedPeriod === 'year')}
+            data-testid="plan-picker-period-year"
           >
             {m.plan_period_yearly()}
           </button>
@@ -112,6 +125,7 @@ export function PlanPicker({ tokenStore, onClose, onBankTransferIntent }: PlanPi
               tierLabel={m.plan_tier_pro()}
               retentionLabel={m.plan_retention_12months()}
               locale={locale}
+              testId="plan-picker-tier-pro"
             />
           )}
           {maxPlan && (
@@ -122,17 +136,28 @@ export function PlanPicker({ tokenStore, onClose, onBankTransferIntent }: PlanPi
               tierLabel={m.plan_tier_max()}
               retentionLabel={m.plan_retention_5years()}
               locale={locale}
+              testId="plan-picker-tier-max"
             />
           )}
         </ul>
 
         {selectedPlan && (
           <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
-            <button onClick={onCard} disabled={busy} style={primaryBtnStyle}>
+            <button
+              onClick={onCard}
+              disabled={busy}
+              style={primaryBtnStyle}
+              data-testid="plan-picker-pay-card"
+            >
               <div style={{ fontWeight: 600 }}>{m.plan_pickerCard()}</div>
               <div style={{ fontSize: 12, opacity: 0.85 }}>{m.plan_pickerCardSubtitle()}</div>
             </button>
-            <button onClick={onBank} disabled={busy} style={secondaryBtnStyle}>
+            <button
+              onClick={onBank}
+              disabled={busy}
+              style={secondaryBtnStyle}
+              data-testid="plan-picker-pay-bank"
+            >
               <div style={{ fontWeight: 600 }}>{m.plan_pickerBank()}</div>
               <div style={{ fontSize: 12, color: '#666' }}>{m.plan_pickerBankSubtitle()}</div>
             </button>
@@ -152,13 +177,16 @@ interface PlanRowProps {
   tierLabel: string;
   retentionLabel: string;
   locale: 'cs' | 'en';
+  testId?: string;
 }
 
-function PlanRow({ plan, selected, onClick, tierLabel, retentionLabel, locale }: PlanRowProps): JSX.Element {
+function PlanRow({ plan, selected, onClick, tierLabel, retentionLabel, locale, testId }: PlanRowProps): JSX.Element {
   return (
     <li>
       <button
         onClick={onClick}
+        data-testid={testId}
+        data-selected={selected || undefined}
         style={{
           ...planRowStyle,
           borderColor: selected ? '#007aff' : 'rgba(0,0,0,0.1)',

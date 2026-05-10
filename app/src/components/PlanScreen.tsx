@@ -54,9 +54,18 @@ export function PlanScreen({ tokenStore, onBack, onRequestBankTransferIntent, on
   };
 
   return (
-    <section style={containerStyle} aria-labelledby="plan-screen-title">
+    <section
+      style={containerStyle}
+      aria-labelledby="plan-screen-title"
+      data-testid="plan-screen"
+    >
       <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button onClick={onBack} style={iconBtnStyle} aria-label={m.billing_back()}>←</button>
+        <button
+          onClick={onBack}
+          style={iconBtnStyle}
+          aria-label={m.billing_back()}
+          data-testid="plan-back"
+        >←</button>
         <h2 id="plan-screen-title" style={{ margin: 0 }}>{m.plan_screenTitle()}</h2>
       </header>
 
@@ -71,28 +80,55 @@ export function PlanScreen({ tokenStore, onBack, onRequestBankTransferIntent, on
       {sub != null && (
         <div style={{ display: 'grid', gap: 8 }}>
           {sub.tier === 'free' && (
-            <button onClick={() => setPickerOpen(true)} style={primaryBtnStyle}>{m.plan_upgrade()}</button>
+            <button
+              onClick={() => setPickerOpen(true)}
+              style={primaryBtnStyle}
+              data-testid="plan-upgrade-cta"
+            >{m.plan_upgrade()}</button>
           )}
           {onOpenBackupExport && (
-            <button onClick={onOpenBackupExport} style={secondaryBtnStyle}>{m.plan_localBackup_title()}</button>
+            <button
+              onClick={onOpenBackupExport}
+              style={secondaryBtnStyle}
+              data-testid="plan-local-backup-cta"
+            >{m.plan_localBackup_title()}</button>
           )}
           {sub.tier === 'paid' && sub.provider === 'stripe' && sub.status !== 'canceled' && (
             <>
-              <button onClick={onManage} disabled={busy} style={secondaryBtnStyle}>
+              <button
+                onClick={onManage}
+                disabled={busy}
+                style={secondaryBtnStyle}
+                data-testid="plan-manage-cta"
+              >
                 {m.plan_manageSubscription()}
               </button>
-              <button onClick={onCancel} disabled={busy} style={dangerBtnStyle}>
+              <button
+                onClick={onCancel}
+                disabled={busy}
+                style={dangerBtnStyle}
+                data-testid="plan-cancel-cta"
+              >
                 {m.plan_cancel()}
               </button>
             </>
           )}
           {sub.tier === 'paid' && sub.provider === 'bank-transfer' && (
             <>
-              <button onClick={() => setPickerOpen(true)} style={primaryBtnStyle}>
+              <button
+                onClick={() => setPickerOpen(true)}
+                style={primaryBtnStyle}
+                data-testid="plan-pay-next-cta"
+              >
                 {m.plan_payNextPeriod()}
               </button>
               {sub.status !== 'canceled' && (
-                <button onClick={onCancel} disabled={busy} style={dangerBtnStyle}>
+                <button
+                  onClick={onCancel}
+                  disabled={busy}
+                  style={dangerBtnStyle}
+                  data-testid="plan-cancel-cta"
+                >
                   {m.plan_cancel()}
                 </button>
               )}
@@ -122,7 +158,7 @@ function PlanCurrentState({ sub }: { sub: Subscription }): JSX.Element {
 
   if (sub.tier === 'free') {
     return (
-      <div style={cardStyle}>
+      <div style={cardStyle} data-testid="plan-current-state-free">
         <h3 style={{ margin: '0 0 4px' }}>{m.plan_freeTitle()}</h3>
         <p style={{ margin: 0, color: '#555', fontSize: 14 }}>{m.plan_freeBlurb()}</p>
         <p style={{ margin: '8px 0 0', fontSize: 13, color: '#888' }}>
@@ -138,7 +174,7 @@ function PlanCurrentState({ sub }: { sub: Subscription }): JSX.Element {
   const planLabel = renderPlanLabel(sub.tierKey, sub.billingPeriod);
   if (grace) {
     return (
-      <div style={cardStyle}>
+      <div style={cardStyle} data-testid="plan-current-state-in-grace">
         <h3 style={{ margin: '0 0 4px' }}>{m.plan_inGraceTitle()}</h3>
         <p style={{ margin: 0, color: '#555', fontSize: 14 }}>
           {m.plan_inGraceBody({ date: dateStr(sub.gracePeriodEndsAt) })}
@@ -148,14 +184,14 @@ function PlanCurrentState({ sub }: { sub: Subscription }): JSX.Element {
   }
   if (sub.status === 'canceled') {
     return (
-      <div style={cardStyle}>
+      <div style={cardStyle} data-testid="plan-current-state-canceled">
         <h3 style={{ margin: '0 0 4px' }}>{m.plan_canceledTitle({ date: dateStr(sub.paidUntil) })}</h3>
         <p style={{ margin: 0, color: '#555', fontSize: 14 }}>{planLabel}</p>
       </div>
     );
   }
   return (
-    <div style={cardStyle}>
+    <div style={cardStyle} data-testid="plan-current-state-active">
       <h3 style={{ margin: '0 0 4px' }}>{planLabel}</h3>
       <p style={{ margin: 0, color: '#555', fontSize: 14 }}>
         {m.plan_paidUntil({ date: dateStr(sub.paidUntil) })}

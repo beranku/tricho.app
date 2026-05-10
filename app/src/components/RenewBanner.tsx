@@ -21,7 +21,7 @@ export function RenewBanner({ onTap }: RenewBannerProps): JSX.Element | null {
     ? m.plan_inGraceTitle()
     : m.plan_renewSoonBanner({ days });
   return (
-    <button onClick={onTap} style={bannerStyle}>
+    <button onClick={onTap} style={bannerStyle} data-testid="renew-banner">
       {label}
     </button>
   );
