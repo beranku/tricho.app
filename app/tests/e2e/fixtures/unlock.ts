@@ -14,7 +14,7 @@ const E2E_BRIDGE_KEY = 'tricho-e2e-bridge';
  *
  * Mirrors the override in `welcome-wizard-pwa-mode.spec.ts`.
  */
-async function emulatePwaLaunchMode(page: Page): Promise<void> {
+export async function emulatePwaLaunchMode(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const original = window.matchMedia.bind(window);
     Object.defineProperty(window, 'matchMedia', {
@@ -195,7 +195,31 @@ export async function joinVaultWithRs(
   await expect(page.locator('.step-card[data-step="3"][data-substep="webauthn"]')).toBeVisible();
 
   await page.getByTestId('wizard-webauthn-activate').click();
-  await expect(page.getByTestId('wizard-final')).toBeVisible({ timeout: 20_000 });
+
+  // Headless Chromium's virtual authenticator does not advertise PRF, so
+  // the wizard routes through `pin-setup` before completing — same shape
+  // as createVaultWithRs (covers both PRF and non-PRF setups).
+  const pinSetup = page.locator('.step-card[data-step="3"][data-substep="pin-setup"]');
+  const finalCard = page.getByTestId('wizard-final');
+  await Promise.race([
+    pinSetup.waitFor({ state: 'visible', timeout: 20_000 }),
+    finalCard.waitFor({ state: 'visible', timeout: 20_000 }),
+  ]);
+
+  if (await pinSetup.isVisible()) {
+    const TEST_PIN = '123456';
+    const pinInputs = page.locator(
+      '.step-card[data-step="3"][data-substep="pin-setup"] input[type="password"]',
+    );
+    await expect(pinInputs).toHaveCount(2);
+    await pinInputs.nth(0).fill(TEST_PIN);
+    await pinInputs.nth(1).fill(TEST_PIN);
+    await page
+      .locator('.step-card[data-step="3"][data-substep="pin-setup"] button[type="submit"]')
+      .click();
+  }
+
+  await expect(finalCard).toBeVisible({ timeout: 20_000 });
 
   await page.getByTestId('wizard-final-cta').click();
   await expect(page.locator('.phone-inner')).toBeVisible({ timeout: 20_000 });

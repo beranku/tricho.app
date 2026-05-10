@@ -476,6 +476,10 @@ export function AppShell(): JSX.Element {
         setDek(unwrapped);
         setDb(opened);
         setHasExistingVault(true);
+        // Land directly on the unlocked shell — there's no further wizard
+        // ceremony for restore-from-zip. Without this the wizard re-mounts
+        // through `setHasExistingVault(true)` and resets to step 1.
+        setView('unlocked');
         return { ok: true, vaultId: zipVaultId };
       } catch (err) {
         console.error('[AppShell] onRestoreFromZip failed', err);
@@ -680,6 +684,20 @@ export function AppShell(): JSX.Element {
         if (!dbRef) throw new Error('vault db not open');
         const rows = await queryDecrypted<CustomerData>(dbRef, DOC_TYPES.CUSTOMER);
         return rows.map((r) => ({ id: r._id, data: r.data }));
+      },
+      generateBackupZip: async (monthKey?: string): Promise<{ b64: string; filename: string }> => {
+        const dbRef = getVaultDb();
+        if (!dbRef || !vaultId) throw new Error('vault db not open');
+        const { generateLocalBackupZip } = await import('../backup/local-zip');
+        const { formatUtcMonth } = await import('../lib/format/utc-month');
+        const result = await generateLocalBackupZip({
+          db: dbRef,
+          vaultId,
+          monthKey: monthKey ?? formatUtcMonth(Date.now()),
+        });
+        let s = '';
+        for (const b of result.bytes) s += String.fromCharCode(b);
+        return { b64: btoa(s), filename: result.filename };
       },
     };
     // Merge with any pre-existing bridge methods (e.g. setView from the

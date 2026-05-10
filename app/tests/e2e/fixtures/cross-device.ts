@@ -1,5 +1,6 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { createVaultWithRs, joinVaultWithRs, type CreatedVault } from './unlock';
+import { grandfatherFreeDevices } from './admin';
 
 const E2E_BRIDGE_KEY = 'tricho-e2e-bridge';
 
@@ -34,6 +35,40 @@ export async function openTwoDevices(browser: Browser, opts: { sub?: string } = 
 
   // Wait until the AppShell wires up the bridge so further calls have it.
   const vaultIdA = await waitForBridge(pageA);
+
+  // Free tier deviceLimit defaults to 1 server-side. Grandfather this user
+  // to lift it to 2 so Device B's OAuth callback approves; this matches the
+  // historical "free users keep two devices" behaviour the cross-device
+  // walks were designed against.
+  await grandfatherFreeDevices(created.user.couchdbUsername);
+
+  // Make sure Device A has finished pushing its `vault-state` doc to
+  // CouchDB before Device B's wizard probes. Without this, B's flow probe
+  // races with A's first sync and falls back to the new-flow card.
+  await pageA.evaluate(
+    (timeoutMs) =>
+      new Promise<void>((resolve, reject) => {
+        const w = window as unknown as {
+          __trichoE2E?: {
+            subscribeSyncEvents: (cb: (s: { status: string }) => void) => () => void;
+          };
+        };
+        if (!w.__trichoE2E) return reject(new Error('bridge not ready'));
+        let unsub: (() => void) | null = null;
+        const timer = setTimeout(() => {
+          unsub?.();
+          reject(new Error(`waitForSyncPaused: timeout after ${timeoutMs}ms`));
+        }, timeoutMs);
+        unsub = w.__trichoE2E.subscribeSyncEvents((s) => {
+          if (s.status === 'paused') {
+            clearTimeout(timer);
+            unsub?.();
+            resolve();
+          }
+        });
+      }),
+    30_000,
+  );
 
   const contextB = await browser.newContext({ ignoreHTTPSErrors: true });
   await enableTestBridge(contextB);
@@ -78,42 +113,28 @@ export async function waitForBridge(page: Page, timeoutMs = 15_000): Promise<str
 }
 
 /**
- * Wait for a specific document id to be observed by Device B's sync listener:
- * a `change` event followed by a `paused` event. No sleeps, no polling on the
- * test side — we register a sync subscriber inside the page that resolves a
- * promise on the right event sequence.
+ * Wait until `docId` is observable on `page` (i.e. `__trichoE2E.getCustomer`
+ * returns a non-null value). PouchDB's `paused` event can fire before the
+ * doc is queryable — we poll directly until the read returns a value.
  */
 export async function waitForSyncedDoc(
   page: Page,
   opts: { docId: string; timeoutMs?: number },
 ): Promise<void> {
-  const { docId, timeoutMs = 20_000 } = opts;
-  await page.evaluate(
-    ({ docId, timeoutMs }) => {
+  const { docId, timeoutMs = 30_000 } = opts;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const got = await page.evaluate(async (id) => {
       const w = window as unknown as {
-        __trichoE2E?: {
-          subscribeSyncEvents: (cb: (s: { status: string; pulled: number }) => void) => () => void;
-        };
+        __trichoE2E?: { getCustomer?: (id: string) => Promise<Record<string, unknown> | null> };
       };
-      if (!w.__trichoE2E) throw new Error('test bridge not ready');
-      return new Promise<void>((resolve, reject) => {
-        let sawChange = false;
-        const timer = setTimeout(() => {
-          unsub();
-          reject(new Error(`waitForSyncedDoc(${docId}): timeout after ${timeoutMs}ms`));
-        }, timeoutMs);
-        const unsub = w.__trichoE2E!.subscribeSyncEvents((s) => {
-          if (s.status === 'syncing' && s.pulled > 0) sawChange = true;
-          if (sawChange && s.status === 'paused') {
-            clearTimeout(timer);
-            unsub();
-            resolve();
-          }
-        });
-      });
-    },
-    { docId, timeoutMs },
-  );
+      if (!w.__trichoE2E?.getCustomer) return null;
+      return w.__trichoE2E.getCustomer(id);
+    }, docId);
+    if (got != null) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`waitForSyncedDoc(${docId}): timeout after ${timeoutMs}ms`);
 }
 
 export async function teardownDevices(devices: TwoDevices): Promise<void> {

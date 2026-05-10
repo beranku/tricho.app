@@ -101,7 +101,7 @@ export function BackupExportScreen({ db, vaultId, onBack }: BackupExportScreenPr
   );
 
   return (
-    <section style={containerStyle} aria-labelledby="backup-export-title">
+    <section style={containerStyle} aria-labelledby="backup-export-title" data-testid="backup-export-screen">
       <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={onBack} style={iconBtnStyle} aria-label={m.billing_back()}>←</button>
         <h2 id="backup-export-title" style={{ margin: 0 }}>{m.plan_localBackup_title()}</h2>
@@ -124,6 +124,7 @@ export function BackupExportScreen({ db, vaultId, onBack }: BackupExportScreenPr
             onChange={(e) => setSelected(e.target.value)}
             disabled={busy}
             style={selectStyle}
+            data-testid="backup-export-month-select"
           >
             {months.map((opt) => (
               <option key={opt.monthKey} value={opt.monthKey}>
@@ -134,11 +135,11 @@ export function BackupExportScreen({ db, vaultId, onBack }: BackupExportScreenPr
         </div>
       )}
 
-      <button onClick={onDownload} disabled={busy || !selectedOption} style={primaryBtnStyle}>
+      <button onClick={onDownload} disabled={busy || !selectedOption} style={primaryBtnStyle} data-testid="backup-export-download">
         {busy ? m.plan_localBackup_generating() : m.plan_localBackup_download()}
       </button>
 
-      {done && <p role="status" style={{ color: '#34c759', fontSize: 13 }}>{m.plan_localBackup_done()}</p>}
+      {done && <p role="status" style={{ color: '#34c759', fontSize: 13 }} data-testid="backup-export-success">{m.plan_localBackup_done()}</p>}
       {error && <p role="alert" style={{ color: '#ff3b30', fontSize: 13 }}>{error}</p>}
     </section>
   );

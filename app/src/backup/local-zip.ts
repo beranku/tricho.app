@@ -56,7 +56,11 @@ export async function generateLocalBackupZip(
 
     if (typeof id === 'string' && id.startsWith('_design/')) continue;
 
-    if (typeof id === 'string' && id === '_local/vault-state') {
+    // The vault-state doc lives at the canonical id `vault-state` (it
+    // replicates so a fresh device can join via RS without needing a ZIP).
+    // The legacy `_local/vault-state` location is also accepted so old
+    // backups remain restorable.
+    if (typeof id === 'string' && (id === 'vault-state' || id === '_local/vault-state')) {
       vaultState = stripCouchInternals(doc) as VaultStateRow;
       continue;
     }

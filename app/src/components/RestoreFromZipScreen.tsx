@@ -52,7 +52,7 @@ export function RestoreFromZipScreen({ db, expectedVaultId, onBack, onRestored }
   };
 
   return (
-    <section style={containerStyle} aria-labelledby="restore-zip-title">
+    <section style={containerStyle} aria-labelledby="restore-zip-title" data-testid="restore-zip-screen">
       <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={onBack} style={iconBtnStyle} aria-label={m.billing_back()}>←</button>
         <h2 id="restore-zip-title" style={{ margin: 0 }}>{m.restore_zip_title()}</h2>
@@ -68,6 +68,7 @@ export function RestoreFromZipScreen({ db, expectedVaultId, onBack, onRestored }
         multiple
         onChange={(e) => onFilesPicked(e.target.files)}
         aria-label={m.restore_zip_pickFile()}
+        data-testid="restore-zip-file-input"
       />
 
       {files.length > 0 && (
@@ -76,12 +77,12 @@ export function RestoreFromZipScreen({ db, expectedVaultId, onBack, onRestored }
         </ul>
       )}
 
-      <button onClick={onRestore} disabled={busy || files.length === 0} style={primaryBtnStyle}>
+      <button onClick={onRestore} disabled={busy || files.length === 0} style={primaryBtnStyle} data-testid="restore-zip-submit">
         {busy ? m.restore_zip_inProgress() : m.restore_zip_button()}
       </button>
 
       {success && (
-        <p role="status" style={{ color: '#34c759', fontSize: 13 }}>
+        <p role="status" style={{ color: '#34c759', fontSize: 13 }} data-testid="restore-zip-success">
           {m.restore_zip_success({ applied: success.applied, monthKey: success.monthKey })}
         </p>
       )}
