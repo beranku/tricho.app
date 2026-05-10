@@ -1,0 +1,10 @@
+FROM caddy:2-alpine
+COPY app/dist /srv
+# Cross-surface assets (manifest, icons, og, thin sw.js) live in `shared/`
+# and are merged into the public root by `scripts/merge-dist.mjs` for the
+# Cloudflare deploy. Mirror that here so the local CI Caddy serves them.
+COPY shared/manifest.webmanifest /srv/manifest.webmanifest
+COPY shared/icons /srv/icons
+COPY shared/og /srv/og
+COPY infrastructure/pwa/Caddyfile /etc/caddy/Caddyfile
+EXPOSE 80

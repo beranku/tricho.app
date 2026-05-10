@@ -291,10 +291,12 @@ services:
       # Route definitions only — service ports live on their owning backend
       # container labels, so Traefik doesn't accidentally load-balance via
       # the Traefik container itself.
+      # /userdb-* and /_replicator go through tricho-auth's CouchDB proxy
+      # (Node + jose verifies RS256, forwards with admin Basic auth).
       traefik.http.routers.couch.rule: |-
         Host(`${APP_HOST:-tricho.localhost}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
       traefik.http.routers.couch.entrypoints: web
-      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.service: auth@docker
       traefik.http.routers.couch.middlewares: tricho-security@file
       traefik.http.routers.auth.rule: Host(`${APP_HOST:-tricho.localhost}`) && PathPrefix(`/auth`)
       traefik.http.routers.auth.entrypoints: web
@@ -338,11 +340,16 @@ services:
       - ./infrastructure/traefik/ci-certs:/ci-certs:ro
     labels:
       traefik.enable: "true"
+      # /userdb-* and /_replicator route through tricho-auth's CouchDB proxy
+      # (which validates the RS256 JWT in Node and forwards with admin auth).
+      # Routing direct to CouchDB would require CouchDB's jwtf to validate
+      # the token, which currently fails on this image — see
+      # `openspec/changes/sync-walkthrough-e2e/INVESTIGATION.md`.
       traefik.http.routers.couch.rule: |-
         Host(`tricho.test`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
       traefik.http.routers.couch.entrypoints: websecure
       traefik.http.routers.couch.tls: "true"
-      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.service: auth@docker
       traefik.http.routers.couch.middlewares: tricho-security@file
       traefik.http.routers.auth.rule: Host(`tricho.test`) && PathPrefix(`/auth`)
       traefik.http.routers.auth.entrypoints: websecure
@@ -385,10 +392,11 @@ services:
       - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
     labels:
       traefik.enable: "true"
+      # /userdb-* and /_replicator go through tricho-auth's CouchDB proxy.
       traefik.http.routers.couch.rule: |-
         Host(`${APP_HOST}`) && (PathPrefix(`/userdb-`) || PathPrefix(`/_replicator`))
       traefik.http.routers.couch.entrypoints: websecure
-      traefik.http.routers.couch.service: couch@docker
+      traefik.http.routers.couch.service: auth@docker
       traefik.http.routers.couch.tls.certresolver: le
       traefik.http.routers.couch.middlewares: tricho-security@file
       traefik.http.routers.auth.rule: Host(`${APP_HOST}`) && PathPrefix(`/auth`)

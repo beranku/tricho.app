@@ -20,7 +20,9 @@
     rewrite @app /{path}
     uri @app strip_prefix /app
 
-    try_files {path} /index.html
+    # `/offline/` is a prerendered Astro page — serve its index.html before
+    # falling through to the PWA shell. Order matters here.
+    try_files {path} {path}/index.html /index.html
     file_server
     header {
         Cache-Control "public, max-age=600, must-revalidate"

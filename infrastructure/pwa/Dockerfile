@@ -34,6 +34,14 @@ CMD ["npx", "astro", "dev", "--host", "0.0.0.0", "--port", "4321"]
 
 # ── Build: produce dist/ ────────────────────────────────────────────────────
 FROM deps AS builder
+# Empty PUBLIC_AUTH_PROXY_URL means "same origin" (the PWA reaches
+# tricho-auth via Traefik on the same host as the PWA). Without this,
+# the bundled fallback `http://localhost:4545` is hard-coded into the
+# build, which the page CSP blocks at runtime.
+ARG PUBLIC_AUTH_PROXY_URL=""
+ENV PUBLIC_AUTH_PROXY_URL=${PUBLIC_AUTH_PROXY_URL}
+ARG PUBLIC_BILLING_ENABLED="true"
+ENV PUBLIC_BILLING_ENABLED=${PUBLIC_BILLING_ENABLED}
 COPY app/ .
 RUN npm run build
 
