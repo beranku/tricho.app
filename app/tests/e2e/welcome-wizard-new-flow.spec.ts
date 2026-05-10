@@ -31,46 +31,42 @@ test('new-flow QR substep exposes the wizard test bridge with the generated RS',
   const page = await context.newPage();
   try {
     // Mid-flow assertion: stop after Step 3 mounts and read the bridge.
+    // Uses the same emulation hooks as createVaultWithRs (PWA launch mode +
+    // cs locale) so the wizard advances past Step 1 and renders Czech copy;
+    // OAuth is driven through the real fragment-based callback (commit
+    // e702e03) and AppShell consumes the URL hash on first paint.
     const { encoded, checksum } = await (async () => {
-      // We can't easily mid-flow stop createVaultWithRs without
-      // restructuring it; instead, re-run the start of its work inline.
       const { openVaultAsTestUser } = await import('./fixtures/vault');
       const { attachVirtualAuthenticator } = await import('./fixtures/webauthn');
-      const user = await openVaultAsTestUser(page);
+      await page.addInitScript(() => {
+        const original = window.matchMedia.bind(window);
+        Object.defineProperty(window, 'matchMedia', {
+          configurable: true,
+          value: (q: string) => {
+            if (q === '(display-mode: standalone)') {
+              return {
+                matches: true,
+                media: q,
+                onchange: null,
+                addListener: () => {},
+                removeListener: () => {},
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                dispatchEvent: () => false,
+              } as MediaQueryList;
+            }
+            return original(q);
+          },
+        });
+        Object.defineProperty(navigator, 'standalone', { configurable: true, value: true });
+        Object.defineProperty(navigator, 'language', { configurable: true, get: () => 'cs-CZ' });
+        Object.defineProperty(navigator, 'languages', {
+          configurable: true,
+          get: () => ['cs-CZ', 'cs'],
+        });
+      });
       await attachVirtualAuthenticator(page);
-      await page.addInitScript(
-        ({ key, payload }) => {
-          try {
-            sessionStorage.setItem(key, payload);
-          } catch {
-            /* noop */
-          }
-        },
-        {
-          key: 'tricho-oauth-result',
-          payload: JSON.stringify({
-            ok: true,
-            isNewUser: true,
-            deviceApproved: true,
-            hasRemoteVault: false,
-            couchdbUsername: user.couchdbUsername,
-            email: user.email,
-            name: null,
-            picture: null,
-            provider: 'google',
-            deviceId: `device-${user.sub}`,
-            devices: [],
-            subscription: { tier: 'free', deviceLimit: 2, storageLimitMB: 100, paidUntil: null },
-            tokens: {
-              jwt: user.jwt,
-              jwtExp: Math.floor(Date.now() / 1000) + 3600,
-              refreshToken: user.refreshToken,
-              refreshTokenExp: Math.floor(Date.now() / 1000) + 86400,
-            },
-          }),
-        },
-      );
-      await page.goto('/');
+      await openVaultAsTestUser(page);
       await page
         .locator('.step-card[data-step="3"][data-state="active"][data-flow="new"]')
         .waitFor({ timeout: 20_000 });

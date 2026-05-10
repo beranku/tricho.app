@@ -6,6 +6,8 @@
   "schedule_clientFallback": "Klient",
   "schedule_freeSlot": "volno {duration}",
   "schedule_addAppointment": "Přidat termín",
+  "schedule_deferred_title": "Plánování v příští verzi",
+  "schedule_deferred_body": "Přidávání a úpravy zákroků dorazí v další verzi. Zatím můžeš prohlížet diár a otevírat karty klientek.",
   "schedule_scrollToToday": "Skok na dnešek",
   "schedule_remainingMinutes": "zbývá {minutes} min",
   "client_kicker": "Klient",

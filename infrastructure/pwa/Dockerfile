@@ -19,6 +19,10 @@
 # ── Shared dependency layer ─────────────────────────────────────────────────
 FROM node:22-alpine AS deps
 WORKDIR /app
+# bash + curl are required by the npm `prebuild` hook
+# (`bash scripts/fetch-fonts.sh` downloads woff2 files via curl). The
+# node:22-alpine base ships with /bin/sh and wget only, so install both.
+RUN apk add --no-cache bash curl
 COPY app/package.json app/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 

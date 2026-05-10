@@ -6,6 +6,8 @@
   "schedule_clientFallback": "Client",
   "schedule_freeSlot": "free {duration}",
   "schedule_addAppointment": "Add appointment",
+  "schedule_deferred_title": "Scheduling in the next version",
+  "schedule_deferred_body": "Adding and editing appointments is coming in a future version. For now you can browse the schedule and open client cards.",
   "schedule_scrollToToday": "Scroll to today",
   "schedule_remainingMinutes": "{minutes} min remaining",
   "client_kicker": "Client",

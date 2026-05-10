@@ -54,10 +54,30 @@ describe('MenuSheet', () => {
 });
 
 describe('FabAddSheet', () => {
-  it('shows the add-appointment title from the catalog', () => {
+  // The visit-creation flow is deferred (per `daily-schedule` SHALL).
+  // This sheet is the placeholder; copy is locked verbatim to the spec
+  // so that commit ff9e306-style regressions (pointing the body at
+  // `m.menu_promo_body()`) fail fast at the component tier.
+  it('shows the spec-aligned deferred-feature title', () => {
     render(<FabAddSheet />);
-    // `m.schedule_addAppointment()` under cs ⇒ "Přidat termín".
-    expect(screen.getByText('Přidat termín')).toBeInTheDocument();
+    expect(screen.getByText('Plánování v příští verzi')).toBeInTheDocument();
+  });
+
+  it('shows the spec-aligned deferred-feature body', () => {
+    render(<FabAddSheet />);
+    expect(
+      screen.getByText(/Přidávání a úpravy zákroků dorazí v další verzi/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Zatím můžeš prohlížet diár a otevírat karty klientek\.$/),
+    ).toBeInTheDocument();
+  });
+
+  it('does not surface the unrelated menu_promo_body string', () => {
+    render(<FabAddSheet />);
+    expect(
+      screen.queryByText('Otevřete plán a prohlížejte detaily klientů.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows the start time when payload provides startAt', () => {

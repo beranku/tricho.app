@@ -145,12 +145,12 @@ export function FabAddSheet({ payload }: { payload?: { startAt?: number } }): JS
   useStore(localeStore);
 
   return (
-    <div className="fab-add-sheet">
-      <h2 className="fab-add-title">{m.schedule_addAppointment()}</h2>
+    <div className="fab-add-sheet" data-testid="fab-add-sheet">
+      <h2 className="fab-add-title" data-testid="fab-add-title">{m.schedule_deferred_title()}</h2>
       {formatted && (
-        <p className="fab-add-time">{formatted}</p>
+        <p className="fab-add-time" data-testid="fab-add-time">{formatted}</p>
       )}
-      <p className="fab-add-body">{m.menu_promo_body()}</p>
+      <p className="fab-add-body" data-testid="fab-add-body">{m.schedule_deferred_body()}</p>
       <button type="button" className="fab-add-close" onClick={closeSheet}>
         {m.common_close()}
       </button>

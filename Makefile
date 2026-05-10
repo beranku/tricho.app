@@ -125,6 +125,28 @@ e2e: _check-prereqs ## Run Playwright end-to-end suite against the ci profile st
 	cd app && npx playwright install chromium >/dev/null 2>&1 || true; \
 	cd app && npx playwright test
 
+.PHONY: e2e-walkthrough
+e2e-walkthrough: ## Run the first-run walkthrough specs against dev-mock (fast local Chrome MCP debug loop)
+	@# Brings up dev-mock (idempotent — `up -d` is a no-op if already running)
+	@# and runs ONLY the first-run walkthrough specs against
+	@# http://tricho.localhost. Designed for fast local iteration and
+	@# Chrome-MCP debugging — the full e2e suite still runs via `make e2e`.
+	@getent hosts tricho.localhost >/dev/null 2>&1 || grep -q "tricho.localhost" /etc/hosts 2>/dev/null || { \
+		echo "tricho.localhost does not resolve. Add '127.0.0.1 tricho.localhost' to /etc/hosts:" >&2; \
+		echo "  echo '127.0.0.1 tricho.localhost' | sudo tee -a /etc/hosts" >&2; \
+		exit 1; \
+	}
+	$(MAKE) dev-mock
+	@echo "Running first-run walkthrough specs against http://tricho.localhost ..."
+	@cd app && E2E_BASE_URL=http://tricho.localhost npx playwright test \
+		tests/e2e/first-run-onboarding.spec.ts \
+		tests/e2e/first-run-composite.spec.ts \
+		tests/e2e/diar-empty-state.spec.ts \
+		tests/e2e/diar-navigation.spec.ts \
+		tests/e2e/karta-klientky-walk.spec.ts \
+		tests/e2e/settings-walk.spec.ts \
+		tests/e2e/plan-picker-walk.spec.ts
+
 .PHONY: secrets-edit
 secrets-edit: ## Edit secrets/$(PROFILE).sops.yaml with sops (PROFILE=dev|ci|prod|sync-prod|sync-dev)
 	@command -v sops >/dev/null || { echo "sops not installed — see secrets/README.md"; exit 1; }

@@ -5,6 +5,56 @@ import { attachVirtualAuthenticator } from './webauthn';
 const SESSION_OAUTH_KEY = 'tricho-oauth-result';
 const E2E_BRIDGE_KEY = 'tricho-e2e-bridge';
 
+/**
+ * Emulate PWA launch mode (matchMedia + navigator.standalone) before any
+ * page script runs. The wizard's `detectLaunchMode()` (`src/lib/launch-mode.ts`)
+ * reads both signals and only advances past Step 1 when `launchMode === 'pwa'`.
+ * Headless Chromium reports a regular tab, so without this hook the wizard
+ * sits on Step 1 forever and `createVaultWithRs` can't reach Step 3.
+ *
+ * Mirrors the override in `welcome-wizard-pwa-mode.spec.ts`.
+ */
+async function emulatePwaLaunchMode(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const original = window.matchMedia.bind(window);
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (q: string) => {
+        if (q === '(display-mode: standalone)') {
+          return {
+            matches: true,
+            media: q,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false,
+          } as MediaQueryList;
+        }
+        return original(q);
+      },
+    });
+    Object.defineProperty(navigator, 'standalone', {
+      configurable: true,
+      value: true,
+    });
+    // Force the locale-bootstrap host fallback to Czech. Without this,
+    // tests run with `en` (DEFAULT_LOCALE) and assertions on Czech copy
+    // — the canonical product voice — would all fail. PouchDB-stored
+    // `_local/locale` takes precedence, but headless Chromium starts
+    // with an empty prefs DB so the host language wins.
+    Object.defineProperty(navigator, 'language', {
+      configurable: true,
+      get: () => 'cs-CZ',
+    });
+    Object.defineProperty(navigator, 'languages', {
+      configurable: true,
+      get: () => ['cs-CZ', 'cs'],
+    });
+  });
+}
+
 export interface CreatedVault {
   user: VaultUser;
   /** The Base32 RS body (52 chars) — ready to paste into a recovery
@@ -27,6 +77,7 @@ export async function createVaultWithRs(
   page: Page,
   opts: { sub?: string; email?: string } = {},
 ): Promise<CreatedVault> {
+  await emulatePwaLaunchMode(page);
   const user = await openVaultAsTestUser(page, opts);
   await attachVirtualAuthenticator(page);
 
@@ -68,9 +119,33 @@ export async function createVaultWithRs(
   await page.getByTestId('wizard-last4-submit').click();
   await expect(page.locator('.step-card[data-step="3"][data-substep="webauthn"]')).toBeVisible();
 
-  // webauthn → final
+  // webauthn → final (or pin-setup → final on non-PRF authenticators)
   await page.getByTestId('wizard-webauthn-activate').click();
-  await expect(page.getByTestId('wizard-final')).toBeVisible({ timeout: 20_000 });
+
+  // Headless Chromium's virtual authenticator does not advertise the PRF
+  // extension, so the wizard routes through `pin-setup` before completing.
+  // Cover both branches so the fixture works on PRF and non-PRF setups.
+  const pinSetup = page.locator('.step-card[data-step="3"][data-substep="pin-setup"]');
+  const finalCard = page.getByTestId('wizard-final');
+  await Promise.race([
+    pinSetup.waitFor({ state: 'visible', timeout: 20_000 }),
+    finalCard.waitFor({ state: 'visible', timeout: 20_000 }),
+  ]);
+
+  if (await pinSetup.isVisible()) {
+    const TEST_PIN = '123456';
+    const pinInputs = page.locator(
+      '.step-card[data-step="3"][data-substep="pin-setup"] input[type="password"]',
+    );
+    await expect(pinInputs).toHaveCount(2);
+    await pinInputs.nth(0).fill(TEST_PIN);
+    await pinInputs.nth(1).fill(TEST_PIN);
+    await page
+      .locator('.step-card[data-step="3"][data-substep="pin-setup"] button[type="submit"]')
+      .click();
+  }
+
+  await expect(finalCard).toBeVisible({ timeout: 20_000 });
 
   // final CTA → unlocked app shell
   await page.getByTestId('wizard-final-cta').click();
@@ -90,6 +165,7 @@ export async function joinVaultWithRs(
   page: Page,
   opts: { sub: string; recoverySecret: string; email?: string },
 ): Promise<VaultUser> {
+  await emulatePwaLaunchMode(page);
   const user = await openVaultAsTestUser(page, { sub: opts.sub, email: opts.email });
   await attachVirtualAuthenticator(page);
 
